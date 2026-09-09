@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import Link from "next/link";
 import { getCurrentProfile } from "@/lib/auth";
 import { signOut } from "./login/actions";
 
@@ -36,13 +37,16 @@ export default async function Home() {
         </form>
       </header>
 
-      <main className="flex flex-1 items-center justify-center p-8">
-        <div className="max-w-md text-center">
-          <p className="text-sm text-muted">
-            Аккаунт подключён и готов к работе. Раздел «Лиды» на реальных
-            данных появится следующим шагом.
-          </p>
-        </div>
+      <main className="flex flex-1 flex-col items-center gap-4 p-8">
+        <Link
+          href="/leads"
+          className="w-full max-w-sm rounded-xl border border-border bg-background p-5 text-left shadow-sm transition-colors hover:border-accent"
+        >
+          <div className="text-sm font-medium text-foreground">Лиды</div>
+          <div className="mt-1 text-xs text-muted">
+            Воронка продаж — канбан и список
+          </div>
+        </Link>
       </main>
     </div>
   );
