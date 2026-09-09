@@ -1,26 +1,38 @@
 @import "tailwindcss";
 
+/*
+ * WI Club brand palette (from WIClub_Brandbook.pdf, applied to the
+ * prototype earlier): black / white / red, red capped as a minority
+ * accent. Carried over here so the real app matches the prototype.
+ */
 :root {
   --background: #ffffff;
-  --foreground: #171717;
+  --foreground: #0a0a0a;
+  --ink-2: #2b2b2b;
+  --muted: #847b6d;
+  --accent: #c8102e;
+  --accent-strong: #9e0c24;
+  --surface-2: #f4f1ee;
+  --surface-3: #e7e2dc;
+  --border: #e7e2dc;
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
+  --color-ink-2: var(--ink-2);
+  --color-muted: var(--muted);
+  --color-accent: var(--accent);
+  --color-accent-strong: var(--accent-strong);
+  --color-surface-2: var(--surface-2);
+  --color-surface-3: var(--surface-3);
+  --color-border: var(--border);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-sans), Arial, Helvetica, sans-serif;
 }
