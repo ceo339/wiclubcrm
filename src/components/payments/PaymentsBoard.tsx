@@ -47,19 +47,19 @@ export default function PaymentsBoard({
   return (
     <div className="flex flex-1 flex-col gap-4">
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-        <div className="rounded-xl border border-border bg-background p-4">
+        <div className="rounded-xl border border-border bg-background shadow-card p-4">
           <div className="text-xs uppercase tracking-wide text-muted">{t("tileCollected")}</div>
           <div className="mt-1 text-xl font-semibold text-foreground">
             <Money amountEur={totalPaid} />
           </div>
         </div>
-        <div className="rounded-xl border border-border bg-background p-4">
+        <div className="rounded-xl border border-border bg-background shadow-card p-4">
           <div className="text-xs uppercase tracking-wide text-muted">{t("statPending")}</div>
           <div className="mt-1 text-xl font-semibold text-foreground">
             <Money amountEur={totalPending} />
           </div>
         </div>
-        <div className="rounded-xl border border-border bg-background p-4">
+        <div className="rounded-xl border border-border bg-background shadow-card p-4">
           <div className="text-xs uppercase tracking-wide text-muted">{t("tileTotalRecords")}</div>
           <div className="mt-1 text-xl font-semibold text-foreground">{filtered.length}</div>
         </div>
@@ -109,7 +109,7 @@ export default function PaymentsBoard({
           {t("emptyNoPaymentsFiltered")}
         </p>
       ) : (
-        <div className="overflow-x-auto rounded-xl border border-border bg-background">
+        <div className="overflow-x-auto rounded-xl border border-border bg-background shadow-card">
           <table className="w-full min-w-[640px] text-left text-sm">
             <thead className="border-b border-border text-xs uppercase tracking-wide text-muted">
               <tr>

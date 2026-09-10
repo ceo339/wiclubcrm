@@ -25,7 +25,7 @@ export default function LeadsList({
   }
 
   return (
-    <div className="overflow-x-auto rounded-xl border border-border bg-background">
+    <div className="overflow-x-auto rounded-xl border border-border bg-background shadow-card">
       <table className="w-full min-w-[720px] text-left text-sm">
         <thead className="border-b border-border text-xs uppercase tracking-wide text-muted">
           <tr>

@@ -1,20 +1,31 @@
 @import "tailwindcss";
 
 /*
- * WI Club brand palette (from WIClub_Brandbook.pdf, applied to the
- * prototype earlier): black / white / red, red capped as a minority
- * accent. Carried over here so the real app matches the prototype.
+ * WI Club brand system (from WIClub_Brandbook.pdf): black / white / red,
+ * red capped as a minority accent (the brand's own "10% rule" — a page
+ * never goes past one red heading/line/mark). Jost for body/nav/labels;
+ * Playfair Display stands in for the brandbook's Kazimir Text on
+ * headings/quotes (see the comment in layout.tsx for why).
  */
 :root {
   --background: #ffffff;
-  --foreground: #0a0a0a;
+  --foreground: #000000;
   --ink-2: #2b2b2b;
   --muted: #847b6d;
   --accent: #c8102e;
   --accent-strong: #9e0c24;
+  --accent-soft: #e2515f;
   --surface-2: #f4f1ee;
   --surface-3: #e7e2dc;
   --border: #e7e2dc;
+
+  /* Soft, warm elevation for card surfaces — a hairline border alone read
+   * flat; this adds just enough lift to separate a card from the page
+   * without the harsh grey of Tailwind's stock shadow-sm. Named distinctly
+   * from the --shadow-card theme token below so that one isn't a
+   * self-reference (same trap as --color-* vs the bare token above). */
+  --card-shadow-value: 0 1px 2px rgba(20, 14, 10, 0.04), 0 6px 20px -10px rgba(20, 14, 10, 0.12);
+  --card-shadow-hover-value: 0 2px 4px rgba(20, 14, 10, 0.05), 0 12px 28px -12px rgba(20, 14, 10, 0.16);
 }
 
 @theme inline {
@@ -24,15 +35,38 @@
   --color-muted: var(--muted);
   --color-accent: var(--accent);
   --color-accent-strong: var(--accent-strong);
+  --color-accent-soft: var(--accent-soft);
   --color-surface-2: var(--surface-2);
   --color-surface-3: var(--surface-3);
   --color-border: var(--border);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --font-sans: "Jost Variable", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Playfair Display Variable", Georgia, serif;
+  --shadow-card: var(--card-shadow-value);
+  --shadow-card-hover: var(--card-shadow-hover-value);
+
+  /* A touch softer/rounder than Tailwind's stock scale across every
+   * rounded-lg/xl/2xl surface in the app — cards, modals, nav tiles — for
+   * the warmer, less clinical feel the brandbook's photography/tone calls
+   * for. Nothing per-component to change: every existing className that
+   * already says rounded-xl etc. picks this up automatically. */
+  --radius-lg: 0.625rem;
+  --radius-xl: 1.125rem;
+  --radius-2xl: 1.5rem;
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
   font-family: var(--font-sans), Arial, Helvetica, sans-serif;
+}
+
+/* Base layer so a utility class (e.g. an explicit font-sans on one
+ * heading that should stay plain) can still override this per element. */
+@layer base {
+  h1,
+  h2,
+  h3 {
+    font-family: var(--font-display);
+    font-weight: 600;
+  }
 }

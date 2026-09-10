@@ -23,13 +23,19 @@ export default function LoginPage() {
   const t = useT();
 
   return (
-    <div className="flex flex-1 items-center justify-center bg-surface-2 px-4 py-16">
+    <div className="flex flex-1 flex-col items-center justify-center gap-6 bg-surface-2 px-4 py-16">
       <LocaleScope scope="network" fallback="ru" />
-      <div className="w-full max-w-sm rounded-2xl border border-border bg-background p-8 shadow-sm">
+      <p className="max-w-sm text-center font-display text-lg italic text-ink-2">
+        {t("loginTagline")}
+      </p>
+      <div className="w-full max-w-sm rounded-2xl border border-border bg-background p-8 shadow-card">
         <div className="flex items-start justify-between">
-          <h1 className="text-xl font-semibold tracking-tight text-foreground">
-            WI Club CRM
-          </h1>
+          <div>
+            <span className="mb-2 block h-0.5 w-8 rounded-full bg-accent" aria-hidden />
+            <h1 className="text-xl font-semibold tracking-tight text-foreground">
+              WI Club CRM
+            </h1>
+          </div>
           <LocaleSwitcher />
         </div>
         <p className="mt-1 text-sm text-muted">

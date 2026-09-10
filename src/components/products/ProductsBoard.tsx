@@ -109,7 +109,7 @@ function ProductCard({
   }
 
   return (
-    <div className="flex flex-col rounded-xl border border-border bg-background p-4 shadow-sm">
+    <div className="flex flex-col rounded-xl border border-border bg-background p-4 shadow-card">
       <div className="flex items-start justify-between gap-2">
         <div>
           <div className="font-medium text-foreground">{product.name}</div>

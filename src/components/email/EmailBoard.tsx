@@ -31,7 +31,7 @@ export default function EmailBoard({
   return (
     <div className="flex flex-1 flex-col gap-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="rounded-xl border border-border bg-background p-4">
+        <div className="rounded-xl border border-border bg-background shadow-card p-4">
           <div className="text-xs uppercase tracking-wide text-muted">{t("statListSize")}</div>
           <div className="mt-1 text-2xl font-semibold text-foreground">
             {listSize.members + listSize.leadsAll}
@@ -51,7 +51,7 @@ export default function EmailBoard({
         )}
       </div>
 
-      <div className="rounded-xl border border-border bg-background">
+      <div className="rounded-xl border border-border bg-background shadow-card">
         {campaigns.length === 0 ? (
           <p className="p-5 text-sm text-muted">{t("emptyNoCampaigns")}</p>
         ) : (

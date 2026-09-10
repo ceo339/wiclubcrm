@@ -74,7 +74,7 @@ export default async function AttendancePage() {
             <T k="emptyNoStreams" />
           </p>
         ) : (
-          <div className="rounded-xl border border-border bg-background">
+          <div className="rounded-xl border border-border bg-background shadow-card">
             <div className="overflow-x-auto">
               <table className="w-full min-w-[560px] text-left text-sm">
                 <thead className="border-b border-border text-xs uppercase tracking-wide text-muted">

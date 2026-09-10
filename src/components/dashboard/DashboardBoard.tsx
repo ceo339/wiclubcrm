@@ -35,7 +35,7 @@ type Totals = {
 
 function StatTile({ label, value, delta }: { label: string; value: ReactNode; delta: string }) {
   return (
-    <div className="rounded-xl border border-border bg-background p-4">
+    <div className="rounded-xl border border-border bg-background shadow-card p-4">
       <div className="text-xs uppercase tracking-wide text-muted">{label}</div>
       <div className="mt-1 text-2xl font-semibold text-foreground">{value}</div>
       <div className="mt-1 text-xs text-muted">{delta}</div>
@@ -61,7 +61,7 @@ function PeriodFilter({
 }) {
   const { locale, t } = useLocale();
   return (
-    <div className="rounded-xl border border-border bg-background p-4">
+    <div className="rounded-xl border border-border bg-background shadow-card p-4">
       <div className="flex flex-wrap items-center gap-2">
         {monthOptions.map((m) => {
           const isActive = period.mode === "month" && period.month === m;
@@ -123,7 +123,7 @@ function ProductsTable({ titleKey, rows }: { titleKey: string; rows: ProductCoun
   const { t } = useLocale();
   const total = rows.reduce((sum, r) => sum + r.count, 0);
   return (
-    <div className="flex-1 rounded-xl border border-border bg-background">
+    <div className="flex-1 rounded-xl border border-border bg-background shadow-card">
       <div className="border-b border-border px-5 py-4">
         <h3 className="text-sm font-semibold text-foreground">{t(titleKey)}</h3>
       </div>
@@ -168,7 +168,7 @@ function AttentionSection({
   const { locale, t } = useLocale();
   return (
     <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
-      <div className="rounded-xl border border-border bg-background">
+      <div className="rounded-xl border border-border bg-background shadow-card">
         <div className="border-b border-border px-5 py-4">
           <h2 className="text-sm font-semibold text-foreground">{t("headingStaleLeads")}</h2>
         </div>
@@ -207,7 +207,7 @@ function AttentionSection({
         </div>
       </div>
 
-      <div className="rounded-xl border border-border bg-background">
+      <div className="rounded-xl border border-border bg-background shadow-card">
         <div className="border-b border-border px-5 py-4">
           <h2 className="text-sm font-semibold text-foreground">{t("headingDecliningClubs")}</h2>
         </div>
@@ -245,7 +245,7 @@ function AttentionSection({
 function SourceConversionTable({ rows }: { rows: SourceConversion[] }) {
   const { locale, t } = useLocale();
   return (
-    <div className="rounded-xl border border-border bg-background">
+    <div className="rounded-xl border border-border bg-background shadow-card">
       <div className="border-b border-border px-5 py-4">
         <h2 className="text-sm font-semibold text-foreground">{t("headingSourceConversion")}</h2>
       </div>
@@ -291,7 +291,7 @@ function RevenueTrendChart({ months }: { months: MonthlyRevenue[] }) {
   const hasAnyRevenue = months.some((m) => m.amount > 0);
 
   return (
-    <div className="rounded-xl border border-border bg-background p-5">
+    <div className="rounded-xl border border-border bg-background shadow-card p-5">
       <h2 className="text-sm font-semibold text-foreground">{t("headingRevenueTrend")}</h2>
       {!hasAnyRevenue ? (
         <p className="mt-3 text-sm text-muted">{t("emptyNoRevenueHistory")}</p>
@@ -302,10 +302,11 @@ function RevenueTrendChart({ months }: { months: MonthlyRevenue[] }) {
               <div className="text-xs font-medium text-foreground">
                 <Money amountEur={m.amount} />
               </div>
-              <div className="flex h-32 w-full items-end">
+              <div className="flex h-32 w-full items-end justify-center">
                 <div
-                  className="w-full rounded-t-md bg-foreground"
+                  className="w-full max-w-10 rounded-t-md bg-foreground transition-opacity hover:opacity-70"
                   style={{ height: `${Math.max(2, (m.amount / max) * 100)}%` }}
+                  title={`${monthLabel(m.monthKey, locale)}: ${m.amount.toLocaleString(locale === "ru" ? "ru-RU" : "bg-BG")} €`}
                 />
               </div>
               <div className="text-[11px] text-muted">{monthLabel(m.monthKey, locale).split(" ")[0]}</div>
@@ -394,7 +395,7 @@ function ClubsTable({ clubs, qs }: { clubs: ClubRow[]; qs: string }) {
   }, [clubs, sortKey, sortDir]);
 
   return (
-    <div className="rounded-xl border border-border bg-background">
+    <div className="rounded-xl border border-border bg-background shadow-card">
       <div className="border-b border-border px-5 py-4">
         <h2 className="text-sm font-semibold text-foreground">{t("headingClubsPeriod")}</h2>
       </div>
@@ -553,7 +554,7 @@ export default function DashboardBoard({
 
       <RevenueTrendChart months={revenueTrend} />
 
-      <div className="rounded-xl border border-border bg-background p-5">
+      <div className="rounded-xl border border-border bg-background shadow-card p-5">
         <h2 className="text-sm font-semibold text-foreground">{t("headingFunnel")}</h2>
         <div className="mt-4 flex flex-col gap-3">
           {funnel.map((s, i) => (

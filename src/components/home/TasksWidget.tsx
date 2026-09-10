@@ -38,7 +38,7 @@ export default function TasksWidget({
   const visible = tasks.filter((task) => !doneIds.has(task.id));
 
   return (
-    <div className="w-full max-w-sm rounded-xl border border-border bg-background p-5 text-left shadow-sm">
+    <div className="w-full max-w-sm rounded-xl border border-border bg-background p-5 text-left shadow-card">
       <div className="text-sm font-medium text-foreground">{t(headingKey)}</div>
       {visible.length === 0 ? (
         <p className="mt-2 text-xs text-muted">{t("emptyNoOpenTasks")}</p>

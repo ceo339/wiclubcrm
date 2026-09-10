@@ -79,7 +79,7 @@ export default async function CohortAttendancePage({
       </header>
 
       <main className="flex flex-1 flex-col p-6">
-        <div className="rounded-xl border border-border bg-background">
+        <div className="rounded-xl border border-border bg-background shadow-card">
           <GroupAttendanceBoard
             members={members ?? []}
             sessions={product?.sessions ?? 0}

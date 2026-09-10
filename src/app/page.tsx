@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
+import type { ReactNode } from "react";
 import { getCurrentProfile } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { scopeForProfile } from "@/lib/currency";
@@ -97,7 +98,7 @@ export default async function Home() {
         </div>
       </header>
 
-      <main className="flex flex-1 flex-col items-center gap-4 p-8">
+      <main className="flex flex-1 flex-col items-center gap-6 p-8">
         {(profile.partner_id || profile.role === "hq") && (
           <TasksWidget
             tasks={openTasks}
@@ -105,94 +106,149 @@ export default async function Home() {
             canEdit={!!profile.partner_id}
           />
         )}
-        {profile.role === "hq" && (
-          <Link
-            href="/dashboard"
-            className="w-full max-w-sm rounded-xl border border-border bg-background p-5 text-left shadow-sm transition-colors hover:border-accent"
-          >
-            <div className="text-sm font-medium text-foreground"><T k="headingNetworkSummary" /></div>
-            <div className="mt-1 text-xs text-muted">
-              <T k="navNetworkSummaryDesc" />
-            </div>
-          </Link>
-        )}
-        {profile.partner_id && (
-          <Link
-            href={`/dashboard/${profile.partner_id}`}
-            className="w-full max-w-sm rounded-xl border border-border bg-background p-5 text-left shadow-sm transition-colors hover:border-accent"
-          >
-            <div className="text-sm font-medium text-foreground"><T k="navMySummary" /></div>
-            <div className="mt-1 text-xs text-muted">
-              <T k="navMySummaryDesc" />
-            </div>
-          </Link>
-        )}
-        <Link
-          href="/leads"
-          className="w-full max-w-sm rounded-xl border border-border bg-background p-5 text-left shadow-sm transition-colors hover:border-accent"
-        >
-          <div className="text-sm font-medium text-foreground"><T k="navLeads" /></div>
-          <div className="mt-1 text-xs text-muted">
-            <T k="navLeadsDesc" />
-          </div>
-        </Link>
-        <Link
-          href="/members"
-          className="w-full max-w-sm rounded-xl border border-border bg-background p-5 text-left shadow-sm transition-colors hover:border-accent"
-        >
-          <div className="text-sm font-medium text-foreground"><T k="navMembers" /></div>
-          <div className="mt-1 text-xs text-muted">
-            <T k="navMembersDesc" />
-          </div>
-        </Link>
-        <Link
-          href="/attendance"
-          className="w-full max-w-sm rounded-xl border border-border bg-background p-5 text-left shadow-sm transition-colors hover:border-accent"
-        >
-          <div className="text-sm font-medium text-foreground"><T k="navAttendance" /></div>
-          <div className="mt-1 text-xs text-muted">
-            <T k="navAttendanceDesc" />
-          </div>
-        </Link>
-        <Link
-          href="/products"
-          className="w-full max-w-sm rounded-xl border border-border bg-background p-5 text-left shadow-sm transition-colors hover:border-accent"
-        >
-          <div className="text-sm font-medium text-foreground"><T k="navCourses" /></div>
-          <div className="mt-1 text-xs text-muted">
-            <T k="navCoursesDesc" />
-          </div>
-        </Link>
-        <Link
-          href="/payments"
-          className="w-full max-w-sm rounded-xl border border-border bg-background p-5 text-left shadow-sm transition-colors hover:border-accent"
-        >
-          <div className="text-sm font-medium text-foreground"><T k="navPayments" /></div>
-          <div className="mt-1 text-xs text-muted">
-            <T k="navPaymentsDesc" />
-          </div>
-        </Link>
-        <Link
-          href="/email"
-          className="w-full max-w-sm rounded-xl border border-border bg-background p-5 text-left shadow-sm transition-colors hover:border-accent"
-        >
-          <div className="text-sm font-medium text-foreground"><T k="navEmail" /></div>
-          <div className="mt-1 text-xs text-muted">
-            <T k="navEmailDesc" />
-          </div>
-        </Link>
-        {profile.role === "hq" && (
-          <Link
-            href="/partners"
-            className="w-full max-w-sm rounded-xl border border-border bg-background p-5 text-left shadow-sm transition-colors hover:border-accent"
-          >
-            <div className="text-sm font-medium text-foreground"><T k="navPartners" /></div>
-            <div className="mt-1 text-xs text-muted">
-              <T k="navPartnersDesc" />
-            </div>
-          </Link>
-        )}
+
+        <div className="grid w-full max-w-4xl grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          {profile.role === "hq" && (
+            <NavCard href="/dashboard" icon={<IconChart />} titleKey="headingNetworkSummary" descKey="navNetworkSummaryDesc" />
+          )}
+          {profile.partner_id && (
+            <NavCard href={`/dashboard/${profile.partner_id}`} icon={<IconChart />} titleKey="navMySummary" descKey="navMySummaryDesc" />
+          )}
+          <NavCard href="/leads" icon={<IconFunnel />} titleKey="navLeads" descKey="navLeadsDesc" />
+          <NavCard href="/members" icon={<IconUsers />} titleKey="navMembers" descKey="navMembersDesc" />
+          <NavCard href="/attendance" icon={<IconCalendar />} titleKey="navAttendance" descKey="navAttendanceDesc" />
+          <NavCard href="/products" icon={<IconBook />} titleKey="navCourses" descKey="navCoursesDesc" />
+          <NavCard href="/payments" icon={<IconWallet />} titleKey="navPayments" descKey="navPaymentsDesc" />
+          <NavCard href="/email" icon={<IconMail />} titleKey="navEmail" descKey="navEmailDesc" />
+          {profile.role === "hq" && (
+            <NavCard href="/partners" icon={<IconBuilding />} titleKey="navPartners" descKey="navPartnersDesc" />
+          )}
+        </div>
       </main>
     </div>
+  );
+}
+
+/**
+ * A single home-screen nav tile: icon badge + title + one-line description.
+ * Was a bare text link before — the icon badge is purely a visual anchor to
+ * help scan a grid of ~8 destinations at a glance, it carries no meaning of
+ * its own (unlike the AI-score/health-status badges rejected elsewhere in
+ * this app), so there's nothing dishonest about it being simple line art
+ * rather than data-driven.
+ */
+function NavCard({
+  href,
+  icon,
+  titleKey,
+  descKey,
+}: {
+  href: string;
+  icon: ReactNode;
+  titleKey: string;
+  descKey: string;
+}) {
+  return (
+    <Link
+      href={href}
+      className="group flex items-start gap-3 rounded-xl border border-border bg-background p-5 text-left shadow-card transition-shadow hover:shadow-card-hover"
+    >
+      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-surface-2 text-ink-2 transition-colors group-hover:bg-accent group-hover:text-white">
+        {icon}
+      </span>
+      <span className="flex flex-col">
+        <span className="text-sm font-medium text-foreground"><T k={titleKey} /></span>
+        <span className="mt-1 text-xs text-muted"><T k={descKey} /></span>
+      </span>
+    </Link>
+  );
+}
+
+function iconProps() {
+  return {
+    xmlns: "http://www.w3.org/2000/svg",
+    viewBox: "0 0 24 24",
+    fill: "none",
+    stroke: "currentColor",
+    strokeWidth: 1.6,
+    strokeLinecap: "round" as const,
+    strokeLinejoin: "round" as const,
+    className: "h-5 w-5",
+    "aria-hidden": true,
+  };
+}
+
+function IconChart() {
+  return (
+    <svg {...iconProps()}>
+      <path d="M4 20V10M12 20V4M20 20v-7" />
+    </svg>
+  );
+}
+
+function IconFunnel() {
+  return (
+    <svg {...iconProps()}>
+      <path d="M4 5h16l-6 7.5V18l-4 2v-7.5L4 5Z" />
+    </svg>
+  );
+}
+
+function IconUsers() {
+  return (
+    <svg {...iconProps()}>
+      <circle cx="9" cy="8" r="3" />
+      <path d="M3.5 19c0-3 2.5-5 5.5-5s5.5 2 5.5 5" />
+      <path d="M16 8.5a2.5 2.5 0 1 0 0-5" />
+      <path d="M15 14c2.5.3 4.5 2.1 4.5 5" />
+    </svg>
+  );
+}
+
+function IconCalendar() {
+  return (
+    <svg {...iconProps()}>
+      <rect x="3.5" y="5" width="17" height="15" rx="2.5" />
+      <path d="M3.5 9.5h17M8 3v3.5M16 3v3.5" />
+      <path d="m8.5 14 2 2 4-4" />
+    </svg>
+  );
+}
+
+function IconBook() {
+  return (
+    <svg {...iconProps()}>
+      <path d="M5 4.5c2 0 5 .5 7 2 2-1.5 5-2 7-2v14c-2 0-5 .5-7 2-2-1.5-5-2-7-2Z" />
+      <path d="M12 6.5V18.5" />
+    </svg>
+  );
+}
+
+function IconWallet() {
+  return (
+    <svg {...iconProps()}>
+      <rect x="3.5" y="6.5" width="17" height="12" rx="2.5" />
+      <path d="M3.5 10.5h17" />
+      <circle cx="16.5" cy="14.5" r="0.9" fill="currentColor" stroke="none" />
+    </svg>
+  );
+}
+
+function IconMail() {
+  return (
+    <svg {...iconProps()}>
+      <rect x="3.5" y="5.5" width="17" height="13" rx="2.5" />
+      <path d="m4.5 7 7.5 6 7.5-6" />
+    </svg>
+  );
+}
+
+function IconBuilding() {
+  return (
+    <svg {...iconProps()}>
+      <rect x="5" y="3.5" width="9" height="17" rx="1" />
+      <rect x="14" y="9" width="5" height="11.5" rx="1" />
+      <path d="M7.5 7h1M10.5 7h1M7.5 10.5h1M10.5 10.5h1M7.5 14h1M10.5 14h1" />
+    </svg>
   );
 }
