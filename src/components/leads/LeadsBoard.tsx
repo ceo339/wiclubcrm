@@ -8,6 +8,7 @@ import KanbanBoard from "./KanbanBoard";
 import LeadsList from "./LeadsList";
 import NewLeadModal from "./NewLeadModal";
 import ImportModal from "./ImportModal";
+import LeadDetailModal from "./LeadDetailModal";
 
 export default function LeadsBoard({
   initialLeads,
@@ -27,6 +28,8 @@ export default function LeadsBoard({
   const [source, setSource] = useState<string>("all");
   const [showNewLead, setShowNewLead] = useState(false);
   const [showImport, setShowImport] = useState(false);
+  const [selectedLeadId, setSelectedLeadId] = useState<string | null>(null);
+  const selectedLead = initialLeads.find((l) => l.id === selectedLeadId) ?? null;
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -98,9 +101,18 @@ export default function LeadsBoard({
       )}
 
       {view === "board" ? (
-        <KanbanBoard leads={filtered} canEdit={canEdit} showPartner={isHq} />
+        <KanbanBoard
+          leads={filtered}
+          canEdit={canEdit}
+          showPartner={isHq}
+          onSelect={setSelectedLeadId}
+        />
       ) : (
-        <LeadsList leads={filtered} showPartner={isHq} />
+        <LeadsList
+          leads={filtered}
+          showPartner={isHq}
+          onSelect={setSelectedLeadId}
+        />
       )}
 
       {showNewLead && (
@@ -111,6 +123,14 @@ export default function LeadsBoard({
         />
       )}
       {showImport && <ImportModal onClose={() => setShowImport(false)} />}
+      {selectedLead && (
+        <LeadDetailModal
+          key={selectedLead.id}
+          lead={selectedLead}
+          canEdit={canEdit}
+          onClose={() => setSelectedLeadId(null)}
+        />
+      )}
     </div>
   );
 }

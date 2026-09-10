@@ -4,9 +4,11 @@ import type { Lead } from "./types";
 export default function LeadsList({
   leads,
   showPartner,
+  onSelect,
 }: {
   leads: Lead[];
   showPartner: boolean;
+  onSelect: (id: string) => void;
 }) {
   if (leads.length === 0) {
     return (
@@ -32,7 +34,11 @@ export default function LeadsList({
         </thead>
         <tbody>
           {leads.map((lead) => (
-            <tr key={lead.id} className="border-b border-border last:border-0">
+            <tr
+              key={lead.id}
+              onClick={() => onSelect(lead.id)}
+              className="cursor-pointer border-b border-border last:border-0 hover:bg-surface-2"
+            >
               <td className="px-4 py-3 font-medium text-foreground">{lead.name}</td>
               {showPartner && (
                 <td className="px-4 py-3 text-muted">{lead.partner_name ?? "—"}</td>

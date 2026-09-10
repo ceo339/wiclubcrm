@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentProfile } from "@/lib/auth";
 import { SOURCES, type StageId } from "@/lib/leads";
+import type { Tables } from "@/types/database";
 
 export type ActionResult = { error: string | null };
 
@@ -163,4 +164,142 @@ export async function importLeads(rows: ImportRow[]): Promise<ImportResult> {
 
   revalidatePath("/leads");
   return { error: null, imported };
+}
+
+/**
+ * Updates the editable contact/detail fields on a lead from the detail
+ * card. Stage changes still happen via the kanban drag (updateLeadStage) —
+ * this only covers the fields the prototype's lead drawer let you see and
+ * amend directly.
+ */
+export async function updateLead(leadId: string, formData: FormData): Promise<ActionResult> {
+  const profile = await getCurrentProfile();
+  if (!profile) return { error: "Не авторизовано" };
+  if (!profile.partner_id) {
+    return { error: "У аккаунта HQ нет своего клуба — редактировать может только партнёр." };
+  }
+
+  const name = String(formData.get("name") || "").trim();
+  if (!name) return { error: "Укажите имя" };
+
+  const phone = String(formData.get("phone") || "").trim() || null;
+  const email = String(formData.get("email") || "").trim() || null;
+  const country = String(formData.get("country") || "").trim() || null;
+  const city = String(formData.get("city") || "").trim() || null;
+  const birthday = String(formData.get("birthday") || "").trim() || null;
+  const note = String(formData.get("note") || "").trim() || null;
+  const valueRaw = String(formData.get("value") || "0").replace(",", ".");
+  const value = Number.isFinite(Number(valueRaw)) ? Number(valueRaw) : 0;
+
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("leads")
+    .update({ name, phone, email, country, city, birthday, note, value })
+    .eq("id", leadId);
+
+  if (error) return { error: error.message };
+
+  revalidatePath("/leads");
+  return { error: null };
+}
+
+export type LeadDetail = {
+  comments: Tables<"comments">[];
+  tasks: Tables<"tasks">[];
+};
+
+/**
+ * Loads comments/tasks for one lead's detail card, fetched on demand when
+ * the card opens rather than upfront with the whole leads list.
+ */
+export async function getLeadDetail(leadId: string): Promise<LeadDetail> {
+  const profile = await getCurrentProfile();
+  if (!profile) return { comments: [], tasks: [] };
+
+  const supabase = await createClient();
+  const [{ data: comments }, { data: tasks }] = await Promise.all([
+    supabase
+      .from("comments")
+      .select("*")
+      .eq("entity_type", "lead")
+      .eq("entity_id", leadId)
+      .order("created_at", { ascending: false }),
+    supabase
+      .from("tasks")
+      .select("*")
+      .eq("entity_type", "lead")
+      .eq("entity_id", leadId)
+      .order("due_date", { ascending: true }),
+  ]);
+
+  return { comments: comments ?? [], tasks: tasks ?? [] };
+}
+
+export async function addComment(leadId: string, text: string): Promise<ActionResult> {
+  const profile = await getCurrentProfile();
+  if (!profile) return { error: "Не авторизовано" };
+  if (!profile.partner_id) return { error: "У аккаунта HQ нет своего клуба." };
+
+  const trimmed = text.trim();
+  if (!trimmed) return { error: "Комментарий пустой" };
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  const author = profile.full_name || user?.email || "Партнёр";
+
+  const { error } = await supabase.from("comments").insert({
+    partner_id: profile.partner_id,
+    entity_type: "lead",
+    entity_id: leadId,
+    text: trimmed,
+    author,
+  });
+
+  if (error) return { error: error.message };
+
+  revalidatePath("/leads");
+  return { error: null };
+}
+
+export async function addTask(
+  leadId: string,
+  text: string,
+  dueDate: string | null
+): Promise<ActionResult> {
+  const profile = await getCurrentProfile();
+  if (!profile) return { error: "Не авторизовано" };
+  if (!profile.partner_id) return { error: "У аккаунта HQ нет своего клуба." };
+
+  const trimmed = text.trim();
+  if (!trimmed) return { error: "Укажите текст задачи" };
+
+  const supabase = await createClient();
+  const { error } = await supabase.from("tasks").insert({
+    partner_id: profile.partner_id,
+    entity_type: "lead",
+    entity_id: leadId,
+    text: trimmed,
+    due_date: dueDate || null,
+    done: false,
+  });
+
+  if (error) return { error: error.message };
+
+  revalidatePath("/leads");
+  return { error: null };
+}
+
+export async function setTaskDone(taskId: string, done: boolean): Promise<ActionResult> {
+  const profile = await getCurrentProfile();
+  if (!profile) return { error: "Не авторизовано" };
+  if (!profile.partner_id) return { error: "У аккаунта HQ нет своего клуба." };
+
+  const supabase = await createClient();
+  const { error } = await supabase.from("tasks").update({ done }).eq("id", taskId);
+  if (error) return { error: error.message };
+
+  revalidatePath("/leads");
+  return { error: null };
 }

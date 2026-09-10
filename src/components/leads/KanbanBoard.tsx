@@ -12,10 +12,12 @@ export default function KanbanBoard({
   leads,
   canEdit,
   showPartner,
+  onSelect,
 }: {
   leads: Lead[];
   canEdit: boolean;
   showPartner: boolean;
+  onSelect: (id: string) => void;
 }) {
   const [items, applyOptimistic] = useOptimistic(leads, (state, update: StageUpdate) =>
     state.map((l) =>
@@ -74,8 +76,9 @@ export default function KanbanBoard({
                     key={lead.id}
                     draggable={canEdit}
                     onDragStart={() => setDragId(lead.id)}
-                    className={`rounded-lg border border-border bg-background p-3 text-sm shadow-sm ${
-                      canEdit ? "cursor-grab active:cursor-grabbing" : ""
+                    onClick={() => onSelect(lead.id)}
+                    className={`rounded-lg border border-border bg-background p-3 text-sm shadow-sm hover:border-accent ${
+                      canEdit ? "cursor-grab active:cursor-grabbing" : "cursor-pointer"
                     }`}
                   >
                     <div className="font-medium text-foreground">{lead.name}</div>
