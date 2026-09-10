@@ -17,6 +17,8 @@ export default async function PaymentsPage() {
     .order("paid_date", { ascending: false });
 
   const canEdit = !!profile.partner_id;
+  const stripeEnabled =
+    canEdit && !!profile.partner_id && profile.partner_id === process.env.STRIPE_ENABLED_PARTNER_ID;
   const { data: members } = canEdit
     ? await supabase
         .from("members")
@@ -58,6 +60,7 @@ export default async function PaymentsPage() {
             }))}
             memberOptions={memberOptions}
             canEdit={canEdit}
+            stripeEnabled={stripeEnabled}
           />
         )}
       </main>

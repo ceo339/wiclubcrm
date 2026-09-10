@@ -5,18 +5,22 @@ import { STATUSES, statusLabel } from "@/lib/payments";
 import type { MemberOption, Payment } from "./types";
 import NewPaymentModal from "./NewPaymentModal";
 import EditPaymentModal from "./EditPaymentModal";
+import PaymentLinkModal from "./PaymentLinkModal";
 
 export default function PaymentsBoard({
   initialPayments,
   memberOptions,
   canEdit,
+  stripeEnabled,
 }: {
   initialPayments: Payment[];
   memberOptions: MemberOption[];
   canEdit: boolean;
+  stripeEnabled: boolean;
 }) {
   const [status, setStatus] = useState<string>("all");
   const [showNew, setShowNew] = useState(false);
+  const [showLink, setShowLink] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
   const isHq = !canEdit;
@@ -68,10 +72,19 @@ export default function PaymentsBoard({
           ))}
         </select>
 
+        {canEdit && stripeEnabled && (
+          <button
+            onClick={() => setShowLink(true)}
+            className="ml-auto rounded-lg border border-border px-4 py-2 text-sm font-medium text-ink-2 hover:bg-surface-2"
+          >
+            + Ссылка на оплату
+          </button>
+        )}
+
         {canEdit && (
           <button
             onClick={() => setShowNew(true)}
-            className="ml-auto rounded-lg bg-foreground px-4 py-2 text-sm font-medium text-background"
+            className={`rounded-lg bg-foreground px-4 py-2 text-sm font-medium text-background ${stripeEnabled ? "" : "ml-auto"}`}
           >
             + Оплата
           </button>
@@ -126,6 +139,7 @@ export default function PaymentsBoard({
       )}
 
       {showNew && <NewPaymentModal members={memberOptions} onClose={() => setShowNew(false)} />}
+      {showLink && <PaymentLinkModal members={memberOptions} onClose={() => setShowLink(false)} />}
       {selected && (
         <EditPaymentModal
           key={selected.id}

@@ -233,6 +233,7 @@ export type Database = {
           partner_id: string
           product_id: string | null
           status: string | null
+          stripe_checkout_session_id: string | null
         }
         Insert: {
           amount: number
@@ -243,6 +244,7 @@ export type Database = {
           partner_id: string
           product_id?: string | null
           status?: string | null
+          stripe_checkout_session_id?: string | null
         }
         Update: {
           amount?: number
@@ -253,6 +255,7 @@ export type Database = {
           partner_id?: string
           product_id?: string | null
           status?: string | null
+          stripe_checkout_session_id?: string | null
         }
         Relationships: [
           {
@@ -470,7 +473,7 @@ export type Database = {
 
 type DatabaseWithoutInternals = Omit<Database, "__InternalSupabase">
 
-type DefaultSchema = DatabaseWithoutInternals[Extract<keyof Database, "public">]
+type DefaultSchema = DatabaseWithoutInternals["public"]
 
 export type Tables<
   DefaultSchemaTableNameOrOptions extends
