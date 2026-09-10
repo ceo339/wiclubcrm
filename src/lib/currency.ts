@@ -17,6 +17,51 @@ export const BASE_CURRENCY: CurrencyCode = "EUR";
 
 export const CURRENCY_STORAGE_KEY = "wiclub_currency";
 
+/** The saved choice is scoped (see CurrencyProvider) so that switching
+ * currency on one club's pages doesn't leak into another club's or into the
+ * network summary — each scope remembers its own pick independently. */
+export function scopeStorageKey(scope: string): string {
+  return `${CURRENCY_STORAGE_KEY}:${scope}`;
+}
+
+/**
+ * The currency a club's own country normally trades in — used as the
+ * *default* display currency for that club (Georgia's lari, Bulgaria's
+ * euro). Ukraine is mapped to dollars rather than the hryvnia, per
+ * Anastasiia: that's what's actually tracked internally there, not the
+ * local currency. Anastasiia confirmed this mapping directly; any country
+ * not listed here (no real club operates there yet) falls back to EUR.
+ */
+export const COUNTRY_CURRENCY: Record<string, CurrencyCode> = {
+  Georgia: "GEL",
+  Bulgaria: "EUR",
+  Ukraine: "USD",
+};
+
+export function currencyForCountry(country: string | null | undefined): CurrencyCode {
+  if (!country) return BASE_CURRENCY;
+  return COUNTRY_CURRENCY[country] ?? BASE_CURRENCY;
+}
+
+/**
+ * Picks the currency scope+default for a page from the signed-in profile:
+ * a partner/staff account sees its own club's currency everywhere it goes,
+ * while hq (whose lists mix every club together) sees the network default
+ * (dollars). Pages that show one specific club regardless of who's looking
+ * (a club's own dashboard, one club's attendance stream) build their own
+ * `club:<id>` scope directly instead, since it doesn't depend on the viewer.
+ */
+export function scopeForProfile(profile: {
+  role: string;
+  partner_id: string | null;
+  partner_country: string | null;
+}): { scope: string; fallback: CurrencyCode } {
+  if (profile.role !== "hq" && profile.partner_id) {
+    return { scope: `club:${profile.partner_id}`, fallback: currencyForCountry(profile.partner_country) };
+  }
+  return { scope: "network", fallback: "USD" };
+}
+
 export function isCurrencyCode(value: string | null | undefined): value is CurrencyCode {
   return !!value && CURRENCIES.some((c) => c.code === value);
 }

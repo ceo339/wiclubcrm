@@ -2,7 +2,9 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { getCurrentProfile } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
+import { scopeForProfile } from "@/lib/currency";
 import CurrencySwitcher from "@/components/currency/CurrencySwitcher";
+import CurrencyScope from "@/components/currency/CurrencyScope";
 import PaymentsBoard from "@/components/payments/PaymentsBoard";
 import type { MemberOption } from "@/components/payments/types";
 
@@ -27,6 +29,8 @@ export default async function PaymentsPage() {
         .order("name")
     : { data: [] };
 
+  const { scope, fallback } = scopeForProfile(profile);
+
   const memberOptions: MemberOption[] = (members ?? []).map((m) => ({
     id: m.id,
     name: m.name,
@@ -44,7 +48,10 @@ export default async function PaymentsPage() {
           </Link>
           <h1 className="mt-1 text-lg font-semibold tracking-tight text-foreground">Оплаты</h1>
         </div>
-        <CurrencySwitcher />
+        <div className="flex items-center gap-2">
+          <CurrencyScope scope={scope} fallback={fallback} />
+          <CurrencySwitcher />
+        </div>
       </header>
 
       <main className="flex flex-1 flex-col p-6">

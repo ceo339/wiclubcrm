@@ -1,7 +1,9 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { getCurrentProfile } from "@/lib/auth";
+import { scopeForProfile } from "@/lib/currency";
 import CurrencySwitcher from "@/components/currency/CurrencySwitcher";
+import CurrencyScope from "@/components/currency/CurrencyScope";
 import { signOut } from "./login/actions";
 
 const ROLE_LABELS: Record<string, string> = {
@@ -16,6 +18,8 @@ export default async function Home() {
     redirect("/login");
   }
 
+  const { scope, fallback } = scopeForProfile(profile);
+
   return (
     <div className="flex flex-1 flex-col bg-surface-2">
       <header className="flex items-center justify-between border-b border-border bg-background px-6 py-4">
@@ -29,6 +33,7 @@ export default async function Home() {
           </p>
         </div>
         <div className="flex items-center gap-2">
+          <CurrencyScope scope={scope} fallback={fallback} />
           <CurrencySwitcher />
           <form action={signOut}>
             <button

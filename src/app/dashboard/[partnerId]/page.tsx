@@ -9,7 +9,9 @@ import {
   monthsWithActivity,
   parsePeriodParams,
 } from "@/lib/dashboard";
+import { currencyForCountry } from "@/lib/currency";
 import CurrencySwitcher from "@/components/currency/CurrencySwitcher";
+import CurrencyScope from "@/components/currency/CurrencyScope";
 import DashboardBoard from "@/components/dashboard/DashboardBoard";
 
 export default async function ClubDashboardPage({
@@ -38,7 +40,7 @@ export default async function ClubDashboardPage({
 
   const { data: partner } = await supabase
     .from("partners")
-    .select("id, name")
+    .select("id, name, country")
     .eq("id", partnerId)
     .single();
   if (!partner) notFound();
@@ -87,7 +89,10 @@ export default async function ClubDashboardPage({
             {partner.name}
           </h1>
         </div>
-        <CurrencySwitcher />
+        <div className="flex items-center gap-2">
+          <CurrencyScope scope={`club:${partnerId}`} fallback={currencyForCountry(partner.country)} />
+          <CurrencySwitcher />
+        </div>
       </header>
 
       <main className="flex flex-1 flex-col p-6">

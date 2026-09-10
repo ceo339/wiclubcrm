@@ -2,7 +2,9 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { getCurrentProfile } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
+import { scopeForProfile } from "@/lib/currency";
 import CurrencySwitcher from "@/components/currency/CurrencySwitcher";
+import CurrencyScope from "@/components/currency/CurrencyScope";
 import LeadsBoard from "@/components/leads/LeadsBoard";
 
 export default async function LeadsPage() {
@@ -16,6 +18,8 @@ export default async function LeadsPage() {
     .from("leads")
     .select("*, partners(name)")
     .order("added_date", { ascending: false });
+
+  const { scope, fallback } = scopeForProfile(profile);
 
   const canEdit = !!profile.partner_id;
   const [{ data: products }, { data: cohorts }] = canEdit
@@ -36,7 +40,10 @@ export default async function LeadsPage() {
             Лиды
           </h1>
         </div>
-        <CurrencySwitcher />
+        <div className="flex items-center gap-2">
+          <CurrencyScope scope={scope} fallback={fallback} />
+          <CurrencySwitcher />
+        </div>
       </header>
 
       <main className="flex flex-1 flex-col p-6">

@@ -2,7 +2,9 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { getCurrentProfile } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
+import { scopeForProfile } from "@/lib/currency";
 import CurrencySwitcher from "@/components/currency/CurrencySwitcher";
+import CurrencyScope from "@/components/currency/CurrencyScope";
 import ProductsBoard from "@/components/products/ProductsBoard";
 
 export default async function ProductsPage() {
@@ -21,6 +23,8 @@ export default async function ProductsPage() {
     .select("*")
     .order("start_date");
 
+  const { scope, fallback } = scopeForProfile(profile);
+
   return (
     <div className="flex flex-1 flex-col bg-surface-2">
       <header className="flex items-center justify-between border-b border-border bg-background px-6 py-4">
@@ -32,7 +36,10 @@ export default async function ProductsPage() {
             Курсы
           </h1>
         </div>
-        <CurrencySwitcher />
+        <div className="flex items-center gap-2">
+          <CurrencyScope scope={scope} fallback={fallback} />
+          <CurrencySwitcher />
+        </div>
       </header>
 
       <main className="flex flex-1 flex-col p-6">

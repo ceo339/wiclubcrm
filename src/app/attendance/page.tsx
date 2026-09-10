@@ -2,7 +2,9 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { getCurrentProfile } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
+import { scopeForProfile } from "@/lib/currency";
 import CurrencySwitcher from "@/components/currency/CurrencySwitcher";
+import CurrencyScope from "@/components/currency/CurrencyScope";
 
 export default async function AttendancePage() {
   const profile = await getCurrentProfile();
@@ -20,6 +22,7 @@ export default async function AttendancePage() {
 
   const allMembers = members ?? [];
   const isHq = profile.role === "hq";
+  const { scope, fallback } = scopeForProfile(profile);
 
   const streams = (cohorts ?? []).map((c) => {
     const product = (c as { products?: { name: string; sessions: number | null } | null }).products;
@@ -48,7 +51,10 @@ export default async function AttendancePage() {
             Посещаемость
           </h1>
         </div>
-        <CurrencySwitcher />
+        <div className="flex items-center gap-2">
+          <CurrencyScope scope={scope} fallback={fallback} />
+          <CurrencySwitcher />
+        </div>
       </header>
 
       <main className="flex flex-1 flex-col p-6">

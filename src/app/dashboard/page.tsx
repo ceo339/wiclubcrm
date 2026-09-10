@@ -10,6 +10,7 @@ import {
   parsePeriodParams,
 } from "@/lib/dashboard";
 import CurrencySwitcher from "@/components/currency/CurrencySwitcher";
+import CurrencyScope from "@/components/currency/CurrencyScope";
 import DashboardBoard from "@/components/dashboard/DashboardBoard";
 import type { ClubRow } from "@/components/dashboard/DashboardBoard";
 
@@ -90,7 +91,10 @@ export default async function DashboardPage({
             Сводка по сети
           </h1>
         </div>
-        <CurrencySwitcher />
+        <div className="flex items-center gap-2">
+          <CurrencyScope scope="network" fallback="USD" />
+          <CurrencySwitcher />
+        </div>
       </header>
 
       <main className="flex flex-1 flex-col p-6">
