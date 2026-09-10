@@ -189,6 +189,22 @@ export const DICT: Record<string, Entry> = {
   colLeads: { ru: "Лидов", bg: "Запитвания" },
   colCollected: { ru: "Собрано", bg: "Събрано" },
 
+  // ---- dashboard: "требует внимания" ----
+  headingStaleLeads: { ru: "Лиды без движения", bg: "Запитвания без движение" },
+  emptyNoStaleLeads: {
+    ru: "Нет лидов без движения дольше 5 дней — по всей сети.",
+    bg: "Няма запитвания без движение повече от 5 дни — в цялата мрежа.",
+  },
+  colLead: { ru: "Лид", bg: "Запитване" },
+  colDaysStuck: { ru: "Дней без движения", bg: "Дни без движение" },
+  daysCount: { ru: "{n} дн.", bg: "{n} дни" },
+  linkViewAllLeads: { ru: "Смотреть все лиды", bg: "Виж всички запитвания" },
+  headingDecliningClubs: { ru: "Клубы с падающей выручкой", bg: "Клубове с падащи приходи" },
+  emptyNoDecliningClubs: {
+    ru: "Ни у одного клуба выручка не упала к прошлому месяцу.",
+    bg: "Нито при един клуб приходите не са паднали спрямо миналия месец.",
+  },
+
   // ---- dashboard: fourth-tile variants ----
   statClubsInNetwork: { ru: "Клубов в сети", bg: "Клубове в мрежата" },
   deltaActiveClubs: { ru: "действующих", bg: "активни" },

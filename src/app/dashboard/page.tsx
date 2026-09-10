@@ -5,6 +5,8 @@ import { createClient } from "@/lib/supabase/server";
 import {
   computeCoreMetrics,
   countByProduct,
+  findDecliningClubs,
+  findStaleLeads,
   inPeriod,
   monthsWithActivity,
   parsePeriodParams,
@@ -36,7 +38,7 @@ export default async function DashboardPage({
   const [{ data: partners }, { data: leads }, { data: members }, { data: payments }, { data: products }] =
     await Promise.all([
       supabase.from("partners").select("id, name").order("name"),
-      supabase.from("leads").select("partner_id, stage, added_date"),
+      supabase.from("leads").select("id, name, partner_id, stage, added_date, updated_at"),
       supabase.from("members").select("partner_id, created_at, product_id"),
       supabase.from("payments").select("partner_id, amount, status, paid_date"),
       supabase.from("products").select("id, name"),
@@ -46,6 +48,12 @@ export default async function DashboardPage({
   const allMembers = members ?? [];
   const allPayments = payments ?? [];
   const productNamesById = new Map((products ?? []).map((p) => [p.id, p.name]));
+  const partnerNamesById = new Map((partners ?? []).map((p) => [p.id, p.name]));
+
+  // "Требует внимания" — independent of the period filter below, see the
+  // doc comment on findStaleLeads/findDecliningClubs in lib/dashboard.ts.
+  const staleLeads = findStaleLeads(allLeads, partnerNamesById);
+  const decliningClubs = findDecliningClubs(partners ?? [], allPayments);
 
   const period = parsePeriodParams(params);
   const monthOptions = monthsWithActivity(allLeads, allMembers, allPayments);
@@ -108,6 +116,8 @@ export default async function DashboardPage({
           fourthTile={{ labelKey: "statClubsInNetwork", value: String(clubs.length), deltaKey: "deltaActiveClubs" }}
           stageCounts={metrics.stageCounts}
           clubs={clubs}
+          staleLeads={staleLeads}
+          decliningClubs={decliningClubs}
           period={period}
           monthOptions={monthOptions}
           basePath="/dashboard"

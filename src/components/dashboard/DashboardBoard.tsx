@@ -3,9 +3,10 @@
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import type { ReactNode } from "react";
-import type { Period, ProductCount, StageCount } from "@/lib/dashboard";
+import type { DecliningClub, Period, ProductCount, StageCount, StaleLead } from "@/lib/dashboard";
 import { formatPctDelta, formatPointsDelta, monthLabel, periodLabel } from "@/lib/dashboard";
 import Money from "@/components/currency/Money";
+import { stageLabel } from "@/lib/leads";
 import { useLocale } from "@/components/i18n/LocaleProvider";
 
 export type ClubRow = {
@@ -140,6 +141,93 @@ function ProductsTable({ titleKey, rows }: { titleKey: string; rows: ProductCoun
   );
 }
 
+/**
+ * "Требует внимания" — two honest signals, not a score: leads nobody has
+ * touched in a while, and clubs whose real revenue slipped vs last month.
+ * Both lists come straight from lib/dashboard's plain filters over the same
+ * rows already on this page — nothing predicted, nothing hidden behind a
+ * single number. Shown only on the network view (HQ is the audience for
+ * "which of my clubs needs a call"); an empty list says so honestly rather
+ * than disappearing, so a quiet week reads as "all clear", not as missing.
+ */
+function AttentionSection({
+  staleLeads,
+  decliningClubs,
+}: {
+  staleLeads: StaleLead[];
+  decliningClubs: DecliningClub[];
+}) {
+  const { locale, t } = useLocale();
+  return (
+    <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+      <div className="rounded-xl border border-border bg-background">
+        <div className="border-b border-border px-5 py-4">
+          <h2 className="text-sm font-semibold text-foreground">{t("headingStaleLeads")}</h2>
+        </div>
+        {staleLeads.length === 0 ? (
+          <p className="p-5 text-sm text-muted">{t("emptyNoStaleLeads")}</p>
+        ) : (
+          <div className="max-h-80 overflow-y-auto">
+            <table className="w-full text-left text-sm">
+              <thead className="border-b border-border text-xs uppercase tracking-wide text-muted">
+                <tr>
+                  <th className="px-5 py-2.5 font-medium">{t("colLead")}</th>
+                  <th className="px-5 py-2.5 font-medium">{t("colClub")}</th>
+                  <th className="px-5 py-2.5 font-medium">{t("colStage")}</th>
+                  <th className="px-5 py-2.5 text-right font-medium">{t("colDaysStuck")}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {staleLeads.map((l) => (
+                  <tr key={l.id} className="border-b border-border last:border-0">
+                    <td className="px-5 py-2.5 font-medium text-foreground">{l.name}</td>
+                    <td className="px-5 py-2.5 text-muted">{l.partnerName}</td>
+                    <td className="px-5 py-2.5 text-muted">{stageLabel(l.stage, locale)}</td>
+                    <td className="px-5 py-2.5 text-right font-medium text-accent-strong">
+                      {t("daysCount", { n: l.daysSinceUpdate })}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+        <div className="border-t border-border px-5 py-3">
+          <Link href="/leads" className="text-sm text-muted hover:text-ink-2 hover:underline">
+            {t("linkViewAllLeads")} →
+          </Link>
+        </div>
+      </div>
+
+      <div className="rounded-xl border border-border bg-background">
+        <div className="border-b border-border px-5 py-4">
+          <h2 className="text-sm font-semibold text-foreground">{t("headingDecliningClubs")}</h2>
+        </div>
+        {decliningClubs.length === 0 ? (
+          <p className="p-5 text-sm text-muted">{t("emptyNoDecliningClubs")}</p>
+        ) : (
+          <table className="w-full text-left text-sm">
+            <tbody>
+              {decliningClubs.map((c) => (
+                <tr key={c.id} className="border-b border-border last:border-0">
+                  <td className="px-5 py-2.5 font-medium text-foreground">
+                    <Link href={`/dashboard/${c.id}`} className="hover:text-accent hover:underline">
+                      {c.name}
+                    </Link>
+                  </td>
+                  <td className="px-5 py-2.5 text-right text-accent-strong">
+                    {formatPctDelta(c.delta, locale)}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+    </div>
+  );
+}
+
 type ClubSortKey = "name" | "leads" | "members" | "collected" | "pending";
 
 function ClubSortHeader({
@@ -266,6 +354,8 @@ export default function DashboardBoard({
   fourthTile,
   stageCounts,
   clubs,
+  staleLeads,
+  decliningClubs,
   period,
   monthOptions,
   basePath,
@@ -286,6 +376,10 @@ export default function DashboardBoard({
   stageCounts: StageCount[];
   /** Omit on a club's own dashboard — there's nothing to break down by club. */
   clubs?: ClubRow[];
+  /** Omit on a club's own dashboard, same as `clubs` — "требует внимания" is
+   * an HQ, network-wide view. */
+  staleLeads?: StaleLead[];
+  decliningClubs?: DecliningClub[];
   period: Period;
   monthOptions: string[];
   /** "/dashboard" for the network view, "/dashboard/<id>" for a club's own. */
@@ -305,6 +399,10 @@ export default function DashboardBoard({
   return (
     <div className="flex flex-1 flex-col gap-6">
       <PeriodFilter period={period} monthOptions={monthOptions} basePath={basePath} />
+
+      {staleLeads && decliningClubs && (
+        <AttentionSection staleLeads={staleLeads} decliningClubs={decliningClubs} />
+      )}
 
       <p className="text-sm text-muted">
         {t("metricsForPrefix")} <span className="font-medium text-foreground">{periodLabel(period, locale)}</span>

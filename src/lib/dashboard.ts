@@ -212,6 +212,81 @@ export function computeCoreMetrics({
 }
 
 // ---------------------------------------------------------------------------
+// "Требует внимания" — two honest signals for HQ, computed straight from
+// the same rows the rest of the dashboard already uses, nothing scored or
+// predicted. Deliberately independent of the page's selected period filter:
+// "no movement in 5 days" and "this month vs last" only make sense against
+// real calendar time, the same way the existing month-over-month deltas
+// elsewhere on this page already work.
+
+/** A lead counts as "stuck" once it's gone this many days without an update
+ * — a stage change, an edit, anything that touches the row (see the
+ * `leads_set_updated_at` DB trigger, which is what keeps `updated_at`
+ * honest instead of frozen at creation time). */
+export const STALE_LEAD_DAYS = 5;
+
+export type StaleLead = {
+  id: string;
+  name: string;
+  stage: string;
+  partnerName: string;
+  daysSinceUpdate: number;
+};
+
+/** Active leads (not yet won or lost) with no movement in over
+ * `STALE_LEAD_DAYS` days, most-stale first. A lead that already reached
+ * "paid" or "declined" is done, not stuck — it's excluded on purpose. */
+export function findStaleLeads(
+  leads: { id: string; name: string; stage: string; updated_at: string; partner_id: string }[],
+  partnerNamesById: Map<string, string>,
+  now: Date = new Date()
+): StaleLead[] {
+  const msPerDay = 24 * 60 * 60 * 1000;
+  return leads
+    .filter((l) => l.stage !== "paid" && l.stage !== "declined")
+    .map((l) => ({
+      id: l.id,
+      name: l.name,
+      stage: l.stage,
+      partnerName: partnerNamesById.get(l.partner_id) ?? "",
+      daysSinceUpdate: Math.floor((now.getTime() - new Date(l.updated_at).getTime()) / msPerDay),
+    }))
+    .filter((l) => l.daysSinceUpdate > STALE_LEAD_DAYS)
+    .sort((a, b) => b.daysSinceUpdate - a.daysSinceUpdate);
+}
+
+export type DecliningClub = { id: string; name: string; delta: number };
+
+/**
+ * Clubs whose real "paid" revenue this calendar month is lower than last
+ * calendar month — most-declined first. A club with no revenue at all last
+ * month is skipped rather than shown as "-100%": there's no real baseline
+ * to fall from, same rule `pctChange` already applies to the network-wide
+ * revenue tile above.
+ */
+export function findDecliningClubs(
+  partners: { id: string; name: string }[],
+  payments: { partner_id: string; amount: number; status: string | null; paid_date: string }[]
+): DecliningClub[] {
+  const paid = payments.filter((p) => p.status === "paid");
+  const thisMonth = currentMonthKey();
+  const prevMonth = previousMonthKey();
+  const revenueFor = (partnerId: string, monthKey: string) =>
+    paid
+      .filter((p) => p.partner_id === partnerId && monthKeyOf(p.paid_date) === monthKey)
+      .reduce((sum, p) => sum + Number(p.amount), 0);
+
+  return partners
+    .map((p) => ({
+      id: p.id,
+      name: p.name,
+      delta: pctChange(revenueFor(p.id, thisMonth), revenueFor(p.id, prevMonth)),
+    }))
+    .filter((c): c is DecliningClub => c.delta !== null && c.delta < 0)
+    .sort((a, b) => a.delta - b.delta);
+}
+
+// ---------------------------------------------------------------------------
 // "Участницы по продуктам" — how many members are on each course/product.
 // Members with no product_id are bucketed separately rather than silently
 // dropped, so the counts always add up to the real total. A real product's
