@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import type { Period, ProductCount, StageCount } from "@/lib/dashboard";
 import { formatPctDelta, formatPointsDelta, monthLabel, periodLabel } from "@/lib/dashboard";
@@ -139,6 +140,127 @@ function ProductsTable({ titleKey, rows }: { titleKey: string; rows: ProductCoun
   );
 }
 
+type ClubSortKey = "name" | "leads" | "members" | "collected" | "pending";
+
+function ClubSortHeader({
+  label,
+  sortKeyName,
+  activeSortKey,
+  sortDir,
+  align,
+  onSort,
+}: {
+  label: string;
+  sortKeyName: ClubSortKey;
+  activeSortKey: ClubSortKey;
+  sortDir: "asc" | "desc";
+  align?: "right";
+  onSort: (key: ClubSortKey) => void;
+}) {
+  const active = activeSortKey === sortKeyName;
+  return (
+    <th
+      className={`px-5 py-3 font-medium ${align === "right" ? "text-right" : ""}`}
+      aria-sort={active ? (sortDir === "asc" ? "ascending" : "descending") : "none"}
+    >
+      <button
+        type="button"
+        onClick={() => onSort(sortKeyName)}
+        className={`inline-flex items-center gap-1 hover:text-ink-2 ${active ? "text-ink-2" : ""}`}
+      >
+        {label}
+        <span className="w-2.5 text-[10px] leading-none text-muted">
+          {active ? (sortDir === "asc" ? "▲" : "▼") : ""}
+        </span>
+      </button>
+    </th>
+  );
+}
+
+/**
+ * Sortable "по клубам" table — click any column to rank clubs by that real
+ * metric (highest first by default, click again to flip). This replaces
+ * the prototype's bubble map with club "health" statuses (Стабильно / Под
+ * наблюдением / Нужна помощь) — that was an opaque score with no visible
+ * formula behind it, same objection as the AI lead score and churn-risk
+ * tag that were already left out elsewhere. Ranking the same numbers the
+ * table already shows is the honest version: nothing is computed that
+ * isn't also right there in the row.
+ */
+function ClubsTable({ clubs, qs }: { clubs: ClubRow[]; qs: string }) {
+  const { t } = useLocale();
+  const [sortKey, setSortKey] = useState<ClubSortKey>("name");
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
+
+  function handleSort(key: ClubSortKey) {
+    if (sortKey === key) {
+      setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    } else {
+      setSortKey(key);
+      setSortDir(key === "name" ? "asc" : "desc");
+    }
+  }
+
+  const sortedClubs = useMemo(() => {
+    const dir = sortDir === "asc" ? 1 : -1;
+    const valueFor = (c: ClubRow) =>
+      sortKey === "leads"
+        ? c.leadsCount
+        : sortKey === "members"
+          ? c.membersCount
+          : sortKey === "collected"
+            ? c.collected
+            : c.pending;
+    return [...clubs].sort((a, b) =>
+      sortKey === "name" ? a.name.localeCompare(b.name) * dir : (valueFor(a) - valueFor(b)) * dir
+    );
+  }, [clubs, sortKey, sortDir]);
+
+  return (
+    <div className="rounded-xl border border-border bg-background">
+      <div className="border-b border-border px-5 py-4">
+        <h2 className="text-sm font-semibold text-foreground">{t("headingClubsPeriod")}</h2>
+      </div>
+      {clubs.length === 0 ? (
+        <p className="p-5 text-sm text-muted">{t("emptyNoClubs")}</p>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[560px] text-left text-sm">
+            <thead className="border-b border-border text-xs uppercase tracking-wide text-muted">
+              <tr>
+                <ClubSortHeader label={t("colClub")} sortKeyName="name" activeSortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
+                <ClubSortHeader label={t("colLeads")} sortKeyName="leads" activeSortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
+                <ClubSortHeader label={t("statMembers")} sortKeyName="members" activeSortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
+                <ClubSortHeader label={t("colCollected")} sortKeyName="collected" activeSortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
+                <ClubSortHeader label={t("statPending")} sortKeyName="pending" activeSortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
+              </tr>
+            </thead>
+            <tbody>
+              {sortedClubs.map((c) => (
+                <tr key={c.id} className="border-b border-border last:border-0">
+                  <td className="px-5 py-3 font-medium text-foreground">
+                    <Link href={`/dashboard/${c.id}${qs}`} className="hover:text-accent hover:underline">
+                      {c.name}
+                    </Link>
+                  </td>
+                  <td className="px-5 py-3 text-muted">{c.leadsCount}</td>
+                  <td className="px-5 py-3 text-muted">{c.membersCount}</td>
+                  <td className="px-5 py-3 text-muted">
+                    <Money amountEur={c.collected} />
+                  </td>
+                  <td className="px-5 py-3 text-muted">
+                    <Money amountEur={c.pending} />
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function DashboardBoard({
   totals,
   fourthTile,
@@ -261,49 +383,7 @@ export default function DashboardBoard({
         <ProductsTable titleKey="headingProductsAllTime" rows={productsAllTime} />
       </div>
 
-      {clubs && (
-        <div className="rounded-xl border border-border bg-background">
-          <div className="border-b border-border px-5 py-4">
-            <h2 className="text-sm font-semibold text-foreground">{t("headingClubsPeriod")}</h2>
-          </div>
-          {clubs.length === 0 ? (
-            <p className="p-5 text-sm text-muted">{t("emptyNoClubs")}</p>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[560px] text-left text-sm">
-                <thead className="border-b border-border text-xs uppercase tracking-wide text-muted">
-                  <tr>
-                    <th className="px-5 py-3 font-medium">{t("colClub")}</th>
-                    <th className="px-5 py-3 font-medium">{t("colLeads")}</th>
-                    <th className="px-5 py-3 font-medium">{t("statMembers")}</th>
-                    <th className="px-5 py-3 font-medium">{t("colCollected")}</th>
-                    <th className="px-5 py-3 font-medium">{t("statPending")}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {clubs.map((c) => (
-                    <tr key={c.id} className="border-b border-border last:border-0">
-                      <td className="px-5 py-3 font-medium text-foreground">
-                        <Link href={`/dashboard/${c.id}${qs}`} className="hover:text-accent hover:underline">
-                          {c.name}
-                        </Link>
-                      </td>
-                      <td className="px-5 py-3 text-muted">{c.leadsCount}</td>
-                      <td className="px-5 py-3 text-muted">{c.membersCount}</td>
-                      <td className="px-5 py-3 text-muted">
-                        <Money amountEur={c.collected} />
-                      </td>
-                      <td className="px-5 py-3 text-muted">
-                        <Money amountEur={c.pending} />
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
-      )}
+      {clubs && <ClubsTable clubs={clubs} qs={qs} />}
     </div>
   );
 }
