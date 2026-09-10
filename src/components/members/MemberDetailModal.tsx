@@ -10,18 +10,8 @@ import {
   updateMember,
   type MemberDetail,
 } from "@/app/members/actions";
-import { STATUSES, statusLabel } from "@/lib/members";
+import { attendedArray, STATUSES, statusLabel } from "@/lib/members";
 import type { Member } from "./types";
-
-function attendedArray(raw: unknown, length: number): (boolean | null)[] {
-  const arr = Array.isArray(raw) ? (raw as unknown[]) : [];
-  const out: (boolean | null)[] = [];
-  for (let i = 0; i < length; i++) {
-    const v = arr[i];
-    out.push(v === true ? true : v === false ? false : null);
-  }
-  return out;
-}
 
 export default function MemberDetailModal({
   member,

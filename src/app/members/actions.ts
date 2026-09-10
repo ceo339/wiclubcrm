@@ -139,6 +139,7 @@ export async function setAttendance(
   if (error) return { error: error.message };
 
   revalidatePath("/members");
+  revalidatePath("/attendance", "layout");
   return { error: null };
 }
 

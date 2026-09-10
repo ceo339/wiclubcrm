@@ -79,6 +79,15 @@ export default async function Home() {
           </div>
         </Link>
         <Link
+          href="/attendance"
+          className="w-full max-w-sm rounded-xl border border-border bg-background p-5 text-left shadow-sm transition-colors hover:border-accent"
+        >
+          <div className="text-sm font-medium text-foreground">Посещаемость</div>
+          <div className="mt-1 text-xs text-muted">
+            Отметки за весь поток курса сразу, а не по одной участнице
+          </div>
+        </Link>
+        <Link
           href="/products"
           className="w-full max-w-sm rounded-xl border border-border bg-background p-5 text-left shadow-sm transition-colors hover:border-accent"
         >
