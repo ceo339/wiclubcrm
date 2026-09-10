@@ -12,11 +12,12 @@ import {
 } from "@/app/leads/actions";
 import {
   COUNTRIES,
+  GENERIC_PLANS,
   SOURCE_LABELS,
   declineReasonLabel,
-  genericPlanLabel,
   stageLabel,
 } from "@/lib/leads";
+import Money from "@/components/currency/Money";
 import type { Lead } from "./types";
 
 export default function LeadDetailModal({
@@ -95,6 +96,8 @@ function ReadView({
   canEdit: boolean;
   onEdit: () => void;
 }) {
+  const plan = lead.plan ? GENERIC_PLANS.find((p) => p.id === lead.plan) : null;
+
   return (
     <>
       <dl className="mt-4 grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
@@ -104,8 +107,28 @@ function ReadView({
         <Row label="Город" value={lead.city} />
         <Row label="Дата рождения" value={lead.birthday} />
         <Row label="Добавлен" value={lead.added_date} />
-        <Row label="Сумма" value={lead.value ? `€${lead.value}` : null} />
-        {lead.plan && <Row label="Интересует" value={genericPlanLabel(lead.plan)} />}
+        {lead.value ? (
+          <>
+            <dt className="text-muted">Сумма</dt>
+            <dd className="text-ink-2">
+              <Money amountEur={lead.value} />
+            </dd>
+          </>
+        ) : null}
+        {lead.plan && (
+          <>
+            <dt className="text-muted">Интересует</dt>
+            <dd className="text-ink-2">
+              {plan ? (
+                <>
+                  {plan.label} · <Money amountEur={plan.price} />
+                </>
+              ) : (
+                lead.plan
+              )}
+            </dd>
+          </>
+        )}
         {lead.cohort_start_date && <Row label="Начало потока" value={lead.cohort_start_date} />}
         {lead.stage === "declined" && lead.decline_reason && (
           <Row

@@ -3,6 +3,7 @@
 import { useActionState, useMemo, useState } from "react";
 import { createLead, type ActionResult } from "@/app/leads/actions";
 import { COUNTRIES, GENERIC_PLANS, SOURCES, SOURCE_LABELS } from "@/lib/leads";
+import Money from "@/components/currency/Money";
 import type { Tables } from "@/types/database";
 
 const initialState: ActionResult = { error: null };
@@ -158,7 +159,7 @@ export default function NewLeadModal({
                 <option value="">— не выбран —</option>
                 {products.map((p) => (
                   <option key={p.id} value={p.id}>
-                    {p.name} · ${p.price}
+                    {p.name} · <Money amountEur={p.price} />
                   </option>
                 ))}
               </select>
@@ -179,7 +180,7 @@ export default function NewLeadModal({
                 <optgroup label="Членство">
                   {GENERIC_PLANS.map((p) => (
                     <option key={p.id} value={`generic:${p.id}`}>
-                      {p.label} · ${p.price}
+                      {p.label} · <Money amountEur={p.price} />
                     </option>
                   ))}
                 </optgroup>
@@ -187,7 +188,7 @@ export default function NewLeadModal({
                   <optgroup label="Курсы">
                     {products.map((p) => (
                       <option key={p.id} value={`product:${p.id}`}>
-                        {p.name} · ${p.price}
+                        {p.name} · <Money amountEur={p.price} />
                       </option>
                     ))}
                   </optgroup>

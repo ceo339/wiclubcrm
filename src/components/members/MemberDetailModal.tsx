@@ -11,6 +11,7 @@ import {
   type MemberDetail,
 } from "@/app/members/actions";
 import { attendedArray, STATUSES, statusLabel } from "@/lib/members";
+import Money from "@/components/currency/Money";
 import type { Member } from "./types";
 
 export default function MemberDetailModal({
@@ -103,7 +104,9 @@ function ReadView({
         <dt className="text-muted">Начало</dt>
         <dd className="text-ink-2">{member.start_date ?? "—"}</dd>
         <dt className="text-muted">Сумма</dt>
-        <dd className="text-ink-2">{member.price_collected ? `€${member.price_collected}` : "—"}</dd>
+        <dd className="text-ink-2">
+          {member.price_collected ? <Money amountEur={member.price_collected} /> : "—"}
+        </dd>
       </dl>
 
       {canEdit && (

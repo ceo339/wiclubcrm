@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { getCurrentProfile } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
+import CurrencySwitcher from "@/components/currency/CurrencySwitcher";
 
 export default async function AttendancePage() {
   const profile = await getCurrentProfile();
@@ -47,6 +48,7 @@ export default async function AttendancePage() {
             Посещаемость
           </h1>
         </div>
+        <CurrencySwitcher />
       </header>
 
       <main className="flex flex-1 flex-col p-6">

@@ -67,8 +67,3 @@ export const GENERIC_PLANS: { id: string; label: string; price: number }[] = [
   { id: "plCourse", label: "Курс «Женское лидерство»", price: 390 },
   { id: "plCoaching", label: "Личный коучинг", price: 850 },
 ];
-
-export const genericPlanLabel = (id: string | null) => {
-  const plan = GENERIC_PLANS.find((p) => p.id === id);
-  return plan ? `${plan.label} · $${plan.price}` : id ?? "";
-};

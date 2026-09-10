@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { getCurrentProfile } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
+import CurrencySwitcher from "@/components/currency/CurrencySwitcher";
 import PaymentsBoard from "@/components/payments/PaymentsBoard";
 import type { MemberOption } from "@/components/payments/types";
 
@@ -43,6 +44,7 @@ export default async function PaymentsPage() {
           </Link>
           <h1 className="mt-1 text-lg font-semibold tracking-tight text-foreground">Оплаты</h1>
         </div>
+        <CurrencySwitcher />
       </header>
 
       <main className="flex flex-1 flex-col p-6">

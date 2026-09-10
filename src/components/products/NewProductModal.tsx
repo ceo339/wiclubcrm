@@ -37,7 +37,7 @@ export default function NewProductModal({ onClose }: { onClose: () => void }) {
             />
           </label>
           <label className="flex flex-col gap-1.5 text-sm">
-            <span className="font-medium text-ink-2">Цена ($)</span>
+            <span className="font-medium text-ink-2">Цена (€)</span>
             <input
               name="price"
               type="number"

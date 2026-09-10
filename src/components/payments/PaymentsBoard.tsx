@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { STATUSES, statusLabel } from "@/lib/payments";
+import Money from "@/components/currency/Money";
 import type { MemberOption, Payment } from "./types";
 import NewPaymentModal from "./NewPaymentModal";
 import EditPaymentModal from "./EditPaymentModal";
@@ -46,11 +47,15 @@ export default function PaymentsBoard({
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
         <div className="rounded-xl border border-border bg-background p-4">
           <div className="text-xs uppercase tracking-wide text-muted">Собрано</div>
-          <div className="mt-1 text-xl font-semibold text-foreground">€{totalPaid}</div>
+          <div className="mt-1 text-xl font-semibold text-foreground">
+            <Money amountEur={totalPaid} />
+          </div>
         </div>
         <div className="rounded-xl border border-border bg-background p-4">
           <div className="text-xs uppercase tracking-wide text-muted">Ожидается</div>
-          <div className="mt-1 text-xl font-semibold text-foreground">€{totalPending}</div>
+          <div className="mt-1 text-xl font-semibold text-foreground">
+            <Money amountEur={totalPending} />
+          </div>
         </div>
         <div className="rounded-xl border border-border bg-background p-4">
           <div className="text-xs uppercase tracking-wide text-muted">Всего записей</div>
@@ -130,7 +135,9 @@ export default function PaymentsBoard({
                     </span>
                   </td>
                   <td className="px-4 py-3 text-muted">{p.paid_date}</td>
-                  <td className="px-4 py-3 font-medium text-foreground">€{p.amount}</td>
+                  <td className="px-4 py-3 font-medium text-foreground">
+                    <Money amountEur={p.amount} />
+                  </td>
                 </tr>
               ))}
             </tbody>

@@ -1,4 +1,5 @@
 import { stageLabel, SOURCE_LABELS, declineReasonLabel } from "@/lib/leads";
+import Money from "@/components/currency/Money";
 import type { Lead } from "./types";
 
 export default function LeadsList({
@@ -56,7 +57,7 @@ export default function LeadsList({
                   </div>
                 )}
               </td>
-              <td className="px-4 py-3 text-muted">{lead.value ? `€${lead.value}` : "—"}</td>
+              <td className="px-4 py-3 text-muted">{lead.value ? <Money amountEur={lead.value} /> : "—"}</td>
               <td className="px-4 py-3 text-muted">
                 {lead.phone || lead.email || "—"}
               </td>

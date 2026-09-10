@@ -3,6 +3,7 @@
 import { useActionState, useMemo, useState } from "react";
 import { createMember, type ActionResult } from "@/app/members/actions";
 import { currentMonthYear, STATUSES } from "@/lib/members";
+import Money from "@/components/currency/Money";
 import type { Tables } from "@/types/database";
 
 const initialState: ActionResult = { error: null };
@@ -90,7 +91,7 @@ export default function NewMemberModal({
                 <option value="">— не выбран —</option>
                 {products.map((p) => (
                   <option key={p.id} value={p.id}>
-                    {p.name} · ${p.price}
+                    {p.name} · <Money amountEur={p.price} />
                   </option>
                 ))}
               </select>

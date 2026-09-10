@@ -3,6 +3,7 @@
 import { useActionState, useState } from "react";
 import { updatePayment, deletePayment, type ActionResult } from "@/app/payments/actions";
 import { STATUSES } from "@/lib/payments";
+import Money from "@/components/currency/Money";
 import type { Payment } from "./types";
 
 const initialState: ActionResult = { error: null };
@@ -123,7 +124,9 @@ export default function EditPaymentModal({
           </form>
         ) : (
           <div className="mt-4 flex flex-col gap-1 text-sm text-ink-2">
-            <p>Сумма: €{payment.amount}</p>
+            <p>
+              Сумма: <Money amountEur={payment.amount} />
+            </p>
             <p>Дата: {payment.paid_date}</p>
             <div className="mt-4 flex justify-end">
               <button

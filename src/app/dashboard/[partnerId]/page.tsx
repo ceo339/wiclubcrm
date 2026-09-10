@@ -9,6 +9,7 @@ import {
   monthsWithActivity,
   parsePeriodParams,
 } from "@/lib/dashboard";
+import CurrencySwitcher from "@/components/currency/CurrencySwitcher";
 import DashboardBoard from "@/components/dashboard/DashboardBoard";
 
 export default async function ClubDashboardPage({
@@ -86,6 +87,7 @@ export default async function ClubDashboardPage({
             {partner.name}
           </h1>
         </div>
+        <CurrencySwitcher />
       </header>
 
       <main className="flex flex-1 flex-col p-6">

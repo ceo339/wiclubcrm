@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { addCohort, deleteCohort, deleteProduct } from "@/app/products/actions";
+import Money from "@/components/currency/Money";
 import type { Cohort, Product } from "./types";
 import NewProductModal from "./NewProductModal";
 
@@ -110,7 +111,7 @@ function ProductCard({
         <div>
           <div className="font-medium text-foreground">{product.name}</div>
           <div className="mt-0.5 text-xs text-muted">
-            ${product.price}
+            <Money amountEur={product.price} />
             {product.sessions ? ` · ${product.sessions} занятий` : ""}
             {showPartner && product.partner_name ? ` · ${product.partner_name}` : ""}
           </div>

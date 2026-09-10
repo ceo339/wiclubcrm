@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { getCurrentProfile } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
+import CurrencySwitcher from "@/components/currency/CurrencySwitcher";
 import MembersBoard from "@/components/members/MembersBoard";
 
 export default async function MembersPage() {
@@ -34,6 +35,7 @@ export default async function MembersPage() {
             Участницы
           </h1>
         </div>
+        <CurrencySwitcher />
       </header>
 
       <main className="flex flex-1 flex-col p-6">

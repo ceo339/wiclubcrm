@@ -2,6 +2,7 @@ import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
 import { getCurrentProfile } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
+import CurrencySwitcher from "@/components/currency/CurrencySwitcher";
 import GroupAttendanceBoard from "@/components/attendance/GroupAttendanceBoard";
 
 export default async function CohortAttendancePage({
@@ -57,6 +58,7 @@ export default async function CohortAttendancePage({
             начало {cohort.start_date}
           </p>
         </div>
+        <CurrencySwitcher />
       </header>
 
       <main className="flex flex-1 flex-col p-6">

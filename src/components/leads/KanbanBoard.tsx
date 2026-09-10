@@ -3,6 +3,7 @@
 import { useOptimistic, useState, useTransition } from "react";
 import { STAGES, type StageId } from "@/lib/leads";
 import { updateLeadStage } from "@/app/leads/actions";
+import Money from "@/components/currency/Money";
 import type { Lead } from "./types";
 import DeclineModal from "./DeclineModal";
 
@@ -83,7 +84,7 @@ export default function KanbanBoard({
                   >
                     <div className="font-medium text-foreground">{lead.name}</div>
                     <div className="mt-0.5 text-xs text-muted">
-                      {lead.value ? `€${lead.value}` : "—"}
+                      {lead.value ? <Money amountEur={lead.value} /> : "—"}
                       {showPartner && lead.partner_name ? ` · ${lead.partner_name}` : ""}
                     </div>
                     {stage.id === "declined" && lead.decline_reason && (

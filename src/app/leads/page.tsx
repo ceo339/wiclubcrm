@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { getCurrentProfile } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
+import CurrencySwitcher from "@/components/currency/CurrencySwitcher";
 import LeadsBoard from "@/components/leads/LeadsBoard";
 
 export default async function LeadsPage() {
@@ -35,6 +36,7 @@ export default async function LeadsPage() {
             Лиды
           </h1>
         </div>
+        <CurrencySwitcher />
       </header>
 
       <main className="flex flex-1 flex-col p-6">

@@ -1,6 +1,8 @@
 import Link from "next/link";
+import type { ReactNode } from "react";
 import type { Period, ProductCount, StageCount } from "@/lib/dashboard";
 import { formatPctDelta, formatPointsDelta, monthLabel, periodLabel } from "@/lib/dashboard";
+import Money from "@/components/currency/Money";
 
 export type ClubRow = {
   id: string;
@@ -18,7 +20,7 @@ type Totals = {
   pending: number;
 };
 
-function StatTile({ label, value, delta }: { label: string; value: string; delta: string }) {
+function StatTile({ label, value, delta }: { label: string; value: ReactNode; delta: string }) {
   return (
     <div className="rounded-xl border border-border bg-background p-4">
       <div className="text-xs uppercase tracking-wide text-muted">{label}</div>
@@ -177,7 +179,7 @@ export default function DashboardBoard({
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <StatTile
           label="Выручка"
-          value={`€${revenue.amount}`}
+          value={<Money amountEur={revenue.amount} />}
           delta={isRange ? "за выбранный период" : formatPctDelta(revenue.delta)}
         />
         <StatTile
@@ -187,7 +189,7 @@ export default function DashboardBoard({
         />
         <StatTile
           label="Роялти к оплате"
-          value={`€${royalty.amount}`}
+          value={<Money amountEur={royalty.amount} />}
           delta={`${royalty.percent}% от выручки за период`}
         />
         <StatTile
@@ -205,8 +207,16 @@ export default function DashboardBoard({
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <StatTile label="Лидов (всего)" value={String(totals.leads)} delta="за всё время" />
-        <StatTile label="Собрано (всего)" value={`€${totals.collected}`} delta="за всё время" />
-        <StatTile label="Ожидается" value={`€${totals.pending}`} delta="ещё не оплачено" />
+        <StatTile
+          label="Собрано (всего)"
+          value={<Money amountEur={totals.collected} />}
+          delta="за всё время"
+        />
+        <StatTile
+          label="Ожидается"
+          value={<Money amountEur={totals.pending} />}
+          delta="ещё не оплачено"
+        />
         <StatTile label={fourthTile.label} value={fourthTile.value} delta={fourthTile.delta} />
       </div>
 
@@ -264,8 +274,12 @@ export default function DashboardBoard({
                       </td>
                       <td className="px-5 py-3 text-muted">{c.leadsCount}</td>
                       <td className="px-5 py-3 text-muted">{c.membersCount}</td>
-                      <td className="px-5 py-3 text-muted">€{c.collected}</td>
-                      <td className="px-5 py-3 text-muted">€{c.pending}</td>
+                      <td className="px-5 py-3 text-muted">
+                        <Money amountEur={c.collected} />
+                      </td>
+                      <td className="px-5 py-3 text-muted">
+                        <Money amountEur={c.pending} />
+                      </td>
                     </tr>
                   ))}
                 </tbody>

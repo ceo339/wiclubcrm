@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { STATUSES, statusLabel } from "@/lib/members";
+import Money from "@/components/currency/Money";
 import type { Tables } from "@/types/database";
 import type { Member } from "./types";
 import NewMemberModal from "./NewMemberModal";
@@ -182,7 +183,7 @@ export default function MembersBoard({
                   <td className="px-4 py-3 text-muted">{m.city ?? "—"}</td>
                   <td className="px-4 py-3 text-muted">{m.start_date ?? "—"}</td>
                   <td className="px-4 py-3 text-muted">
-                    {m.price_collected ? `€${m.price_collected}` : "—"}
+                    {m.price_collected ? <Money amountEur={m.price_collected} /> : "—"}
                   </td>
                 </tr>
               ))}
