@@ -43,10 +43,12 @@ export async function signUp(
     return { ...EMPTY_STATE, error: error.message };
   }
 
+  // A dictionary key, not literal text — actions.ts runs on the server with
+  // no access to the signed-out visitor's language choice, so the page
+  // translates this at render time (same idea as every other error key).
   return {
     ...EMPTY_STATE,
-    message:
-      "Аккаунт создан. Пока свяжитесь с администратором, чтобы привязать его к клубу-партнёру, — самостоятельный онбординг ещё не готов.",
+    message: "signupSuccessMessage",
   };
 }
 

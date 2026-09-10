@@ -20,13 +20,13 @@ function normalizeStatus(raw: string | undefined | null): string {
  */
 export async function createMember(formData: FormData): Promise<ActionResult> {
   const profile = await getCurrentProfile();
-  if (!profile) return { error: "Не авторизовано" };
+  if (!profile) return { error: "errNotAuthorized" };
   if (!profile.partner_id) {
-    return { error: "У аккаунта HQ нет своего клуба — добавлять участниц может только партнёр." };
+    return { error: "errHqNoClubAddMembers" };
   }
 
   const name = String(formData.get("name") || "").trim();
-  if (!name) return { error: "Укажите имя" };
+  if (!name) return { error: "errEnterName" };
 
   const status = normalizeStatus(String(formData.get("status") || ""));
   const productId = String(formData.get("product_id") || "").trim() || null;
@@ -71,13 +71,13 @@ export async function createMember(formData: FormData): Promise<ActionResult> {
 
 export async function updateMember(memberId: string, formData: FormData): Promise<ActionResult> {
   const profile = await getCurrentProfile();
-  if (!profile) return { error: "Не авторизовано" };
+  if (!profile) return { error: "errNotAuthorized" };
   if (!profile.partner_id) {
-    return { error: "У аккаунта HQ нет своего клуба — редактировать может только партнёр." };
+    return { error: "errHqNoClubEdit" };
   }
 
   const name = String(formData.get("name") || "").trim();
-  if (!name) return { error: "Укажите имя" };
+  if (!name) return { error: "errEnterName" };
 
   const status = normalizeStatus(String(formData.get("status") || ""));
   const startDate = String(formData.get("start_date") || "").trim() || null;
@@ -118,8 +118,8 @@ export async function setAttendance(
   value: boolean | null
 ): Promise<ActionResult> {
   const profile = await getCurrentProfile();
-  if (!profile) return { error: "Не авторизовано" };
-  if (!profile.partner_id) return { error: "У аккаунта HQ нет своего клуба." };
+  if (!profile) return { error: "errNotAuthorized" };
+  if (!profile.partner_id) return { error: "errHqNoClubGeneric" };
 
   const supabase = await createClient();
   const { data: member, error: fetchError } = await supabase
@@ -129,7 +129,7 @@ export async function setAttendance(
     .maybeSingle();
 
   if (fetchError) return { error: fetchError.message };
-  if (!member) return { error: "Участница не найдена" };
+  if (!member) return { error: "errMemberNotFound" };
 
   const attended = Array.isArray(member.attended) ? [...member.attended] : [];
   while (attended.length <= index) attended.push(null);
@@ -173,11 +173,11 @@ export async function getMemberDetail(memberId: string): Promise<MemberDetail> {
 
 export async function addMemberComment(memberId: string, text: string): Promise<ActionResult> {
   const profile = await getCurrentProfile();
-  if (!profile) return { error: "Не авторизовано" };
-  if (!profile.partner_id) return { error: "У аккаунта HQ нет своего клуба." };
+  if (!profile) return { error: "errNotAuthorized" };
+  if (!profile.partner_id) return { error: "errHqNoClubGeneric" };
 
   const trimmed = text.trim();
-  if (!trimmed) return { error: "Комментарий пустой" };
+  if (!trimmed) return { error: "errCommentEmpty" };
 
   const supabase = await createClient();
   const {
@@ -205,11 +205,11 @@ export async function addMemberTask(
   dueDate: string | null
 ): Promise<ActionResult> {
   const profile = await getCurrentProfile();
-  if (!profile) return { error: "Не авторизовано" };
-  if (!profile.partner_id) return { error: "У аккаунта HQ нет своего клуба." };
+  if (!profile) return { error: "errNotAuthorized" };
+  if (!profile.partner_id) return { error: "errHqNoClubGeneric" };
 
   const trimmed = text.trim();
-  if (!trimmed) return { error: "Укажите текст задачи" };
+  if (!trimmed) return { error: "errEnterTaskText" };
 
   const supabase = await createClient();
   const { error } = await supabase.from("tasks").insert({
@@ -229,8 +229,8 @@ export async function addMemberTask(
 
 export async function setMemberTaskDone(taskId: string, done: boolean): Promise<ActionResult> {
   const profile = await getCurrentProfile();
-  if (!profile) return { error: "Не авторизовано" };
-  if (!profile.partner_id) return { error: "У аккаунта HQ нет своего клуба." };
+  if (!profile) return { error: "errNotAuthorized" };
+  if (!profile.partner_id) return { error: "errHqNoClubGeneric" };
 
   const supabase = await createClient();
   const { error } = await supabase.from("tasks").update({ done }).eq("id", taskId);

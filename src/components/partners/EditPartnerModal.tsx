@@ -3,6 +3,7 @@
 import { useActionState, useState } from "react";
 import { updatePartner } from "@/app/partners/actions";
 import { COUNTRIES } from "@/lib/leads";
+import { useT } from "@/components/i18n/LocaleProvider";
 import type { Tables } from "@/types/database";
 
 const initialState = { error: null as string | null };
@@ -14,6 +15,7 @@ export default function EditPartnerModal({
   partner: Tables<"partners">;
   onClose: () => void;
 }) {
+  const t = useT();
   const [country, setCountry] = useState(partner.country ?? "");
   const [city, setCity] = useState(partner.city ?? "");
 
@@ -36,11 +38,11 @@ export default function EditPartnerModal({
         onClick={(e) => e.stopPropagation()}
       >
         <form action={formAction}>
-          <h3 className="text-base font-semibold text-foreground">Редактировать клуб</h3>
+          <h3 className="text-base font-semibold text-foreground">{t("headingEditClub")}</h3>
 
           <div className="mt-4 flex flex-col gap-3">
             <label className="flex flex-col gap-1.5 text-sm">
-              <span className="font-medium text-ink-2">Название клуба</span>
+              <span className="font-medium text-ink-2">{t("fieldClubName")}</span>
               <input
                 name="name"
                 required
@@ -50,7 +52,7 @@ export default function EditPartnerModal({
             </label>
 
             <label className="flex flex-col gap-1.5 text-sm">
-              <span className="font-medium text-ink-2">Страна</span>
+              <span className="font-medium text-ink-2">{t("fieldCountry")}</span>
               <select
                 name="country"
                 value={country}
@@ -58,7 +60,7 @@ export default function EditPartnerModal({
                 required
                 className="rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-accent focus:ring-1 focus:ring-accent"
               >
-                <option value="">— выберите —</option>
+                <option value="">{t("optionSelectGeneric")}</option>
                 {COUNTRIES.map((c) => (
                   <option key={c.name} value={c.name}>
                     {c.name}
@@ -68,7 +70,7 @@ export default function EditPartnerModal({
             </label>
 
             <label className="flex flex-col gap-1.5 text-sm">
-              <span className="font-medium text-ink-2">Город</span>
+              <span className="font-medium text-ink-2">{t("fieldCity")}</span>
               <input
                 name="city"
                 value={city}
@@ -80,7 +82,7 @@ export default function EditPartnerModal({
           </div>
 
           {state.error && (
-            <p className="mt-3 rounded-md bg-accent/10 px-3 py-2 text-sm text-accent-strong">{state.error}</p>
+            <p className="mt-3 rounded-md bg-accent/10 px-3 py-2 text-sm text-accent-strong">{t(state.error)}</p>
           )}
 
           <div className="mt-5 flex justify-end gap-2">
@@ -89,14 +91,14 @@ export default function EditPartnerModal({
               onClick={onClose}
               className="rounded-lg border border-border px-4 py-2 text-sm font-medium text-ink-2 hover:bg-surface-2"
             >
-              Отмена
+              {t("cancel")}
             </button>
             <button
               type="submit"
               disabled={pending}
               className="rounded-lg bg-foreground px-4 py-2 text-sm font-medium text-background disabled:opacity-50"
             >
-              {pending ? "..." : "Сохранить"}
+              {pending ? "..." : t("save")}
             </button>
           </div>
         </form>

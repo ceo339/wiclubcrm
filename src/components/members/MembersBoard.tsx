@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { STATUSES, statusLabel } from "@/lib/members";
 import Money from "@/components/currency/Money";
+import { useLocale } from "@/components/i18n/LocaleProvider";
 import type { Tables } from "@/types/database";
 import type { Member } from "./types";
 import NewMemberModal from "./NewMemberModal";
@@ -21,6 +22,7 @@ export default function MembersBoard({
   isHq: boolean;
   canEdit: boolean;
 }) {
+  const { locale, t } = useLocale();
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState<string>("all");
   const [productId, setProductId] = useState<string>("all");
@@ -75,7 +77,7 @@ export default function MembersBoard({
         <input
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          placeholder="Поиск по имени, городу…"
+          placeholder={t("searchMembersPlaceholder")}
           className="w-64 rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-accent focus:ring-1 focus:ring-accent"
         />
         <select
@@ -83,10 +85,10 @@ export default function MembersBoard({
           onChange={(e) => setStatus(e.target.value)}
           className="rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-accent focus:ring-1 focus:ring-accent"
         >
-          <option value="all">Все статусы</option>
+          <option value="all">{t("allStatuses")}</option>
           {STATUSES.map((s) => (
             <option key={s.id} value={s.id}>
-              {s.label}
+              {statusLabel(s.id, locale)}
             </option>
           ))}
         </select>
@@ -97,7 +99,7 @@ export default function MembersBoard({
             onChange={(e) => setProductId(e.target.value)}
             className="rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-accent focus:ring-1 focus:ring-accent"
           >
-            <option value="all">Все курсы</option>
+            <option value="all">{t("allCourses")}</option>
             {productOptions.map((p) => (
               <option key={p.id} value={p.id}>
                 {p.name}
@@ -112,7 +114,7 @@ export default function MembersBoard({
             onChange={(e) => setStartDate(e.target.value)}
             className="rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-accent focus:ring-1 focus:ring-accent"
           >
-            <option value="all">Все даты старта</option>
+            <option value="all">{t("allStartDates")}</option>
             {dateOptions.map((d) => (
               <option key={d} value={d}>
                 {d}
@@ -127,7 +129,7 @@ export default function MembersBoard({
             onClick={resetFilters}
             className="text-sm text-muted hover:text-ink-2"
           >
-            Сбросить фильтр
+            {t("btnResetFilter")}
           </button>
         )}
 
@@ -136,33 +138,33 @@ export default function MembersBoard({
             onClick={() => setShowNew(true)}
             className="ml-auto rounded-lg bg-foreground px-4 py-2 text-sm font-medium text-background"
           >
-            + Участница
+            {t("btnAddMemberShort")}
           </button>
         )}
       </div>
 
       {isHq && (
         <p className="rounded-lg bg-surface-2 px-3 py-2 text-xs text-muted">
-          Режим HQ: видны участницы всех клубов сети, доступно только для просмотра.
+          {t("hqReadOnlyMembersBanner")}
         </p>
       )}
 
       {filtered.length === 0 ? (
         <p className="rounded-lg border border-dashed border-border p-8 text-center text-sm text-muted">
-          Участниц по этим фильтрам не найдено.
+          {t("emptyNoMembersFiltered")}
         </p>
       ) : (
         <div className="overflow-x-auto rounded-xl border border-border bg-background">
           <table className="w-full min-w-[720px] text-left text-sm">
             <thead className="border-b border-border text-xs uppercase tracking-wide text-muted">
               <tr>
-                <th className="px-4 py-3 font-medium">Имя</th>
-                {isHq && <th className="px-4 py-3 font-medium">Клуб</th>}
-                <th className="px-4 py-3 font-medium">Курс</th>
-                <th className="px-4 py-3 font-medium">Статус</th>
-                <th className="px-4 py-3 font-medium">Город</th>
-                <th className="px-4 py-3 font-medium">Начало</th>
-                <th className="px-4 py-3 font-medium">Сумма</th>
+                <th className="px-4 py-3 font-medium">{t("colName")}</th>
+                {isHq && <th className="px-4 py-3 font-medium">{t("colClub")}</th>}
+                <th className="px-4 py-3 font-medium">{t("colCourse")}</th>
+                <th className="px-4 py-3 font-medium">{t("colStatus")}</th>
+                <th className="px-4 py-3 font-medium">{t("fieldCity")}</th>
+                <th className="px-4 py-3 font-medium">{t("colStart")}</th>
+                <th className="px-4 py-3 font-medium">{t("colAmount")}</th>
               </tr>
             </thead>
             <tbody>
@@ -177,7 +179,7 @@ export default function MembersBoard({
                   <td className="px-4 py-3 text-muted">{m.product_name ?? "—"}</td>
                   <td className="px-4 py-3">
                     <span className="rounded-full bg-surface-2 px-2 py-0.5 text-xs text-ink-2">
-                      {statusLabel(m.status)}
+                      {statusLabel(m.status, locale)}
                     </span>
                   </td>
                   <td className="px-4 py-3 text-muted">{m.city ?? "—"}</td>

@@ -4,15 +4,26 @@
 // link" / Stripe-style automations don't correspond to anything real here,
 // so they weren't ported).
 
+import { t, type Locale } from "@/lib/i18n";
+
 export type PaymentStatus = "paid" | "pending" | "refunded";
 
-export const STATUSES: { id: PaymentStatus; label: string }[] = [
-  { id: "paid", label: "Оплачено" },
-  { id: "pending", label: "Ожидается" },
-  { id: "refunded", label: "Возврат" },
+const STATUS_LABEL_KEYS: Record<string, string> = {
+  paid: "payStatusPaid",
+  pending: "payStatusPending",
+  refunded: "payStatusRefunded",
+};
+
+export const STATUSES: { id: PaymentStatus }[] = [
+  { id: "paid" },
+  { id: "pending" },
+  { id: "refunded" },
 ];
 
-export const statusLabel = (id: string) => STATUSES.find((s) => s.id === id)?.label ?? id;
+export const statusLabel = (id: string, locale: Locale) => {
+  const key = STATUS_LABEL_KEYS[id];
+  return key ? t(locale, key) : id;
+};
 
 export function todayIso(): string {
   return new Date().toISOString().slice(0, 10);

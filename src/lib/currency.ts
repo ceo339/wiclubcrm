@@ -4,6 +4,8 @@
 // far, including Sofia now that Bulgaria is on the euro) — this only
 // changes how an amount is *displayed*, exactly like the prototype did.
 
+import { clubScopeForProfile } from "@/lib/scope";
+
 export type CurrencyCode = "EUR" | "USD" | "GEL" | "UAH";
 
 export const CURRENCIES: { code: CurrencyCode; symbol: string }[] = [
@@ -58,10 +60,9 @@ export function scopeForProfile(profile: {
   partner_id: string | null;
   partner_country: string | null;
 }): { scope: string; fallback: CurrencyCode } {
-  if (profile.role !== "hq" && profile.partner_id) {
-    return { scope: `club:${profile.partner_id}`, fallback: currencyForCountry(profile.partner_country) };
-  }
-  return { scope: "network", fallback: "USD" };
+  const scope = clubScopeForProfile(profile);
+  const fallback = scope === "network" ? "USD" : currencyForCountry(profile.partner_country);
+  return { scope, fallback };
 }
 
 export function isCurrencyCode(value: string | null | undefined): value is CurrencyCode {

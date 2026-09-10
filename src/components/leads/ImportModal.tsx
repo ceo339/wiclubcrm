@@ -2,17 +2,10 @@
 
 import { useMemo, useState } from "react";
 import Papa from "papaparse";
-import { importLeads, type ImportRow } from "@/app/leads/actions";
+import { importLeads, type ImportResult, type ImportRow } from "@/app/leads/actions";
+import { useT } from "@/components/i18n/LocaleProvider";
 
 type TargetField = "name" | "phone" | "email" | "source" | "value";
-
-const FIELD_LABELS: Record<TargetField, string> = {
-  name: "Имя",
-  phone: "Телефон",
-  email: "Email",
-  source: "Источник",
-  value: "Сумма",
-};
 
 const AUTO_HINTS: Record<TargetField, string[]> = {
   name: ["name", "имя", "фио", "клиент", "контакт", "full name"],
@@ -29,6 +22,17 @@ function guessColumn(headers: string[], field: TargetField): string {
 }
 
 export default function ImportModal({ onClose }: { onClose: () => void }) {
+  const t = useT();
+  const FIELD_LABELS: Record<TargetField, string> = useMemo(
+    () => ({
+      name: t("colName"),
+      phone: t("fieldPhone"),
+      email: t("fieldEmail"),
+      source: t("fieldSource"),
+      value: t("colAmount"),
+    }),
+    [t]
+  );
   const [fileName, setFileName] = useState<string | null>(null);
   const [headers, setHeaders] = useState<string[]>([]);
   const [rows, setRows] = useState<Record<string, string>[]>([]);
@@ -40,7 +44,7 @@ export default function ImportModal({ onClose }: { onClose: () => void }) {
     value: "",
   });
   const [parseError, setParseError] = useState<string | null>(null);
-  const [result, setResult] = useState<{ error: string | null; imported: number } | null>(null);
+  const [result, setResult] = useState<ImportResult | null>(null);
   const [pending, setPending] = useState(false);
 
   function handleFile(file: File) {
@@ -76,7 +80,7 @@ export default function ImportModal({ onClose }: { onClose: () => void }) {
 
   async function handleImport() {
     if (!mapping.name) {
-      setParseError("Укажите, какая колонка содержит имя");
+      setParseError(t("errSelectNameColumn"));
       return;
     }
     setPending(true);
@@ -104,13 +108,11 @@ export default function ImportModal({ onClose }: { onClose: () => void }) {
         className="max-h-[85vh] w-full max-w-2xl overflow-y-auto rounded-2xl border border-border bg-background p-6 shadow-lg"
         onClick={(e) => e.stopPropagation()}
       >
-        <h3 className="text-base font-semibold text-foreground">Импорт лидов из CSV</h3>
-        <p className="mt-1 text-sm text-muted">
-          Загрузите файл со списком контактов — первая строка должна быть заголовками колонок.
-        </p>
+        <h3 className="text-base font-semibold text-foreground">{t("headingImportLeads")}</h3>
+        <p className="mt-1 text-sm text-muted">{t("importLeadsSubtitle")}</p>
 
         <label className="mt-4 flex cursor-pointer flex-col items-center justify-center gap-1 rounded-xl border border-dashed border-border bg-surface-2 px-4 py-6 text-sm text-muted hover:border-accent">
-          <span>{fileName ?? "Выбрать CSV-файл"}</span>
+          <span>{fileName ?? t("placeholderChooseCsv")}</span>
           <input
             type="file"
             accept=".csv,text/csv"
@@ -141,7 +143,7 @@ export default function ImportModal({ onClose }: { onClose: () => void }) {
                     }
                     className="rounded-lg border border-border bg-background px-2 py-1.5 text-xs outline-none focus:border-accent focus:ring-1 focus:ring-accent"
                   >
-                    <option value="">— не использовать —</option>
+                    <option value="">{t("optionDoNotUse")}</option>
                     {headers.map((h) => (
                       <option key={h} value={h}>
                         {h}
@@ -153,7 +155,7 @@ export default function ImportModal({ onClose }: { onClose: () => void }) {
             </div>
 
             <p className="mt-4 text-xs font-medium text-ink-2">
-              Предпросмотр ({rows.length} {rows.length === 1 ? "строка" : "строк"} всего)
+              {t("previewHeading", { n: rows.length })}
             </p>
             <div className="mt-1 overflow-x-auto rounded-lg border border-border">
               <table className="w-full text-left text-xs">
@@ -190,7 +192,15 @@ export default function ImportModal({ onClose }: { onClose: () => void }) {
                 : "bg-surface-2 text-ink-2"
             }`}
           >
-            {result.error ?? `Импортировано лидов: ${result.imported}`}
+            {result.error === "errImportPartial" && result.partialFailure
+              ? t("errImportPartial", {
+                  imported: result.imported,
+                  total: result.partialFailure.total,
+                  message: result.partialFailure.message,
+                })
+              : result.error
+              ? t(result.error)
+              : t("importedCount", { n: result.imported })}
           </p>
         )}
 
@@ -199,14 +209,14 @@ export default function ImportModal({ onClose }: { onClose: () => void }) {
             onClick={onClose}
             className="rounded-lg border border-border px-4 py-2 text-sm font-medium text-ink-2 hover:bg-surface-2"
           >
-            Отмена
+            {t("cancel")}
           </button>
           <button
             onClick={handleImport}
             disabled={pending || rows.length === 0}
             className="rounded-lg bg-foreground px-4 py-2 text-sm font-medium text-background disabled:opacity-50"
           >
-            {pending ? "Импортирую…" : `Импортировать ${rows.length || ""}`}
+            {pending ? t("btnImporting") : t("btnImportCount", { n: rows.length })}
           </button>
         </div>
       </div>

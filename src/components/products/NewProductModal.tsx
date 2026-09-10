@@ -2,10 +2,12 @@
 
 import { useActionState } from "react";
 import { createProduct, type ActionResult } from "@/app/products/actions";
+import { useT } from "@/components/i18n/LocaleProvider";
 
 const initialState: ActionResult = { error: null };
 
 export default function NewProductModal({ onClose }: { onClose: () => void }) {
+  const t = useT();
   const [state, formAction, pending] = useActionState(
     async (_prev: ActionResult, formData: FormData) => {
       const result = await createProduct(formData);
@@ -25,11 +27,11 @@ export default function NewProductModal({ onClose }: { onClose: () => void }) {
         onClick={(e) => e.stopPropagation()}
         className="w-full max-w-sm rounded-2xl border border-border bg-background p-6 shadow-lg"
       >
-        <h3 className="text-base font-semibold text-foreground">Новый курс</h3>
+        <h3 className="text-base font-semibold text-foreground">{t("headingNewCourse")}</h3>
 
         <div className="mt-4 flex flex-col gap-3">
           <label className="flex flex-col gap-1.5 text-sm">
-            <span className="font-medium text-ink-2">Название</span>
+            <span className="font-medium text-ink-2">{t("fieldName")}</span>
             <input
               name="name"
               required
@@ -37,7 +39,7 @@ export default function NewProductModal({ onClose }: { onClose: () => void }) {
             />
           </label>
           <label className="flex flex-col gap-1.5 text-sm">
-            <span className="font-medium text-ink-2">Цена (€)</span>
+            <span className="font-medium text-ink-2">{t("fieldPriceEur")}</span>
             <input
               name="price"
               type="number"
@@ -47,7 +49,7 @@ export default function NewProductModal({ onClose }: { onClose: () => void }) {
             />
           </label>
           <label className="flex flex-col gap-1.5 text-sm">
-            <span className="font-medium text-ink-2">Занятий (необязательно)</span>
+            <span className="font-medium text-ink-2">{t("fieldSessionsOptional")}</span>
             <input
               name="sessions"
               type="number"
@@ -59,7 +61,7 @@ export default function NewProductModal({ onClose }: { onClose: () => void }) {
 
         {state.error && (
           <p className="mt-3 rounded-md bg-accent/10 px-3 py-2 text-sm text-accent-strong">
-            {state.error}
+            {t(state.error)}
           </p>
         )}
 
@@ -69,14 +71,14 @@ export default function NewProductModal({ onClose }: { onClose: () => void }) {
             onClick={onClose}
             className="rounded-lg border border-border px-4 py-2 text-sm font-medium text-ink-2 hover:bg-surface-2"
           >
-            Отмена
+            {t("cancel")}
           </button>
           <button
             type="submit"
             disabled={pending}
             className="rounded-lg bg-foreground px-4 py-2 text-sm font-medium text-background disabled:opacity-50"
           >
-            {pending ? "..." : "Создать"}
+            {pending ? "..." : t("btnCreate")}
           </button>
         </div>
       </form>

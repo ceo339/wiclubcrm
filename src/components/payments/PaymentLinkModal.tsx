@@ -2,6 +2,7 @@
 
 import { useActionState, useMemo, useState } from "react";
 import { createPaymentLink, type PaymentLinkResult } from "@/app/payments/actions";
+import { useT } from "@/components/i18n/LocaleProvider";
 import type { MemberOption } from "./types";
 
 const initialState: PaymentLinkResult = { error: null };
@@ -13,6 +14,7 @@ export default function PaymentLinkModal({
   members: MemberOption[];
   onClose: () => void;
 }) {
+  const t = useT();
   const [memberId, setMemberId] = useState("");
   const [amount, setAmount] = useState("");
   const [link, setLink] = useState<string | null>(null);
@@ -53,17 +55,15 @@ export default function PaymentLinkModal({
       >
         {link ? (
           <>
-            <h3 className="text-base font-semibold text-foreground">Ссылка готова</h3>
-            <p className="mt-2 text-sm text-ink-2">
-              Отправьте эту ссылку клиентке — после оплаты статус в списке обновится сам.
-            </p>
+            <h3 className="text-base font-semibold text-foreground">{t("headingLinkReady")}</h3>
+            <p className="mt-2 text-sm text-ink-2">{t("linkReadySubtitle")}</p>
             <div className="mt-4 break-all rounded-lg bg-surface-2 p-3 text-xs text-ink-2">{link}</div>
             <button
               type="button"
               onClick={handleCopy}
               className="mt-3 rounded-lg border border-border px-3 py-1.5 text-xs font-medium text-ink-2 hover:bg-surface-2"
             >
-              {copied ? "Скопировано" : "Скопировать"}
+              {copied ? t("btnCopied") : t("btnCopy")}
             </button>
             <div className="mt-5 flex justify-end">
               <button
@@ -71,20 +71,18 @@ export default function PaymentLinkModal({
                 onClick={onClose}
                 className="rounded-lg bg-foreground px-4 py-2 text-sm font-medium text-background"
               >
-                Готово
+                {t("btnDone")}
               </button>
             </div>
           </>
         ) : (
           <form action={formAction}>
-            <h3 className="text-base font-semibold text-foreground">Ссылка на оплату</h3>
-            <p className="mt-1 text-xs text-muted">
-              Реальная онлайн-оплата картой (Stripe) — сейчас доступна для одного клуба сети.
-            </p>
+            <h3 className="text-base font-semibold text-foreground">{t("headingPaymentLink")}</h3>
+            <p className="mt-1 text-xs text-muted">{t("paymentLinkSubtitle")}</p>
 
             <div className="mt-4 flex flex-col gap-3">
               <label className="flex flex-col gap-1.5 text-sm">
-                <span className="font-medium text-ink-2">Участница</span>
+                <span className="font-medium text-ink-2">{t("colMember")}</span>
                 <select
                   name="member_id"
                   value={memberId}
@@ -92,7 +90,7 @@ export default function PaymentLinkModal({
                   required
                   className="rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-accent focus:ring-1 focus:ring-accent"
                 >
-                  <option value="">— выберите —</option>
+                  <option value="">{t("optionSelectMember")}</option>
                   {members.map((m) => (
                     <option key={m.id} value={m.id}>
                       {m.name}
@@ -103,11 +101,11 @@ export default function PaymentLinkModal({
               </label>
 
               {selectedMember?.product_name && (
-                <p className="text-xs text-muted">Курс: {selectedMember.product_name}</p>
+                <p className="text-xs text-muted">{t("coursePrefix", { name: selectedMember.product_name })}</p>
               )}
 
               <label className="flex flex-col gap-1.5 text-sm">
-                <span className="font-medium text-ink-2">Сумма (€)</span>
+                <span className="font-medium text-ink-2">{t("fieldValueEur")}</span>
                 <input
                   name="amount"
                   type="number"
@@ -122,7 +120,7 @@ export default function PaymentLinkModal({
             </div>
 
             {state.error && (
-              <p className="mt-3 rounded-md bg-accent/10 px-3 py-2 text-sm text-accent-strong">{state.error}</p>
+              <p className="mt-3 rounded-md bg-accent/10 px-3 py-2 text-sm text-accent-strong">{t(state.error)}</p>
             )}
 
             <div className="mt-5 flex justify-end gap-2">
@@ -131,14 +129,14 @@ export default function PaymentLinkModal({
                 onClick={onClose}
                 className="rounded-lg border border-border px-4 py-2 text-sm font-medium text-ink-2 hover:bg-surface-2"
               >
-                Отмена
+                {t("cancel")}
               </button>
               <button
                 type="submit"
                 disabled={pending || members.length === 0}
                 className="rounded-lg bg-foreground px-4 py-2 text-sm font-medium text-background disabled:opacity-50"
               >
-                {pending ? "..." : "Создать ссылку"}
+                {pending ? "..." : t("btnCreateLink")}
               </button>
             </div>
           </form>

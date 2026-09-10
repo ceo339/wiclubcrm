@@ -27,7 +27,7 @@ export async function updateLeadStage(
   decline?: { reason: string; note: string | null }
 ): Promise<ActionResult> {
   const profile = await getCurrentProfile();
-  if (!profile) return { error: "Не авторизовано" };
+  if (!profile) return { error: "errNotAuthorized" };
 
   const supabase = await createClient();
   const { error } = await supabase
@@ -47,13 +47,13 @@ export async function updateLeadStage(
 
 export async function createLead(formData: FormData): Promise<ActionResult> {
   const profile = await getCurrentProfile();
-  if (!profile) return { error: "Не авторизовано" };
+  if (!profile) return { error: "errNotAuthorized" };
   if (!profile.partner_id) {
-    return { error: "У аккаунта HQ нет своего клуба — добавлять лиды может только партнёр." };
+    return { error: "errHqNoClubAddLeads" };
   }
 
   const name = String(formData.get("name") || "").trim();
-  if (!name) return { error: "Укажите имя" };
+  if (!name) return { error: "errEnterName" };
 
   const phone = String(formData.get("phone") || "").trim() || null;
   const email = String(formData.get("email") || "").trim() || null;
@@ -115,7 +115,12 @@ export type ImportRow = {
   value?: number | null;
 };
 
-export type ImportResult = { error: string | null; imported: number };
+export type ImportResult = {
+  error: string | null;
+  imported: number;
+  /** Only set when error === "errImportPartial" — see importLeads below. */
+  partialFailure?: { total: number; message: string };
+};
 
 const MAX_IMPORT_ROWS = 1000;
 const IMPORT_CHUNK_SIZE = 200;
@@ -126,10 +131,10 @@ const IMPORT_CHUNK_SIZE = 200;
  */
 export async function importLeads(rows: ImportRow[]): Promise<ImportResult> {
   const profile = await getCurrentProfile();
-  if (!profile) return { error: "Не авторизовано", imported: 0 };
+  if (!profile) return { error: "errNotAuthorized", imported: 0 };
   if (!profile.partner_id) {
     return {
-      error: "У аккаунта HQ нет своего клуба — импортировать лиды может только партнёр.",
+      error: "errHqNoClubImportLeads",
       imported: 0,
     };
   }
@@ -147,7 +152,7 @@ export async function importLeads(rows: ImportRow[]): Promise<ImportResult> {
     .filter((r) => r.name.length > 0)
     .slice(0, MAX_IMPORT_ROWS);
 
-  if (clean.length === 0) return { error: "Не найдено ни одной строки с именем", imported: 0 };
+  if (clean.length === 0) return { error: "errNoRowsWithName", imported: 0 };
 
   const supabase = await createClient();
   let imported = 0;
@@ -156,8 +161,9 @@ export async function importLeads(rows: ImportRow[]): Promise<ImportResult> {
     const { error, count } = await supabase.from("leads").insert(chunk, { count: "exact" });
     if (error) {
       return {
-        error: `Импортировано ${imported} из ${clean.length}, затем ошибка: ${error.message}`,
+        error: "errImportPartial",
         imported,
+        partialFailure: { total: clean.length, message: error.message },
       };
     }
     imported += count ?? chunk.length;
@@ -175,13 +181,13 @@ export async function importLeads(rows: ImportRow[]): Promise<ImportResult> {
  */
 export async function updateLead(leadId: string, formData: FormData): Promise<ActionResult> {
   const profile = await getCurrentProfile();
-  if (!profile) return { error: "Не авторизовано" };
+  if (!profile) return { error: "errNotAuthorized" };
   if (!profile.partner_id) {
-    return { error: "У аккаунта HQ нет своего клуба — редактировать может только партнёр." };
+    return { error: "errHqNoClubEdit" };
   }
 
   const name = String(formData.get("name") || "").trim();
-  if (!name) return { error: "Укажите имя" };
+  if (!name) return { error: "errEnterName" };
 
   const phone = String(formData.get("phone") || "").trim() || null;
   const email = String(formData.get("email") || "").trim() || null;
@@ -238,11 +244,11 @@ export async function getLeadDetail(leadId: string): Promise<LeadDetail> {
 
 export async function addComment(leadId: string, text: string): Promise<ActionResult> {
   const profile = await getCurrentProfile();
-  if (!profile) return { error: "Не авторизовано" };
-  if (!profile.partner_id) return { error: "У аккаунта HQ нет своего клуба." };
+  if (!profile) return { error: "errNotAuthorized" };
+  if (!profile.partner_id) return { error: "errHqNoClubGeneric" };
 
   const trimmed = text.trim();
-  if (!trimmed) return { error: "Комментарий пустой" };
+  if (!trimmed) return { error: "errCommentEmpty" };
 
   const supabase = await createClient();
   const {
@@ -270,11 +276,11 @@ export async function addTask(
   dueDate: string | null
 ): Promise<ActionResult> {
   const profile = await getCurrentProfile();
-  if (!profile) return { error: "Не авторизовано" };
-  if (!profile.partner_id) return { error: "У аккаунта HQ нет своего клуба." };
+  if (!profile) return { error: "errNotAuthorized" };
+  if (!profile.partner_id) return { error: "errHqNoClubGeneric" };
 
   const trimmed = text.trim();
-  if (!trimmed) return { error: "Укажите текст задачи" };
+  if (!trimmed) return { error: "errEnterTaskText" };
 
   const supabase = await createClient();
   const { error } = await supabase.from("tasks").insert({
@@ -294,8 +300,8 @@ export async function addTask(
 
 export async function setTaskDone(taskId: string, done: boolean): Promise<ActionResult> {
   const profile = await getCurrentProfile();
-  if (!profile) return { error: "Не авторизовано" };
-  if (!profile.partner_id) return { error: "У аккаунта HQ нет своего клуба." };
+  if (!profile) return { error: "errNotAuthorized" };
+  if (!profile.partner_id) return { error: "errHqNoClubGeneric" };
 
   const supabase = await createClient();
   const { error } = await supabase.from("tasks").update({ done }).eq("id", taskId);
@@ -312,8 +318,8 @@ export async function setTaskDone(taskId: string, done: boolean): Promise<Action
  */
 export async function convertLeadToMember(leadId: string): Promise<ActionResult> {
   const profile = await getCurrentProfile();
-  if (!profile) return { error: "Не авторизовано" };
-  if (!profile.partner_id) return { error: "У аккаунта HQ нет своего клуба." };
+  if (!profile) return { error: "errNotAuthorized" };
+  if (!profile.partner_id) return { error: "errHqNoClubGeneric" };
 
   const supabase = await createClient();
   const { data: lead, error: fetchError } = await supabase
@@ -323,7 +329,7 @@ export async function convertLeadToMember(leadId: string): Promise<ActionResult>
     .maybeSingle();
 
   if (fetchError) return { error: fetchError.message };
-  if (!lead) return { error: "Лид не найден" };
+  if (!lead) return { error: "errLeadNotFound" };
 
   const { error } = await supabase.from("members").insert({
     partner_id: profile.partner_id,

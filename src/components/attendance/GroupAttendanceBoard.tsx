@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { setAttendance } from "@/app/members/actions";
 import { attendedArray } from "@/lib/members";
+import { useT } from "@/components/i18n/LocaleProvider";
 
 type MemberRow = { id: string; name: string; attended: unknown };
 
@@ -24,6 +25,7 @@ export default function GroupAttendanceBoard({
     members.map((m) => attendedArray(m.attended, sessions))
   );
   const [pending, startTransition] = useTransition();
+  const t = useT();
 
   function cycle(row: number, col: number) {
     if (!canEdit) return;
@@ -43,16 +45,11 @@ export default function GroupAttendanceBoard({
   const sessionIndexes = Array.from({ length: sessions }, (_, i) => i);
 
   if (members.length === 0) {
-    return <p className="p-5 text-sm text-muted">В этом потоке пока нет ни одной участницы.</p>;
+    return <p className="p-5 text-sm text-muted">{t("emptyNoMembersInStream")}</p>;
   }
 
   if (sessions === 0) {
-    return (
-      <p className="p-5 text-sm text-muted">
-        У этого курса не указано число занятий — добавьте его в разделе «Курсы», чтобы отмечать
-        посещаемость.
-      </p>
-    );
+    return <p className="p-5 text-sm text-muted">{t("emptyNoSessions")}</p>;
   }
 
   return (
@@ -60,7 +57,7 @@ export default function GroupAttendanceBoard({
       <table className="w-full text-left text-sm">
         <thead className="border-b border-border text-xs uppercase tracking-wide text-muted">
           <tr>
-            <th className="sticky left-0 z-10 bg-background px-5 py-3 font-medium">Участница</th>
+            <th className="sticky left-0 z-10 bg-background px-5 py-3 font-medium">{t("colMember")}</th>
             {sessionIndexes.map((i) => (
               <th key={i} className="px-1 py-3 text-center font-medium">
                 {i + 1}
@@ -88,7 +85,7 @@ export default function GroupAttendanceBoard({
                         type="button"
                         disabled={!canEdit || pending}
                         onClick={() => cycle(row, col)}
-                        title={`Занятие ${col + 1} — ${m.name}`}
+                        title={t("sessionTitle", { n: col + 1, name: m.name })}
                         className={`mx-auto flex h-7 w-7 items-center justify-center rounded-md border text-xs font-medium ${
                           v === true
                             ? "border-accent bg-accent/10 text-accent-strong"
@@ -110,7 +107,7 @@ export default function GroupAttendanceBoard({
         <tfoot>
           <tr className="border-t border-border text-xs text-muted">
             <td className="sticky left-0 z-10 bg-background px-5 py-2 font-medium text-ink-2">
-              Была на занятии
+              {t("rowPresentCount")}
             </td>
             {sessionIndexes.map((col) => (
               <td key={col} className="px-1 py-2 text-center font-medium text-ink-2">

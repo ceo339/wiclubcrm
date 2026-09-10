@@ -2,8 +2,9 @@
 
 import { useActionState, useState } from "react";
 import { updatePayment, deletePayment, type ActionResult } from "@/app/payments/actions";
-import { STATUSES } from "@/lib/payments";
+import { STATUSES, statusLabel } from "@/lib/payments";
 import Money from "@/components/currency/Money";
+import { useLocale } from "@/components/i18n/LocaleProvider";
 import type { Payment } from "./types";
 
 const initialState: ActionResult = { error: null };
@@ -17,6 +18,7 @@ export default function EditPaymentModal({
   canEdit: boolean;
   onClose: () => void;
 }) {
+  const { locale, t } = useLocale();
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
@@ -43,14 +45,14 @@ export default function EditPaymentModal({
         className="w-full max-w-sm rounded-2xl border border-border bg-background p-6 shadow-lg"
         onClick={(e) => e.stopPropagation()}
       >
-        <h3 className="text-base font-semibold text-foreground">{payment.member_name ?? "Оплата"}</h3>
+        <h3 className="text-base font-semibold text-foreground">{payment.member_name ?? t("fallbackPaymentTitle")}</h3>
         {payment.product_name && <p className="mt-1 text-sm text-muted">{payment.product_name}</p>}
 
         {canEdit ? (
           <form action={formAction} className="mt-4">
             <div className="flex flex-col gap-3">
               <label className="flex flex-col gap-1.5 text-sm">
-                <span className="font-medium text-ink-2">Сумма (€)</span>
+                <span className="font-medium text-ink-2">{t("fieldValueEur")}</span>
                 <input
                   name="amount"
                   type="number"
@@ -63,7 +65,7 @@ export default function EditPaymentModal({
               </label>
 
               <label className="flex flex-col gap-1.5 text-sm">
-                <span className="font-medium text-ink-2">Статус</span>
+                <span className="font-medium text-ink-2">{t("colStatus")}</span>
                 <select
                   name="status"
                   defaultValue={payment.status ?? "paid"}
@@ -71,14 +73,14 @@ export default function EditPaymentModal({
                 >
                   {STATUSES.map((s) => (
                     <option key={s.id} value={s.id}>
-                      {s.label}
+                      {statusLabel(s.id, locale)}
                     </option>
                   ))}
                 </select>
               </label>
 
               <label className="flex flex-col gap-1.5 text-sm">
-                <span className="font-medium text-ink-2">Дата</span>
+                <span className="font-medium text-ink-2">{t("colDate")}</span>
                 <input
                   name="paid_date"
                   type="date"
@@ -91,7 +93,7 @@ export default function EditPaymentModal({
 
             {(state.error || deleteError) && (
               <p className="mt-3 rounded-md bg-accent/10 px-3 py-2 text-sm text-accent-strong">
-                {state.error ?? deleteError}
+                {t((state.error ?? deleteError) as string)}
               </p>
             )}
 
@@ -102,7 +104,7 @@ export default function EditPaymentModal({
                 disabled={deleting || pending}
                 className="text-sm text-accent-strong hover:underline disabled:opacity-50"
               >
-                {deleting ? "..." : "Удалить"}
+                {deleting ? "..." : t("delete")}
               </button>
               <div className="flex gap-2">
                 <button
@@ -110,14 +112,14 @@ export default function EditPaymentModal({
                   onClick={onClose}
                   className="rounded-lg border border-border px-4 py-2 text-sm font-medium text-ink-2 hover:bg-surface-2"
                 >
-                  Отмена
+                  {t("cancel")}
                 </button>
                 <button
                   type="submit"
                   disabled={pending || deleting}
                   className="rounded-lg bg-foreground px-4 py-2 text-sm font-medium text-background disabled:opacity-50"
                 >
-                  {pending ? "..." : "Сохранить"}
+                  {pending ? "..." : t("save")}
                 </button>
               </div>
             </div>
@@ -125,16 +127,16 @@ export default function EditPaymentModal({
         ) : (
           <div className="mt-4 flex flex-col gap-1 text-sm text-ink-2">
             <p>
-              Сумма: <Money amountEur={payment.amount} />
+              {t("colAmount")}: <Money amountEur={payment.amount} />
             </p>
-            <p>Дата: {payment.paid_date}</p>
+            <p>{t("colDate")}: {payment.paid_date}</p>
             <div className="mt-4 flex justify-end">
               <button
                 type="button"
                 onClick={onClose}
                 className="rounded-lg border border-border px-4 py-2 text-sm font-medium text-ink-2 hover:bg-surface-2"
               >
-                Закрыть
+                {t("close")}
               </button>
             </div>
           </div>

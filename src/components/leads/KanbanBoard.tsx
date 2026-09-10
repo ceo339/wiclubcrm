@@ -1,9 +1,10 @@
 "use client";
 
 import { useOptimistic, useState, useTransition } from "react";
-import { STAGES, type StageId } from "@/lib/leads";
+import { STAGES, declineReasonLabel, type StageId } from "@/lib/leads";
 import { updateLeadStage } from "@/app/leads/actions";
 import Money from "@/components/currency/Money";
+import { useLocale } from "@/components/i18n/LocaleProvider";
 import type { Lead } from "./types";
 import DeclineModal from "./DeclineModal";
 
@@ -20,6 +21,7 @@ export default function KanbanBoard({
   showPartner: boolean;
   onSelect: (id: string) => void;
 }) {
+  const { locale, t } = useLocale();
   const [items, applyOptimistic] = useOptimistic(leads, (state, update: StageUpdate) =>
     state.map((l) =>
       l.id === update.id
@@ -66,7 +68,7 @@ export default function KanbanBoard({
               className="flex w-72 shrink-0 flex-col rounded-xl border border-border bg-background"
             >
               <div className="flex items-center justify-between border-b border-border px-3 py-2.5">
-                <span className="text-sm font-medium text-ink-2">{stage.label}</span>
+                <span className="text-sm font-medium text-ink-2">{t(stage.labelKey)}</span>
                 <span className="rounded-full bg-surface-2 px-2 py-0.5 text-xs text-muted">
                   {stageLeads.length}
                 </span>
@@ -89,7 +91,7 @@ export default function KanbanBoard({
                     </div>
                     {stage.id === "declined" && lead.decline_reason && (
                       <div className="mt-1 text-xs text-accent-strong">
-                        {lead.decline_note || lead.decline_reason}
+                        {lead.decline_note || declineReasonLabel(lead.decline_reason, locale)}
                       </div>
                     )}
                   </div>

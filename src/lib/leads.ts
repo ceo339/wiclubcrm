@@ -1,6 +1,12 @@
 // Shared constants for the Leads feature — mirrors the stage/source/decline
 // vocabulary from the prototype (velora-final2.html) so behaviour and
 // wording stay consistent between the demo and the real app.
+//
+// Labels are stored as dictionary keys (see src/lib/i18n.ts), not literal
+// Russian text — every call site passes the current locale explicitly,
+// since these are plain functions with no access to React context.
+
+import { t, type Locale } from "@/lib/i18n";
 
 export type StageId =
   | "new"
@@ -10,41 +16,54 @@ export type StageId =
   | "paid"
   | "declined";
 
-export const STAGES: { id: StageId; label: string; prob: number; won?: boolean; lost?: boolean }[] = [
-  { id: "new", label: "Новая заявка", prob: 10 },
-  { id: "progress", label: "В работе", prob: 25 },
-  { id: "presented", label: "Записалась", prob: 45 },
-  { id: "invoiced", label: "Выставлен счет", prob: 70 },
-  { id: "paid", label: "Оплата", prob: 100, won: true },
-  { id: "declined", label: "Отказ", prob: 0, lost: true },
+export const STAGES: { id: StageId; labelKey: string; prob: number; won?: boolean; lost?: boolean }[] = [
+  { id: "new", labelKey: "stageNew", prob: 10 },
+  { id: "progress", labelKey: "stageProgress", prob: 25 },
+  { id: "presented", labelKey: "stagePresented", prob: 45 },
+  { id: "invoiced", labelKey: "stageInvoiced", prob: 70 },
+  { id: "paid", labelKey: "stagePaid", prob: 100, won: true },
+  { id: "declined", labelKey: "stageDeclined", prob: 0, lost: true },
 ];
 
-export const stageLabel = (id: string) => STAGES.find((s) => s.id === id)?.label ?? id;
+export const stageLabel = (id: string, locale: Locale) => {
+  const key = STAGES.find((s) => s.id === id)?.labelKey;
+  return key ? t(locale, key) : id;
+};
 
 export const SOURCES = ["Instagram", "Referral", "Website", "Event"] as const;
 export type Source = (typeof SOURCES)[number];
 
-export const SOURCE_LABELS: Record<string, string> = {
-  Instagram: "Instagram",
-  Referral: "Рекомендация",
-  Website: "Сайт",
-  Event: "Мероприятие",
+const SOURCE_LABEL_KEYS: Record<string, string> = {
+  Instagram: "sourceInstagram",
+  Referral: "sourceReferral",
+  Website: "sourceWebsite",
+  Event: "sourceEvent",
 };
 
-export const DECLINE_REASONS = [
-  { id: "declineNoMoney", label: "Нет денег" },
-  { id: "declineExpensive", label: "Дорого" },
-  { id: "declineNoTime", label: "Нет времени" },
-  { id: "declineNotRelevant", label: "Не актуально" },
-  { id: "declineNotInCity", label: "Не в городе" },
-  { id: "declineOther", label: "Другое" },
-];
+export const sourceLabel = (source: string, locale: Locale) => {
+  const key = SOURCE_LABEL_KEYS[source];
+  return key ? t(locale, key) : source;
+};
 
-export const declineReasonLabel = (id: string | null) =>
-  DECLINE_REASONS.find((r) => r.id === id)?.label ?? id ?? "";
+// Decline-reason ids double as their own dictionary keys — already
+// distinctive enough (declineNoMoney, declineExpensive, …) not to need a
+// separate labelKey field.
+export const DECLINE_REASONS = [
+  "declineNoMoney",
+  "declineExpensive",
+  "declineNoTime",
+  "declineNotRelevant",
+  "declineNotInCity",
+  "declineOther",
+] as const;
+
+export const declineReasonLabel = (id: string | null, locale: Locale) =>
+  id ? t(locale, id) : "";
 
 // Country list + default city, mirrors the prototype's COUNTRIES array
-// (velora-final2.html) so the Add Lead form behaves the same way.
+// (velora-final2.html) so the Add Lead form behaves the same way. Country
+// names are proper nouns and stay as-is regardless of interface language —
+// not part of this round's translation.
 export const COUNTRIES: { name: string; city?: string }[] = [
   { name: "Sweden" },
   { name: "USA" },
@@ -61,9 +80,12 @@ export const COUNTRIES: { name: string; city?: string }[] = [
 
 // Generic membership/course plans offered when a lead isn't tied to a real
 // product yet — mirrors the prototype's "Интересует" fallback dropdown.
-export const GENERIC_PLANS: { id: string; label: string; price: number }[] = [
-  { id: "plAnnual", label: "Годовое членство", price: 1200 },
-  { id: "plMonthly", label: "Ежемесячное членство", price: 520 },
-  { id: "plCourse", label: "Курс «Женское лидерство»", price: 390 },
-  { id: "plCoaching", label: "Личный коучинг", price: 850 },
+// Ids double as their own dictionary keys, same reasoning as decline reasons.
+export const GENERIC_PLANS: { id: string; price: number }[] = [
+  { id: "planAnnual", price: 1200 },
+  { id: "planMonthly", price: 520 },
+  { id: "planCourse", price: 390 },
+  { id: "planCoaching", price: 850 },
 ];
+
+export const genericPlanLabel = (id: string, locale: Locale) => t(locale, id);

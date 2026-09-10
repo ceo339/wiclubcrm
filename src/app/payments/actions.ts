@@ -23,17 +23,17 @@ function normalizeStatus(raw: string | undefined | null): string {
  */
 export async function createPayment(formData: FormData): Promise<ActionResult> {
   const profile = await getCurrentProfile();
-  if (!profile) return { error: "Не авторизовано" };
+  if (!profile) return { error: "errNotAuthorized" };
   if (!profile.partner_id) {
-    return { error: "У аккаунта HQ нет своего клуба — добавлять оплаты может только партнёр." };
+    return { error: "errHqNoClubAddPayments" };
   }
 
   const memberId = String(formData.get("member_id") || "").trim();
-  if (!memberId) return { error: "Выберите участницу" };
+  if (!memberId) return { error: "errSelectMember" };
 
   const amountRaw = String(formData.get("amount") || "").replace(",", ".");
   const amount = Number(amountRaw);
-  if (!Number.isFinite(amount) || amount <= 0) return { error: "Укажите сумму" };
+  if (!Number.isFinite(amount) || amount <= 0) return { error: "errEnterAmount" };
 
   const status = normalizeStatus(String(formData.get("status") || ""));
   const paidDate = String(formData.get("paid_date") || "").trim() || todayIso();
@@ -49,7 +49,7 @@ export async function createPayment(formData: FormData): Promise<ActionResult> {
     .eq("partner_id", profile.partner_id)
     .maybeSingle();
 
-  if (!member) return { error: "Участница не найдена" };
+  if (!member) return { error: "errMemberNotFound" };
 
   const { error } = await supabase.from("payments").insert({
     partner_id: profile.partner_id,
@@ -68,14 +68,14 @@ export async function createPayment(formData: FormData): Promise<ActionResult> {
 
 export async function updatePayment(paymentId: string, formData: FormData): Promise<ActionResult> {
   const profile = await getCurrentProfile();
-  if (!profile) return { error: "Не авторизовано" };
+  if (!profile) return { error: "errNotAuthorized" };
   if (!profile.partner_id) {
-    return { error: "У аккаунта HQ нет своего клуба — редактировать может только партнёр." };
+    return { error: "errHqNoClubEdit" };
   }
 
   const amountRaw = String(formData.get("amount") || "").replace(",", ".");
   const amount = Number(amountRaw);
-  if (!Number.isFinite(amount) || amount <= 0) return { error: "Укажите сумму" };
+  if (!Number.isFinite(amount) || amount <= 0) return { error: "errEnterAmount" };
 
   const status = normalizeStatus(String(formData.get("status") || ""));
   const paidDate = String(formData.get("paid_date") || "").trim() || todayIso();
@@ -103,34 +103,31 @@ export async function updatePayment(paymentId: string, formData: FormData): Prom
  */
 export async function createPaymentLink(formData: FormData): Promise<PaymentLinkResult> {
   const profile = await getCurrentProfile();
-  if (!profile) return { error: "Не авторизовано" };
+  if (!profile) return { error: "errNotAuthorized" };
   if (!profile.partner_id) {
-    return { error: "У аккаунта HQ нет своего клуба — ссылки на оплату может создавать только партнёр." };
+    return { error: "errHqNoClubCreateLinks" };
   }
 
   const enabledPartnerId = process.env.STRIPE_ENABLED_PARTNER_ID;
   if (!enabledPartnerId) {
-    return {
-      error:
-        "Онлайн-оплата ещё не настроена для этого клуба (нет STRIPE_ENABLED_PARTNER_ID в переменных окружения).",
-    };
+    return { error: "errStripeNotConfigured" };
   }
   if (profile.partner_id !== enabledPartnerId) {
-    return { error: "Онлайн-оплата пока подключена только для одного клуба сети." };
+    return { error: "errStripeOnlyOneClub" };
   }
 
   const memberId = String(formData.get("member_id") || "").trim();
-  if (!memberId) return { error: "Выберите участницу" };
+  if (!memberId) return { error: "errSelectMember" };
 
   const amountRaw = String(formData.get("amount") || "").replace(",", ".");
   const amount = Number(amountRaw);
-  if (!Number.isFinite(amount) || amount <= 0) return { error: "Укажите сумму" };
+  if (!Number.isFinite(amount) || amount <= 0) return { error: "errEnterAmount" };
 
   let stripe;
   try {
     stripe = getStripeClient();
   } catch {
-    return { error: "Не настроен серверный ключ Stripe (STRIPE_SECRET_KEY)." };
+    return { error: "errStripeSecretMissing" };
   }
 
   const supabase = await createClient();
@@ -141,7 +138,7 @@ export async function createPaymentLink(formData: FormData): Promise<PaymentLink
     .eq("partner_id", profile.partner_id)
     .maybeSingle();
 
-  if (!member) return { error: "Участница не найдена" };
+  if (!member) return { error: "errMemberNotFound" };
   const productName = (member as { products?: { name: string } | null }).products?.name ?? null;
 
   const { data: payment, error: insertError } = await supabase
@@ -187,21 +184,21 @@ export async function createPaymentLink(formData: FormData): Promise<PaymentLink
       .update({ stripe_checkout_session_id: session.id })
       .eq("id", payment.id);
 
-    if (!session.url) return { error: "Stripe не вернул ссылку на оплату" };
+    if (!session.url) return { error: "errStripeNoUrl" };
 
     revalidatePath("/payments");
     return { error: null, url: session.url };
   } catch (err) {
     // Don't leave a dangling "pending" payment with no way to pay it.
     await supabase.from("payments").delete().eq("id", payment.id);
-    return { error: err instanceof Error ? err.message : "Не удалось создать ссылку на оплату" };
+    return { error: err instanceof Error ? err.message : "errCreateLinkFailed" };
   }
 }
 
 export async function deletePayment(paymentId: string): Promise<ActionResult> {
   const profile = await getCurrentProfile();
-  if (!profile) return { error: "Не авторизовано" };
-  if (!profile.partner_id) return { error: "У аккаунта HQ нет своего клуба." };
+  if (!profile) return { error: "errNotAuthorized" };
+  if (!profile.partner_id) return { error: "errHqNoClubGeneric" };
 
   const supabase = await createClient();
   const { error } = await supabase.from("payments").delete().eq("id", paymentId);

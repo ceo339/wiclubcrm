@@ -13,13 +13,13 @@ export type ActionResult = { error: string | null };
  */
 export async function createProduct(formData: FormData): Promise<ActionResult> {
   const profile = await getCurrentProfile();
-  if (!profile) return { error: "Не авторизовано" };
+  if (!profile) return { error: "errNotAuthorized" };
   if (!profile.partner_id) {
-    return { error: "У аккаунта HQ нет своего клуба — курсы может добавлять только партнёр." };
+    return { error: "errHqNoClubAddCourses" };
   }
 
   const name = String(formData.get("name") || "").trim();
-  if (!name) return { error: "Укажите название курса" };
+  if (!name) return { error: "errEnterCourseName" };
 
   const priceRaw = String(formData.get("price") || "0").replace(",", ".");
   const price = Number.isFinite(Number(priceRaw)) ? Number(priceRaw) : 0;
@@ -45,8 +45,8 @@ export async function createProduct(formData: FormData): Promise<ActionResult> {
 
 export async function deleteProduct(id: string): Promise<ActionResult> {
   const profile = await getCurrentProfile();
-  if (!profile) return { error: "Не авторизовано" };
-  if (!profile.partner_id) return { error: "У аккаунта HQ нет своего клуба." };
+  if (!profile) return { error: "errNotAuthorized" };
+  if (!profile.partner_id) return { error: "errHqNoClubGeneric" };
 
   const supabase = await createClient();
   const { error } = await supabase.from("products").delete().eq("id", id);
@@ -59,12 +59,12 @@ export async function deleteProduct(id: string): Promise<ActionResult> {
 
 export async function addCohort(formData: FormData): Promise<ActionResult> {
   const profile = await getCurrentProfile();
-  if (!profile) return { error: "Не авторизовано" };
-  if (!profile.partner_id) return { error: "У аккаунта HQ нет своего клуба." };
+  if (!profile) return { error: "errNotAuthorized" };
+  if (!profile.partner_id) return { error: "errHqNoClubGeneric" };
 
   const productId = String(formData.get("product_id") || "").trim();
   const startDate = String(formData.get("start_date") || "").trim();
-  if (!productId || !startDate) return { error: "Укажите дату начала потока" };
+  if (!productId || !startDate) return { error: "errEnterCohortStartDate" };
 
   const supabase = await createClient();
   const { error } = await supabase.from("product_cohorts").insert({
@@ -82,8 +82,8 @@ export async function addCohort(formData: FormData): Promise<ActionResult> {
 
 export async function deleteCohort(id: string): Promise<ActionResult> {
   const profile = await getCurrentProfile();
-  if (!profile) return { error: "Не авторизовано" };
-  if (!profile.partner_id) return { error: "У аккаунта HQ нет своего клуба." };
+  if (!profile) return { error: "errNotAuthorized" };
+  if (!profile.partner_id) return { error: "errHqNoClubGeneric" };
 
   const supabase = await createClient();
   const { error } = await supabase.from("product_cohorts").delete().eq("id", id);

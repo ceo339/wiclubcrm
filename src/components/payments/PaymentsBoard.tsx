@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { STATUSES, statusLabel } from "@/lib/payments";
 import Money from "@/components/currency/Money";
+import { useLocale } from "@/components/i18n/LocaleProvider";
 import type { MemberOption, Payment } from "./types";
 import NewPaymentModal from "./NewPaymentModal";
 import EditPaymentModal from "./EditPaymentModal";
@@ -19,6 +20,7 @@ export default function PaymentsBoard({
   canEdit: boolean;
   stripeEnabled: boolean;
 }) {
+  const { locale, t } = useLocale();
   const [status, setStatus] = useState<string>("all");
   const [showNew, setShowNew] = useState(false);
   const [showLink, setShowLink] = useState(false);
@@ -46,19 +48,19 @@ export default function PaymentsBoard({
     <div className="flex flex-1 flex-col gap-4">
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
         <div className="rounded-xl border border-border bg-background p-4">
-          <div className="text-xs uppercase tracking-wide text-muted">Собрано</div>
+          <div className="text-xs uppercase tracking-wide text-muted">{t("tileCollected")}</div>
           <div className="mt-1 text-xl font-semibold text-foreground">
             <Money amountEur={totalPaid} />
           </div>
         </div>
         <div className="rounded-xl border border-border bg-background p-4">
-          <div className="text-xs uppercase tracking-wide text-muted">Ожидается</div>
+          <div className="text-xs uppercase tracking-wide text-muted">{t("statPending")}</div>
           <div className="mt-1 text-xl font-semibold text-foreground">
             <Money amountEur={totalPending} />
           </div>
         </div>
         <div className="rounded-xl border border-border bg-background p-4">
-          <div className="text-xs uppercase tracking-wide text-muted">Всего записей</div>
+          <div className="text-xs uppercase tracking-wide text-muted">{t("tileTotalRecords")}</div>
           <div className="mt-1 text-xl font-semibold text-foreground">{filtered.length}</div>
         </div>
       </div>
@@ -69,10 +71,10 @@ export default function PaymentsBoard({
           onChange={(e) => setStatus(e.target.value)}
           className="rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-accent focus:ring-1 focus:ring-accent"
         >
-          <option value="all">Все статусы</option>
+          <option value="all">{t("allStatuses")}</option>
           {STATUSES.map((s) => (
             <option key={s.id} value={s.id}>
-              {s.label}
+              {statusLabel(s.id, locale)}
             </option>
           ))}
         </select>
@@ -82,7 +84,7 @@ export default function PaymentsBoard({
             onClick={() => setShowLink(true)}
             className="ml-auto rounded-lg border border-border px-4 py-2 text-sm font-medium text-ink-2 hover:bg-surface-2"
           >
-            + Ссылка на оплату
+            {t("btnAddPaymentLinkShort")}
           </button>
         )}
 
@@ -91,32 +93,32 @@ export default function PaymentsBoard({
             onClick={() => setShowNew(true)}
             className={`rounded-lg bg-foreground px-4 py-2 text-sm font-medium text-background ${stripeEnabled ? "" : "ml-auto"}`}
           >
-            + Оплата
+            {t("btnAddPaymentShort")}
           </button>
         )}
       </div>
 
       {isHq && (
         <p className="rounded-lg bg-surface-2 px-3 py-2 text-xs text-muted">
-          Режим HQ: видны оплаты всех клубов сети, доступно только для просмотра.
+          {t("hqReadOnlyPaymentsBanner")}
         </p>
       )}
 
       {filtered.length === 0 ? (
         <p className="rounded-lg border border-dashed border-border p-8 text-center text-sm text-muted">
-          Оплат по этим фильтрам не найдено.
+          {t("emptyNoPaymentsFiltered")}
         </p>
       ) : (
         <div className="overflow-x-auto rounded-xl border border-border bg-background">
           <table className="w-full min-w-[640px] text-left text-sm">
             <thead className="border-b border-border text-xs uppercase tracking-wide text-muted">
               <tr>
-                <th className="px-4 py-3 font-medium">Участница</th>
-                {isHq && <th className="px-4 py-3 font-medium">Клуб</th>}
-                <th className="px-4 py-3 font-medium">Курс</th>
-                <th className="px-4 py-3 font-medium">Статус</th>
-                <th className="px-4 py-3 font-medium">Дата</th>
-                <th className="px-4 py-3 font-medium">Сумма</th>
+                <th className="px-4 py-3 font-medium">{t("colMember")}</th>
+                {isHq && <th className="px-4 py-3 font-medium">{t("colClub")}</th>}
+                <th className="px-4 py-3 font-medium">{t("colCourse")}</th>
+                <th className="px-4 py-3 font-medium">{t("colStatus")}</th>
+                <th className="px-4 py-3 font-medium">{t("colDate")}</th>
+                <th className="px-4 py-3 font-medium">{t("colAmount")}</th>
               </tr>
             </thead>
             <tbody>
@@ -131,7 +133,7 @@ export default function PaymentsBoard({
                   <td className="px-4 py-3 text-muted">{p.product_name ?? "—"}</td>
                   <td className="px-4 py-3">
                     <span className="rounded-full bg-surface-2 px-2 py-0.5 text-xs text-ink-2">
-                      {statusLabel(p.status ?? "paid")}
+                      {statusLabel(p.status ?? "paid", locale)}
                     </span>
                   </td>
                   <td className="px-4 py-3 text-muted">{p.paid_date}</td>

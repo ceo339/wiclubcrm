@@ -1,7 +1,8 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { SOURCES, SOURCE_LABELS } from "@/lib/leads";
+import { SOURCES, sourceLabel } from "@/lib/leads";
+import { useLocale } from "@/components/i18n/LocaleProvider";
 import type { Tables } from "@/types/database";
 import type { Lead } from "./types";
 import KanbanBoard from "./KanbanBoard";
@@ -23,6 +24,7 @@ export default function LeadsBoard({
   products: Tables<"products">[];
   cohorts: Tables<"product_cohorts">[];
 }) {
+  const { locale, t } = useLocale();
   const [view, setView] = useState<"board" | "list">("board");
   const [search, setSearch] = useState("");
   const [source, setSource] = useState<string>("all");
@@ -50,7 +52,7 @@ export default function LeadsBoard({
         <input
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          placeholder="Поиск по имени, телефону, email…"
+          placeholder={t("searchLeadsPlaceholder")}
           className="w-64 rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-accent focus:ring-1 focus:ring-accent"
         />
         <select
@@ -58,10 +60,10 @@ export default function LeadsBoard({
           onChange={(e) => setSource(e.target.value)}
           className="rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-accent focus:ring-1 focus:ring-accent"
         >
-          <option value="all">Все источники</option>
+          <option value="all">{t("allSources")}</option>
           {SOURCES.map((s) => (
             <option key={s} value={s}>
-              {SOURCE_LABELS[s]}
+              {sourceLabel(s, locale)}
             </option>
           ))}
         </select>
@@ -69,10 +71,10 @@ export default function LeadsBoard({
         <div className="ml-auto flex items-center gap-2">
           <div className="flex rounded-lg bg-surface-2 p-1 text-sm">
             <ViewTab active={view === "board"} onClick={() => setView("board")}>
-              Канбан
+              {t("viewKanban")}
             </ViewTab>
             <ViewTab active={view === "list"} onClick={() => setView("list")}>
-              Список
+              {t("viewList")}
             </ViewTab>
           </div>
           {canEdit && (
@@ -81,13 +83,13 @@ export default function LeadsBoard({
                 onClick={() => setShowImport(true)}
                 className="rounded-lg border border-border px-4 py-2 text-sm font-medium text-ink-2 hover:bg-surface-2"
               >
-                Импорт
+                {t("btnImport")}
               </button>
               <button
                 onClick={() => setShowNewLead(true)}
                 className="rounded-lg bg-foreground px-4 py-2 text-sm font-medium text-background"
               >
-                + Лид
+                {t("btnAddLeadShort")}
               </button>
             </>
           )}
@@ -96,7 +98,7 @@ export default function LeadsBoard({
 
       {isHq && (
         <p className="rounded-lg bg-surface-2 px-3 py-2 text-xs text-muted">
-          Режим HQ: видны лиды всех клубов сети, доступно только для просмотра.
+          {t("hqReadOnlyLeadsBanner")}
         </p>
       )}
 

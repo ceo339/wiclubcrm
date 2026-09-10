@@ -1,5 +1,6 @@
 import { ROYALTY_PERCENT } from "@/lib/royalty";
 import { STAGES } from "@/lib/leads";
+import { t, type Locale } from "@/lib/i18n";
 
 // Month-over-month helpers for the HQ dashboard. All comparisons are
 // against real rows (payments/members/leads) — when there's no data for
@@ -25,25 +26,26 @@ export function monthKeyOf(dateStr: string): string {
   return dateStr.slice(0, 7);
 }
 
-const RU_MONTHS = [
-  "Январь",
-  "Февраль",
-  "Март",
-  "Апрель",
-  "Май",
-  "Июнь",
-  "Июль",
-  "Август",
-  "Сентябрь",
-  "Октябрь",
-  "Ноябрь",
-  "Декабрь",
+const MONTH_KEYS = [
+  "monthJan",
+  "monthFeb",
+  "monthMar",
+  "monthApr",
+  "monthMay",
+  "monthJun",
+  "monthJul",
+  "monthAug",
+  "monthSep",
+  "monthOct",
+  "monthNov",
+  "monthDec",
 ];
 
-/** "2026-09" -> "Сентябрь 2026" */
-export function monthLabel(monthKey: string): string {
+/** "2026-09" -> "Сентябрь 2026" (or the Bulgarian equivalent) */
+export function monthLabel(monthKey: string, locale: Locale): string {
   const [y, m] = monthKey.split("-").map(Number);
-  return `${RU_MONTHS[m - 1] ?? monthKey} ${y}`;
+  const key = MONTH_KEYS[m - 1];
+  return `${key ? t(locale, key) : monthKey} ${y}`;
 }
 
 export function isValidMonthKey(value: string): boolean {
@@ -54,7 +56,8 @@ export function isValidDateStr(value: string): boolean {
   return /^\d{4}-\d{2}-\d{2}$/.test(value);
 }
 
-/** "2026-09-10" -> "10.09.2026" */
+/** "2026-09-10" -> "10.09.2026" — the DD.MM.YYYY order is the same in both
+ * Russian and Bulgarian, so this doesn't need a locale. */
 export function formatDateRu(dateStr: string): string {
   const [y, m, d] = dateStr.slice(0, 10).split("-");
   return `${d}.${m}.${y}`;
@@ -66,24 +69,29 @@ export function pctChange(current: number, previous: number): number | null {
   return Math.round(((current - previous) / previous) * 100);
 }
 
-export function formatPctDelta(delta: number | null, suffix = "к прошлому месяцу"): string {
-  if (delta === null) return "нет данных за прошлый месяц";
-  if (delta === 0) return `без изменений ${suffix}`;
+export function formatPctDelta(
+  delta: number | null,
+  locale: Locale,
+  suffix = t(locale, "deltaVsPrevMonth")
+): string {
+  if (delta === null) return t(locale, "deltaNoPrevMonth");
+  if (delta === 0) return t(locale, "deltaUnchanged", { suffix });
   const arrow = delta > 0 ? "▲" : "▼";
-  return `${arrow} ${Math.abs(delta)}% ${suffix}`;
+  return t(locale, "deltaChange", { arrow, value: Math.abs(delta), suffix });
 }
 
 export function formatPointsDelta(
   current: number | null,
   previous: number | null,
-  suffix = "п.п. к прошлому месяцу"
+  locale: Locale,
+  suffix = t(locale, "deltaVsPrevMonthPts")
 ): string {
-  if (current === null) return "нет лидов за период";
-  if (previous === null) return "нет данных за прошлый месяц";
+  if (current === null) return t(locale, "deltaNoLeadsInPeriod");
+  if (previous === null) return t(locale, "deltaNoPrevMonth");
   const delta = current - previous;
-  if (delta === 0) return `без изменений ${suffix}`;
+  if (delta === 0) return t(locale, "deltaUnchanged", { suffix });
   const arrow = delta > 0 ? "▲" : "▼";
-  return `${arrow} ${Math.abs(delta)} ${suffix}`;
+  return t(locale, "deltaChangePts", { arrow, value: Math.abs(delta), suffix });
 }
 
 // ---------------------------------------------------------------------------
@@ -120,9 +128,9 @@ export function inPreviousMonth(period: Period, dateStr: string): boolean {
   return monthKeyOf(dateStr) === shiftMonthKey(period.month, -1);
 }
 
-export function periodLabel(period: Period): string {
+export function periodLabel(period: Period, locale: Locale): string {
   return period.mode === "month"
-    ? monthLabel(period.month)
+    ? monthLabel(period.month, locale)
     : `${formatDateRu(period.from)} – ${formatDateRu(period.to)}`;
 }
 
@@ -148,7 +156,7 @@ export function conversionRate(rows: { stage: string }[]): number | null {
     : Math.round((100 * rows.filter((l) => l.stage === "paid").length) / rows.length);
 }
 
-export type StageCount = { id: string; label: string; count: number };
+export type StageCount = { id: string; labelKey: string; count: number };
 
 export type CoreMetrics = {
   revenue: { amount: number; delta: number | null };
@@ -197,7 +205,7 @@ export function computeCoreMetrics({
     royalty: { amount: royaltyAmount, percent: ROYALTY_PERCENT },
     stageCounts: STAGES.map((s) => ({
       id: s.id,
-      label: s.label,
+      labelKey: s.labelKey,
       count: leadsInPeriod.filter((l) => l.stage === s.id).length,
     })),
   };
@@ -205,21 +213,40 @@ export function computeCoreMetrics({
 
 // ---------------------------------------------------------------------------
 // "Участницы по продуктам" — how many members are on each course/product.
-// Members with no product_id are bucketed as "Без привязки к курсу" rather
-// than silently dropped, so the counts always add up to the real total.
+// Members with no product_id are bucketed separately rather than silently
+// dropped, so the counts always add up to the real total. A real product's
+// own name is user data (not app copy) and is never translated; only the
+// two special buckets ("deleted"/"unassigned") are.
 
-export type ProductCount = { name: string; count: number };
+export type ProductCount =
+  | { kind: "product"; name: string; count: number }
+  | { kind: "deleted"; count: number }
+  | { kind: "unassigned"; count: number };
 
 export function countByProduct(
   members: { product_id: string | null }[],
   productNamesById: Map<string, string>
 ): ProductCount[] {
-  const counts = new Map<string, number>();
+  const counts = new Map<string, ProductCount>();
   for (const m of members) {
-    const name = m.product_id ? productNamesById.get(m.product_id) ?? "Удалённый курс" : "Без привязки к курсу";
-    counts.set(name, (counts.get(name) ?? 0) + 1);
+    let bucketKey: string;
+    let base: ProductCount;
+    if (!m.product_id) {
+      bucketKey = "__unassigned__";
+      base = { kind: "unassigned", count: 0 };
+    } else {
+      const name = productNamesById.get(m.product_id);
+      if (name) {
+        bucketKey = `product:${name}`;
+        base = { kind: "product", name, count: 0 };
+      } else {
+        bucketKey = "__deleted__";
+        base = { kind: "deleted", count: 0 };
+      }
+    }
+    const existing = counts.get(bucketKey);
+    counts.set(bucketKey, { ...base, count: (existing?.count ?? 0) + 1 } as ProductCount);
   }
-  return [...counts.entries()]
-    .map(([name, count]) => ({ name, count }))
-    .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name, "ru"));
+  const sortKey = (p: ProductCount) => (p.kind === "product" ? p.name : "");
+  return [...counts.values()].sort((a, b) => b.count - a.count || sortKey(a).localeCompare(sortKey(b), "ru"));
 }

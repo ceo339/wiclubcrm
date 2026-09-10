@@ -4,7 +4,12 @@ import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getCurrentProfile } from "@/lib/auth";
 
-export type ActionResult = { error: string | null; tempPassword?: string };
+export type ActionResult = {
+  error: string | null;
+  tempPassword?: string;
+  /** Only set when error === "errCreateLoginFailed" — see createClubPartner below. */
+  errorDetail?: string;
+};
 
 const PASSWORD_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789";
 
@@ -26,27 +31,24 @@ function generateTempPassword(length = 12): string {
  */
 export async function createClubPartner(formData: FormData): Promise<ActionResult> {
   const profile = await getCurrentProfile();
-  if (!profile) return { error: "Не авторизовано" };
-  if (profile.role !== "hq") return { error: "Добавлять клубы может только HQ" };
+  if (!profile) return { error: "errNotAuthorized" };
+  if (profile.role !== "hq") return { error: "errHqOnlyAddClubs" };
 
   const name = String(formData.get("name") || "").trim();
   const city = String(formData.get("city") || "").trim();
   const country = String(formData.get("country") || "").trim();
   const email = String(formData.get("email") || "").trim().toLowerCase();
 
-  if (!name) return { error: "Укажите название клуба" };
-  if (!city) return { error: "Укажите город" };
-  if (!country) return { error: "Укажите страну" };
-  if (!email) return { error: "Укажите email для входа" };
+  if (!name) return { error: "errEnterClubName" };
+  if (!city) return { error: "errEnterCity" };
+  if (!country) return { error: "errEnterCountry" };
+  if (!email) return { error: "errEnterLoginEmail" };
 
   let admin;
   try {
     admin = createAdminClient();
   } catch {
-    return {
-      error:
-        "Не настроен серверный ключ Supabase (SUPABASE_SERVICE_ROLE_KEY) — добавьте его в переменные окружения на Vercel.",
-    };
+    return { error: "errSupabaseServiceKeyMissing" };
   }
 
   const { data: partner, error: partnerError } = await admin
@@ -72,7 +74,7 @@ export async function createClubPartner(formData: FormData): Promise<ActionResul
   if (userError) {
     // Don't leave an orphan club with no way to log into it.
     await admin.from("partners").delete().eq("id", partner.id);
-    return { error: `Не удалось создать логин: ${userError.message}` };
+    return { error: "errCreateLoginFailed", errorDetail: userError.message };
   }
 
   revalidatePath("/partners");
@@ -89,25 +91,22 @@ export async function updatePartner(
   formData: FormData
 ): Promise<{ error: string | null }> {
   const profile = await getCurrentProfile();
-  if (!profile) return { error: "Не авторизовано" };
-  if (profile.role !== "hq") return { error: "Редактировать клубы может только HQ" };
+  if (!profile) return { error: "errNotAuthorized" };
+  if (profile.role !== "hq") return { error: "errHqOnlyEditClubs" };
 
   const name = String(formData.get("name") || "").trim();
   const city = String(formData.get("city") || "").trim();
   const country = String(formData.get("country") || "").trim();
 
-  if (!name) return { error: "Укажите название клуба" };
-  if (!city) return { error: "Укажите город" };
-  if (!country) return { error: "Укажите страну" };
+  if (!name) return { error: "errEnterClubName" };
+  if (!city) return { error: "errEnterCity" };
+  if (!country) return { error: "errEnterCountry" };
 
   let admin;
   try {
     admin = createAdminClient();
   } catch {
-    return {
-      error:
-        "Не настроен серверный ключ Supabase (SUPABASE_SERVICE_ROLE_KEY) — добавьте его в переменные окружения на Vercel.",
-    };
+    return { error: "errSupabaseServiceKeyMissing" };
   }
 
   const { error } = await admin

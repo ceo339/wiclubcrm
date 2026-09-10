@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { addCohort, deleteCohort, deleteProduct } from "@/app/products/actions";
 import Money from "@/components/currency/Money";
+import { useT } from "@/components/i18n/LocaleProvider";
 import type { Cohort, Product } from "./types";
 import NewProductModal from "./NewProductModal";
 
@@ -17,6 +18,7 @@ export default function ProductsBoard({
   isHq: boolean;
   canEdit: boolean;
 }) {
+  const t = useT();
   const [showNew, setShowNew] = useState(false);
 
   return (
@@ -24,22 +26,22 @@ export default function ProductsBoard({
       <div className="flex items-center justify-between">
         <p className="text-sm text-muted">
           {initialProducts.length === 0
-            ? "Курсов пока нет — добавьте первый, чтобы он появился в форме «Новый лид»."
-            : `Курсов: ${initialProducts.length}`}
+            ? t("emptyNoCoursesYet")
+            : t("coursesCountLabel", { n: initialProducts.length })}
         </p>
         {canEdit && (
           <button
             onClick={() => setShowNew(true)}
             className="rounded-lg bg-foreground px-4 py-2 text-sm font-medium text-background"
           >
-            + Курс
+            {t("btnAddCourseShort")}
           </button>
         )}
       </div>
 
       {isHq && (
         <p className="rounded-lg bg-surface-2 px-3 py-2 text-xs text-muted">
-          Режим HQ: видны курсы всех клубов сети, доступно только для просмотра.
+          {t("hqReadOnlyCoursesBanner")}
         </p>
       )}
 
@@ -71,6 +73,7 @@ function ProductCard({
   canEdit: boolean;
   showPartner: boolean;
 }) {
+  const t = useT();
   const [pending, startTransition] = useTransition();
   const [newDate, setNewDate] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -97,7 +100,7 @@ function ProductCard({
   }
 
   function handleDeleteProduct() {
-    if (!confirm(`Удалить курс «${product.name}»? Связанные лиды не удалятся, но потеряют привязку к курсу.`)) {
+    if (!confirm(t("confirmDeleteProduct", { name: product.name }))) {
       return;
     }
     startTransition(async () => {
@@ -112,7 +115,7 @@ function ProductCard({
           <div className="font-medium text-foreground">{product.name}</div>
           <div className="mt-0.5 text-xs text-muted">
             <Money amountEur={product.price} />
-            {product.sessions ? ` · ${product.sessions} занятий` : ""}
+            {product.sessions ? ` · ${t("sessionsSuffix", { n: product.sessions })}` : ""}
             {showPartner && product.partner_name ? ` · ${product.partner_name}` : ""}
           </div>
         </div>
@@ -122,15 +125,15 @@ function ProductCard({
             disabled={pending}
             className="shrink-0 text-xs text-muted hover:text-accent-strong"
           >
-            Удалить
+            {t("delete")}
           </button>
         )}
       </div>
 
       <div className="mt-3 flex flex-col gap-1.5">
-        <span className="text-xs font-medium text-ink-2">Потоки</span>
+        <span className="text-xs font-medium text-ink-2">{t("headingCohorts")}</span>
         {sortedCohorts.length === 0 && (
-          <p className="text-xs text-muted">Нет запланированных потоков</p>
+          <p className="text-xs text-muted">{t("emptyNoCohorts")}</p>
         )}
         {sortedCohorts.map((c) => (
           <div key={c.id} className="flex items-center justify-between text-xs text-ink-2">
@@ -140,7 +143,7 @@ function ProductCard({
                 onClick={() => handleDeleteCohort(c.id)}
                 disabled={pending}
                 className="text-muted hover:text-accent-strong"
-                aria-label="Удалить поток"
+                aria-label={t("ariaDeleteCohort")}
               >
                 ×
               </button>
@@ -162,11 +165,11 @@ function ProductCard({
             disabled={pending || !newDate}
             className="rounded-lg border border-border px-3 py-1.5 text-xs font-medium text-ink-2 hover:bg-surface-2 disabled:opacity-50"
           >
-            + Дата
+            {t("btnAddDateShort")}
           </button>
         </div>
       )}
-      {error && <p className="mt-1 text-xs text-accent-strong">{error}</p>}
+      {error && <p className="mt-1 text-xs text-accent-strong">{t(error)}</p>}
     </div>
   );
 }

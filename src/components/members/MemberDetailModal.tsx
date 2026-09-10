@@ -12,6 +12,7 @@ import {
 } from "@/app/members/actions";
 import { attendedArray, STATUSES, statusLabel } from "@/lib/members";
 import Money from "@/components/currency/Money";
+import { useLocale, useT } from "@/components/i18n/LocaleProvider";
 import type { Member } from "./types";
 
 export default function MemberDetailModal({
@@ -23,6 +24,7 @@ export default function MemberDetailModal({
   canEdit: boolean;
   onClose: () => void;
 }) {
+  const t = useT();
   const [detail, setDetail] = useState<MemberDetail | null>(null);
   const [editing, setEditing] = useState(false);
 
@@ -55,14 +57,14 @@ export default function MemberDetailModal({
             <h3 className="text-base font-semibold text-foreground">{member.name}</h3>
             <p className="mt-0.5 text-xs text-muted">
               {member.city ?? "—"}
-              {member.member_since ? ` · с ${member.member_since}` : ""}
+              {member.member_since ? ` · ${t("sincePrefix", { date: member.member_since })}` : ""}
             </p>
           </div>
           <button
             type="button"
             onClick={onClose}
             className="shrink-0 text-sm text-muted hover:text-ink-2"
-            aria-label="Закрыть"
+            aria-label={t("close")}
           >
             ×
           </button>
@@ -94,16 +96,17 @@ function ReadView({
   canEdit: boolean;
   onEdit: () => void;
 }) {
+  const { locale, t } = useLocale();
   return (
     <>
       <dl className="mt-4 grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
-        <dt className="text-muted">Курс</dt>
+        <dt className="text-muted">{t("colCourse")}</dt>
         <dd className="text-ink-2">{member.product_name ?? "—"}</dd>
-        <dt className="text-muted">Статус</dt>
-        <dd className="text-ink-2">{statusLabel(member.status)}</dd>
-        <dt className="text-muted">Начало</dt>
+        <dt className="text-muted">{t("colStatus")}</dt>
+        <dd className="text-ink-2">{statusLabel(member.status, locale)}</dd>
+        <dt className="text-muted">{t("colStart")}</dt>
         <dd className="text-ink-2">{member.start_date ?? "—"}</dd>
-        <dt className="text-muted">Сумма</dt>
+        <dt className="text-muted">{t("colAmount")}</dt>
         <dd className="text-ink-2">
           {member.price_collected ? <Money amountEur={member.price_collected} /> : "—"}
         </dd>
@@ -115,7 +118,7 @@ function ReadView({
           onClick={onEdit}
           className="mt-4 self-start rounded-lg border border-border px-3 py-1.5 text-xs font-medium text-ink-2 hover:bg-surface-2"
         >
-          Редактировать
+          {t("edit")}
         </button>
       )}
     </>
@@ -131,6 +134,7 @@ function EditForm({
   onCancel: () => void;
   onSaved: () => void;
 }) {
+  const { locale, t } = useLocale();
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
@@ -146,7 +150,7 @@ function EditForm({
   return (
     <form action={handleSubmit} className="mt-4 flex flex-col gap-3">
       <label className="flex flex-col gap-1.5 text-sm">
-        <span className="font-medium text-ink-2">Имя</span>
+        <span className="font-medium text-ink-2">{t("colName")}</span>
         <input
           name="name"
           defaultValue={member.name}
@@ -156,7 +160,7 @@ function EditForm({
       </label>
 
       <label className="flex flex-col gap-1.5 text-sm">
-        <span className="font-medium text-ink-2">Статус</span>
+        <span className="font-medium text-ink-2">{t("colStatus")}</span>
         <select
           name="status"
           defaultValue={member.status}
@@ -164,14 +168,14 @@ function EditForm({
         >
           {STATUSES.map((s) => (
             <option key={s.id} value={s.id}>
-              {s.label}
+              {statusLabel(s.id, locale)}
             </option>
           ))}
         </select>
       </label>
 
       <label className="flex flex-col gap-1.5 text-sm">
-        <span className="font-medium text-ink-2">Город</span>
+        <span className="font-medium text-ink-2">{t("fieldCity")}</span>
         <input
           name="city"
           defaultValue={member.city ?? ""}
@@ -180,7 +184,7 @@ function EditForm({
       </label>
 
       <label className="flex flex-col gap-1.5 text-sm">
-        <span className="font-medium text-ink-2">Дата начала</span>
+        <span className="font-medium text-ink-2">{t("colStartDate")}</span>
         <input
           name="start_date"
           type="date"
@@ -190,7 +194,7 @@ function EditForm({
       </label>
 
       <label className="flex flex-col gap-1.5 text-sm">
-        <span className="font-medium text-ink-2">Сумма (€)</span>
+        <span className="font-medium text-ink-2">{t("fieldValueEur")}</span>
         <input
           name="price_collected"
           type="number"
@@ -200,7 +204,7 @@ function EditForm({
       </label>
 
       <label className="flex flex-col gap-1.5 text-sm">
-        <span className="font-medium text-ink-2">Участница с</span>
+        <span className="font-medium text-ink-2">{t("fieldMemberSince")}</span>
         <input
           name="member_since"
           defaultValue={member.member_since ?? ""}
@@ -209,7 +213,7 @@ function EditForm({
       </label>
 
       {error && (
-        <p className="rounded-md bg-accent/10 px-3 py-2 text-sm text-accent-strong">{error}</p>
+        <p className="rounded-md bg-accent/10 px-3 py-2 text-sm text-accent-strong">{t(error)}</p>
       )}
 
       <div className="flex justify-end gap-2">
@@ -218,14 +222,14 @@ function EditForm({
           onClick={onCancel}
           className="rounded-lg border border-border px-4 py-2 text-sm font-medium text-ink-2 hover:bg-surface-2"
         >
-          Отмена
+          {t("cancel")}
         </button>
         <button
           type="submit"
           disabled={pending}
           className="rounded-lg bg-foreground px-4 py-2 text-sm font-medium text-background disabled:opacity-50"
         >
-          {pending ? "..." : "Сохранить"}
+          {pending ? "..." : t("save")}
         </button>
       </div>
     </form>
@@ -233,6 +237,7 @@ function EditForm({
 }
 
 function AttendanceSection({ member, canEdit }: { member: Member; canEdit: boolean }) {
+  const t = useT();
   const sessions = member.product_sessions ?? 0;
   const [attended, setAttended] = useState(() => attendedArray(member.attended, sessions));
   const [pending, startTransition] = useTransition();
@@ -256,7 +261,7 @@ function AttendanceSection({ member, canEdit }: { member: Member; canEdit: boole
   return (
     <div className="mt-5">
       <div className="flex items-center justify-between">
-        <span className="text-xs font-medium text-ink-2">Посещаемость</span>
+        <span className="text-xs font-medium text-ink-2">{t("headingAttendance")}</span>
         <span className="text-xs text-muted">{pct === null ? "—" : `${pct}%`}</span>
       </div>
       <div className="mt-2 flex flex-wrap gap-1.5">
@@ -266,7 +271,7 @@ function AttendanceSection({ member, canEdit }: { member: Member; canEdit: boole
             type="button"
             disabled={!canEdit || pending}
             onClick={() => cycle(i)}
-            title={`Занятие ${i + 1}`}
+            title={t("attendanceSessionTitle", { n: i + 1 })}
             className={`flex h-7 w-7 items-center justify-center rounded-md border text-xs font-medium ${
               v === true
                 ? "border-accent bg-accent/10 text-accent-strong"
@@ -279,7 +284,7 @@ function AttendanceSection({ member, canEdit }: { member: Member; canEdit: boole
           </button>
         ))}
       </div>
-      <p className="mt-1 text-xs text-muted">Клик по занятию переключает: не отмечено → была → не была.</p>
+      <p className="mt-1 text-xs text-muted">{t("attendanceCycleHint")}</p>
     </div>
   );
 }
@@ -295,6 +300,7 @@ function CommentsSection({
   canEdit: boolean;
   onChanged: () => void;
 }) {
+  const { locale, t } = useLocale();
   const [text, setText] = useState("");
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -314,18 +320,18 @@ function CommentsSection({
 
   return (
     <div className="mt-5">
-      <span className="text-xs font-medium text-ink-2">Комментарии</span>
+      <span className="text-xs font-medium text-ink-2">{t("headingComments")}</span>
       {detail === null ? (
-        <p className="mt-2 text-xs text-muted">Загрузка…</p>
+        <p className="mt-2 text-xs text-muted">{t("loading")}</p>
       ) : detail.comments.length === 0 ? (
-        <p className="mt-2 text-xs text-muted">Пока нет комментариев</p>
+        <p className="mt-2 text-xs text-muted">{t("emptyNoComments")}</p>
       ) : (
         <div className="mt-2 flex flex-col gap-2">
           {detail.comments.map((c) => (
             <div key={c.id} className="rounded-lg bg-surface-2 p-2 text-xs">
               <div className="flex items-center justify-between text-muted">
                 <span className="font-medium text-ink-2">{c.author}</span>
-                <span>{new Date(c.created_at).toLocaleString("ru-RU")}</span>
+                <span>{new Date(c.created_at).toLocaleString(locale === "bg" ? "bg-BG" : "ru-RU")}</span>
               </div>
               <p className="mt-1 text-ink-2">{c.text}</p>
             </div>
@@ -339,17 +345,17 @@ function CommentsSection({
             value={text}
             onChange={(e) => setText(e.target.value)}
             rows={2}
-            placeholder="Добавить комментарий…"
+            placeholder={t("placeholderAddComment")}
             className="rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-accent focus:ring-1 focus:ring-accent"
           />
-          {error && <p className="text-xs text-accent-strong">{error}</p>}
+          {error && <p className="text-xs text-accent-strong">{t(error)}</p>}
           <button
             type="button"
             onClick={handleAdd}
             disabled={pending || !text.trim()}
             className="self-start rounded-lg bg-foreground px-3 py-1.5 text-xs font-medium text-background disabled:opacity-50"
           >
-            Добавить
+            {t("add")}
           </button>
         </div>
       )}
@@ -368,6 +374,7 @@ function TasksSection({
   canEdit: boolean;
   onChanged: () => void;
 }) {
+  const t = useT();
   const [text, setText] = useState("");
   const [due, setDue] = useState("");
   const [pending, startTransition] = useTransition();
@@ -395,16 +402,16 @@ function TasksSection({
   }
 
   const tasks = detail?.tasks ?? [];
-  const open = tasks.filter((t) => !t.done);
-  const done = tasks.filter((t) => t.done);
+  const open = tasks.filter((task) => !task.done);
+  const done = tasks.filter((task) => task.done);
 
   return (
     <div className="mt-5">
-      <span className="text-xs font-medium text-ink-2">Задачи</span>
+      <span className="text-xs font-medium text-ink-2">{t("headingTasks")}</span>
       {detail === null ? (
-        <p className="mt-2 text-xs text-muted">Загрузка…</p>
+        <p className="mt-2 text-xs text-muted">{t("loading")}</p>
       ) : open.length === 0 && done.length === 0 ? (
-        <p className="mt-2 text-xs text-muted">Пока нет задач</p>
+        <p className="mt-2 text-xs text-muted">{t("emptyNoTasks")}</p>
       ) : (
         <div className="mt-2 flex flex-col gap-1.5">
           {[...open, ...done].map((task) => (
@@ -430,7 +437,7 @@ function TasksSection({
           <input
             value={text}
             onChange={(e) => setText(e.target.value)}
-            placeholder="Новая задача…"
+            placeholder={t("placeholderNewTask")}
             className="min-w-[140px] flex-1 rounded-lg border border-border bg-background px-2 py-1.5 text-xs outline-none focus:border-accent focus:ring-1 focus:ring-accent"
           />
           <input
@@ -445,11 +452,11 @@ function TasksSection({
             disabled={pending || !text.trim()}
             className="rounded-lg border border-border px-3 py-1.5 text-xs font-medium text-ink-2 hover:bg-surface-2 disabled:opacity-50"
           >
-            + Задача
+            {t("btnAddTaskShort")}
           </button>
         </div>
       )}
-      {error && <p className="mt-1 text-xs text-accent-strong">{error}</p>}
+      {error && <p className="mt-1 text-xs text-accent-strong">{t(error)}</p>}
     </div>
   );
 }

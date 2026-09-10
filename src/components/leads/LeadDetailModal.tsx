@@ -13,11 +13,13 @@ import {
 import {
   COUNTRIES,
   GENERIC_PLANS,
-  SOURCE_LABELS,
   declineReasonLabel,
+  sourceLabel,
   stageLabel,
 } from "@/lib/leads";
 import Money from "@/components/currency/Money";
+import { useLocale, useT } from "@/components/i18n/LocaleProvider";
+import T from "@/components/i18n/T";
 import type { Lead } from "./types";
 
 export default function LeadDetailModal({
@@ -29,6 +31,7 @@ export default function LeadDetailModal({
   canEdit: boolean;
   onClose: () => void;
 }) {
+  const { locale, t } = useLocale();
   const [detail, setDetail] = useState<LeadDetail | null>(null);
   const [editing, setEditing] = useState(false);
 
@@ -60,15 +63,15 @@ export default function LeadDetailModal({
           <div>
             <h3 className="text-base font-semibold text-foreground">{lead.name}</h3>
             <p className="mt-0.5 text-xs text-muted">
-              {lead.source ? SOURCE_LABELS[lead.source] ?? lead.source : "—"} ·{" "}
-              {stageLabel(lead.stage)}
+              {lead.source ? sourceLabel(lead.source, locale) : "—"} ·{" "}
+              {stageLabel(lead.stage, locale)}
             </p>
           </div>
           <button
             type="button"
             onClick={onClose}
             className="shrink-0 text-sm text-muted hover:text-ink-2"
-            aria-label="Закрыть"
+            aria-label={t("close")}
           >
             ×
           </button>
@@ -96,20 +99,21 @@ function ReadView({
   canEdit: boolean;
   onEdit: () => void;
 }) {
+  const { locale, t } = useLocale();
   const plan = lead.plan ? GENERIC_PLANS.find((p) => p.id === lead.plan) : null;
 
   return (
     <>
       <dl className="mt-4 grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
-        <Row label="Телефон" value={lead.phone} />
-        <Row label="Email" value={lead.email} />
-        <Row label="Страна" value={lead.country} />
-        <Row label="Город" value={lead.city} />
-        <Row label="Дата рождения" value={lead.birthday} />
-        <Row label="Добавлен" value={lead.added_date} />
+        <Row label={t("fieldPhone")} value={lead.phone} />
+        <Row label={t("fieldEmail")} value={lead.email} />
+        <Row label={t("fieldCountry")} value={lead.country} />
+        <Row label={t("fieldCity")} value={lead.city} />
+        <Row label={t("fieldBirthday")} value={lead.birthday} />
+        <Row label={t("colAdded")} value={lead.added_date} />
         {lead.value ? (
           <>
-            <dt className="text-muted">Сумма</dt>
+            <dt className="text-muted">{t("colAmount")}</dt>
             <dd className="text-ink-2">
               <Money amountEur={lead.value} />
             </dd>
@@ -117,11 +121,11 @@ function ReadView({
         ) : null}
         {lead.plan && (
           <>
-            <dt className="text-muted">Интересует</dt>
+            <dt className="text-muted">{t("fieldInterestedIn")}</dt>
             <dd className="text-ink-2">
               {plan ? (
                 <>
-                  {plan.label} · <Money amountEur={plan.price} />
+                  <T k={plan.id} /> · <Money amountEur={plan.price} />
                 </>
               ) : (
                 lead.plan
@@ -129,11 +133,11 @@ function ReadView({
             </dd>
           </>
         )}
-        {lead.cohort_start_date && <Row label="Начало потока" value={lead.cohort_start_date} />}
+        {lead.cohort_start_date && <Row label={t("fieldCohortStart")} value={lead.cohort_start_date} />}
         {lead.stage === "declined" && lead.decline_reason && (
           <Row
-            label="Причина отказа"
-            value={`${declineReasonLabel(lead.decline_reason)}${
+            label={t("declineModalTitle")}
+            value={`${declineReasonLabel(lead.decline_reason, locale)}${
               lead.decline_note ? " · " + lead.decline_note : ""
             }`}
           />
@@ -142,7 +146,7 @@ function ReadView({
 
       {lead.note && (
         <div className="mt-4">
-          <span className="text-xs font-medium text-ink-2">Заметка</span>
+          <span className="text-xs font-medium text-ink-2">{t("fieldNote")}</span>
           <p className="mt-1 text-sm text-ink-2">{lead.note}</p>
         </div>
       )}
@@ -154,7 +158,7 @@ function ReadView({
             onClick={onEdit}
             className="self-start rounded-lg border border-border px-3 py-1.5 text-xs font-medium text-ink-2 hover:bg-surface-2"
           >
-            Редактировать
+            {t("edit")}
           </button>
           {lead.stage === "paid" && <ConvertToMemberButton leadId={lead.id} />}
         </div>
@@ -164,12 +168,13 @@ function ReadView({
 }
 
 function ConvertToMemberButton({ leadId }: { leadId: string }) {
+  const t = useT();
   const [pending, startTransition] = useTransition();
   const [done, setDone] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   if (done) {
-    return <p className="text-xs text-muted">Добавлена в «Участницы»</p>;
+    return <p className="text-xs text-muted">{t("convertedToMember")}</p>;
   }
 
   return (
@@ -186,9 +191,9 @@ function ConvertToMemberButton({ leadId }: { leadId: string }) {
         }
         className="rounded-lg bg-foreground px-3 py-1.5 text-xs font-medium text-background disabled:opacity-50"
       >
-        {pending ? "..." : "Сделать участницей"}
+        {pending ? "..." : t("btnConvertToMember")}
       </button>
-      {error && <p className="text-xs text-accent-strong">{error}</p>}
+      {error && <p className="text-xs text-accent-strong">{t(error)}</p>}
     </div>
   );
 }
@@ -212,6 +217,7 @@ function EditForm({
   onCancel: () => void;
   onSaved: () => void;
 }) {
+  const t = useT();
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
@@ -226,18 +232,18 @@ function EditForm({
 
   return (
     <form action={handleSubmit} className="mt-4 flex flex-col gap-3">
-      <Field label="Имя" name="name" defaultValue={lead.name} required />
-      <Field label="Email" name="email" type="email" defaultValue={lead.email ?? ""} />
-      <Field label="Телефон" name="phone" type="tel" defaultValue={lead.phone ?? ""} />
+      <Field label={t("colName")} name="name" defaultValue={lead.name} required />
+      <Field label={t("fieldEmail")} name="email" type="email" defaultValue={lead.email ?? ""} />
+      <Field label={t("fieldPhone")} name="phone" type="tel" defaultValue={lead.phone ?? ""} />
 
       <label className="flex flex-col gap-1.5 text-sm">
-        <span className="font-medium text-ink-2">Страна</span>
+        <span className="font-medium text-ink-2">{t("fieldCountry")}</span>
         <select
           name="country"
           defaultValue={lead.country ?? ""}
           className="rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-accent focus:ring-1 focus:ring-accent"
         >
-          <option value="">— не указано —</option>
+          <option value="">{t("optionNotSpecified")}</option>
           {COUNTRIES.map((c) => (
             <option key={c.name} value={c.name}>
               {c.name}
@@ -246,12 +252,12 @@ function EditForm({
         </select>
       </label>
 
-      <Field label="Город" name="city" defaultValue={lead.city ?? ""} />
-      <Field label="Дата рождения" name="birthday" type="date" defaultValue={lead.birthday ?? ""} />
-      <Field label="Сумма (€)" name="value" type="number" defaultValue={String(lead.value ?? 0)} />
+      <Field label={t("fieldCity")} name="city" defaultValue={lead.city ?? ""} />
+      <Field label={t("fieldBirthday")} name="birthday" type="date" defaultValue={lead.birthday ?? ""} />
+      <Field label={t("fieldValueEur")} name="value" type="number" defaultValue={String(lead.value ?? 0)} />
 
       <label className="flex flex-col gap-1.5 text-sm">
-        <span className="font-medium text-ink-2">Заметка</span>
+        <span className="font-medium text-ink-2">{t("fieldNote")}</span>
         <textarea
           name="note"
           rows={3}
@@ -261,7 +267,7 @@ function EditForm({
       </label>
 
       {error && (
-        <p className="rounded-md bg-accent/10 px-3 py-2 text-sm text-accent-strong">{error}</p>
+        <p className="rounded-md bg-accent/10 px-3 py-2 text-sm text-accent-strong">{t(error)}</p>
       )}
 
       <div className="flex justify-end gap-2">
@@ -270,14 +276,14 @@ function EditForm({
           onClick={onCancel}
           className="rounded-lg border border-border px-4 py-2 text-sm font-medium text-ink-2 hover:bg-surface-2"
         >
-          Отмена
+          {t("cancel")}
         </button>
         <button
           type="submit"
           disabled={pending}
           className="rounded-lg bg-foreground px-4 py-2 text-sm font-medium text-background disabled:opacity-50"
         >
-          {pending ? "..." : "Сохранить"}
+          {pending ? "..." : t("save")}
         </button>
       </div>
     </form>
@@ -322,6 +328,7 @@ function CommentsSection({
   canEdit: boolean;
   onChanged: () => void;
 }) {
+  const { locale, t } = useLocale();
   const [text, setText] = useState("");
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -341,18 +348,18 @@ function CommentsSection({
 
   return (
     <div className="mt-5">
-      <span className="text-xs font-medium text-ink-2">Комментарии</span>
+      <span className="text-xs font-medium text-ink-2">{t("headingComments")}</span>
       {detail === null ? (
-        <p className="mt-2 text-xs text-muted">Загрузка…</p>
+        <p className="mt-2 text-xs text-muted">{t("loading")}</p>
       ) : detail.comments.length === 0 ? (
-        <p className="mt-2 text-xs text-muted">Пока нет комментариев</p>
+        <p className="mt-2 text-xs text-muted">{t("emptyNoComments")}</p>
       ) : (
         <div className="mt-2 flex flex-col gap-2">
           {detail.comments.map((c) => (
             <div key={c.id} className="rounded-lg bg-surface-2 p-2 text-xs">
               <div className="flex items-center justify-between text-muted">
                 <span className="font-medium text-ink-2">{c.author}</span>
-                <span>{new Date(c.created_at).toLocaleString("ru-RU")}</span>
+                <span>{new Date(c.created_at).toLocaleString(locale === "bg" ? "bg-BG" : "ru-RU")}</span>
               </div>
               <p className="mt-1 text-ink-2">{c.text}</p>
             </div>
@@ -366,17 +373,17 @@ function CommentsSection({
             value={text}
             onChange={(e) => setText(e.target.value)}
             rows={2}
-            placeholder="Добавить комментарий…"
+            placeholder={t("placeholderAddComment")}
             className="rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-accent focus:ring-1 focus:ring-accent"
           />
-          {error && <p className="text-xs text-accent-strong">{error}</p>}
+          {error && <p className="text-xs text-accent-strong">{t(error)}</p>}
           <button
             type="button"
             onClick={handleAdd}
             disabled={pending || !text.trim()}
             className="self-start rounded-lg bg-foreground px-3 py-1.5 text-xs font-medium text-background disabled:opacity-50"
           >
-            Добавить
+            {t("add")}
           </button>
         </div>
       )}
@@ -395,6 +402,7 @@ function TasksSection({
   canEdit: boolean;
   onChanged: () => void;
 }) {
+  const t = useT();
   const [text, setText] = useState("");
   const [due, setDue] = useState("");
   const [pending, startTransition] = useTransition();
@@ -422,16 +430,16 @@ function TasksSection({
   }
 
   const tasks = detail?.tasks ?? [];
-  const open = tasks.filter((t) => !t.done);
-  const done = tasks.filter((t) => t.done);
+  const open = tasks.filter((task) => !task.done);
+  const done = tasks.filter((task) => task.done);
 
   return (
     <div className="mt-5">
-      <span className="text-xs font-medium text-ink-2">Задачи</span>
+      <span className="text-xs font-medium text-ink-2">{t("headingTasks")}</span>
       {detail === null ? (
-        <p className="mt-2 text-xs text-muted">Загрузка…</p>
+        <p className="mt-2 text-xs text-muted">{t("loading")}</p>
       ) : open.length === 0 && done.length === 0 ? (
-        <p className="mt-2 text-xs text-muted">Пока нет задач</p>
+        <p className="mt-2 text-xs text-muted">{t("emptyNoTasks")}</p>
       ) : (
         <div className="mt-2 flex flex-col gap-1.5">
           {[...open, ...done].map((task) => (
@@ -457,7 +465,7 @@ function TasksSection({
           <input
             value={text}
             onChange={(e) => setText(e.target.value)}
-            placeholder="Новая задача…"
+            placeholder={t("placeholderNewTask")}
             className="min-w-[140px] flex-1 rounded-lg border border-border bg-background px-2 py-1.5 text-xs outline-none focus:border-accent focus:ring-1 focus:ring-accent"
           />
           <input
@@ -472,11 +480,11 @@ function TasksSection({
             disabled={pending || !text.trim()}
             className="rounded-lg border border-border px-3 py-1.5 text-xs font-medium text-ink-2 hover:bg-surface-2 disabled:opacity-50"
           >
-            + Задача
+            {t("btnAddTaskShort")}
           </button>
         </div>
       )}
-      {error && <p className="mt-1 text-xs text-accent-strong">{error}</p>}
+      {error && <p className="mt-1 text-xs text-accent-strong">{t(error)}</p>}
     </div>
   );
 }

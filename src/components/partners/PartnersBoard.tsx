@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useLocale } from "@/components/i18n/LocaleProvider";
 import type { Tables } from "@/types/database";
 import NewPartnerModal from "./NewPartnerModal";
 import EditPartnerModal from "./EditPartnerModal";
@@ -10,6 +11,7 @@ export default function PartnersBoard({
 }: {
   initialPartners: Tables<"partners">[];
 }) {
+  const { locale, t } = useLocale();
   const [showNew, setShowNew] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const editingPartner = initialPartners.find((p) => p.id === editingId) ?? null;
@@ -19,30 +21,30 @@ export default function PartnersBoard({
       <div className="flex items-center justify-between">
         <p className="text-sm text-muted">
           {initialPartners.length === 0
-            ? "Клубов пока нет."
-            : `Клубов в сети: ${initialPartners.length}`}
+            ? t("emptyNoClubsShort")
+            : t("clubsInNetworkCountLabel", { n: initialPartners.length })}
         </p>
         <button
           onClick={() => setShowNew(true)}
           className="rounded-lg bg-foreground px-4 py-2 text-sm font-medium text-background"
         >
-          + Клуб
+          {t("btnAddClubShort")}
         </button>
       </div>
 
       {initialPartners.length === 0 ? (
         <p className="rounded-lg border border-dashed border-border p-8 text-center text-sm text-muted">
-          Пока нет ни одного клуба.
+          {t("emptyNoClubsAtAll")}
         </p>
       ) : (
         <div className="overflow-x-auto rounded-xl border border-border bg-background">
           <table className="w-full min-w-[480px] text-left text-sm">
             <thead className="border-b border-border text-xs uppercase tracking-wide text-muted">
               <tr>
-                <th className="px-4 py-3 font-medium">Клуб</th>
-                <th className="px-4 py-3 font-medium">Страна</th>
-                <th className="px-4 py-3 font-medium">Город</th>
-                <th className="px-4 py-3 font-medium">Добавлен</th>
+                <th className="px-4 py-3 font-medium">{t("colClub")}</th>
+                <th className="px-4 py-3 font-medium">{t("fieldCountry")}</th>
+                <th className="px-4 py-3 font-medium">{t("fieldCity")}</th>
+                <th className="px-4 py-3 font-medium">{t("colAdded")}</th>
               </tr>
             </thead>
             <tbody>
@@ -56,7 +58,7 @@ export default function PartnersBoard({
                   <td className="px-4 py-3 text-muted">{p.country ?? "—"}</td>
                   <td className="px-4 py-3 text-muted">{p.city ?? "—"}</td>
                   <td className="px-4 py-3 text-muted">
-                    {new Date(p.created_at).toLocaleDateString("ru-RU")}
+                    {new Date(p.created_at).toLocaleDateString(locale === "bg" ? "bg-BG" : "ru-RU")}
                   </td>
                 </tr>
               ))}

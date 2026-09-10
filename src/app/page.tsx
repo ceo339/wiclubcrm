@@ -2,14 +2,18 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { getCurrentProfile } from "@/lib/auth";
 import { scopeForProfile } from "@/lib/currency";
+import { localeScopeForProfile } from "@/lib/i18n";
 import CurrencySwitcher from "@/components/currency/CurrencySwitcher";
 import CurrencyScope from "@/components/currency/CurrencyScope";
+import LocaleSwitcher from "@/components/i18n/LocaleSwitcher";
+import LocaleScope from "@/components/i18n/LocaleScope";
+import T from "@/components/i18n/T";
 import { signOut } from "./login/actions";
 
-const ROLE_LABELS: Record<string, string> = {
-  partner: "Партнёр",
-  staff: "Сотрудник клуба",
-  hq: "HQ (головной офис)",
+const ROLE_LABEL_KEYS: Record<string, string> = {
+  partner: "roleLabelPartner",
+  staff: "roleLabelStaff",
+  hq: "roleLabelHq",
 };
 
 export default async function Home() {
@@ -19,28 +23,32 @@ export default async function Home() {
   }
 
   const { scope, fallback } = scopeForProfile(profile);
+  const localeScope = localeScopeForProfile(profile);
+  const roleLabelKey = ROLE_LABEL_KEYS[profile.role];
 
   return (
     <div className="flex flex-1 flex-col bg-surface-2">
       <header className="flex items-center justify-between border-b border-border bg-background px-6 py-4">
         <div>
           <h1 className="text-lg font-semibold tracking-tight text-foreground">
-            WI Club CRM
+            <T k="appName" />
           </h1>
           <p className="text-sm text-muted">
-            {profile.partner_name ?? "Без привязки к клубу"} ·{" "}
-            {ROLE_LABELS[profile.role] ?? profile.role}
+            {profile.partner_name ?? <T k="noClubAttached" />} ·{" "}
+            {roleLabelKey ? <T k={roleLabelKey} /> : profile.role}
           </p>
         </div>
         <div className="flex items-center gap-2">
           <CurrencyScope scope={scope} fallback={fallback} />
           <CurrencySwitcher />
+          <LocaleScope scope={localeScope.scope} fallback={localeScope.fallback} />
+          <LocaleSwitcher />
           <form action={signOut}>
             <button
               type="submit"
               className="rounded-lg border border-border px-3 py-1.5 text-sm font-medium text-ink-2 hover:bg-surface-2"
             >
-              Выйти
+              <T k="signOut" />
             </button>
           </form>
         </div>
@@ -52,9 +60,9 @@ export default async function Home() {
             href="/dashboard"
             className="w-full max-w-sm rounded-xl border border-border bg-background p-5 text-left shadow-sm transition-colors hover:border-accent"
           >
-            <div className="text-sm font-medium text-foreground">Сводка по сети</div>
+            <div className="text-sm font-medium text-foreground"><T k="headingNetworkSummary" /></div>
             <div className="mt-1 text-xs text-muted">
-              Лиды, участницы и оплаты по всей сети и по каждому клубу
+              <T k="navNetworkSummaryDesc" />
             </div>
           </Link>
         )}
@@ -63,9 +71,9 @@ export default async function Home() {
             href={`/dashboard/${profile.partner_id}`}
             className="w-full max-w-sm rounded-xl border border-border bg-background p-5 text-left shadow-sm transition-colors hover:border-accent"
           >
-            <div className="text-sm font-medium text-foreground">Моя сводка</div>
+            <div className="text-sm font-medium text-foreground"><T k="navMySummary" /></div>
             <div className="mt-1 text-xs text-muted">
-              Выручка, роялти, конверсия и участницы по продуктам за период
+              <T k="navMySummaryDesc" />
             </div>
           </Link>
         )}
@@ -73,45 +81,45 @@ export default async function Home() {
           href="/leads"
           className="w-full max-w-sm rounded-xl border border-border bg-background p-5 text-left shadow-sm transition-colors hover:border-accent"
         >
-          <div className="text-sm font-medium text-foreground">Лиды</div>
+          <div className="text-sm font-medium text-foreground"><T k="navLeads" /></div>
           <div className="mt-1 text-xs text-muted">
-            Воронка продаж — канбан и список
+            <T k="navLeadsDesc" />
           </div>
         </Link>
         <Link
           href="/members"
           className="w-full max-w-sm rounded-xl border border-border bg-background p-5 text-left shadow-sm transition-colors hover:border-accent"
         >
-          <div className="text-sm font-medium text-foreground">Участницы</div>
+          <div className="text-sm font-medium text-foreground"><T k="navMembers" /></div>
           <div className="mt-1 text-xs text-muted">
-            Список участниц, статус оплаты, посещаемость
+            <T k="navMembersDesc" />
           </div>
         </Link>
         <Link
           href="/attendance"
           className="w-full max-w-sm rounded-xl border border-border bg-background p-5 text-left shadow-sm transition-colors hover:border-accent"
         >
-          <div className="text-sm font-medium text-foreground">Посещаемость</div>
+          <div className="text-sm font-medium text-foreground"><T k="navAttendance" /></div>
           <div className="mt-1 text-xs text-muted">
-            Отметки за весь поток курса сразу, а не по одной участнице
+            <T k="navAttendanceDesc" />
           </div>
         </Link>
         <Link
           href="/products"
           className="w-full max-w-sm rounded-xl border border-border bg-background p-5 text-left shadow-sm transition-colors hover:border-accent"
         >
-          <div className="text-sm font-medium text-foreground">Курсы</div>
+          <div className="text-sm font-medium text-foreground"><T k="navCourses" /></div>
           <div className="mt-1 text-xs text-muted">
-            Продукты клуба и даты потоков — для формы «Новый лид»
+            <T k="navCoursesDesc" />
           </div>
         </Link>
         <Link
           href="/payments"
           className="w-full max-w-sm rounded-xl border border-border bg-background p-5 text-left shadow-sm transition-colors hover:border-accent"
         >
-          <div className="text-sm font-medium text-foreground">Оплаты</div>
+          <div className="text-sm font-medium text-foreground"><T k="navPayments" /></div>
           <div className="mt-1 text-xs text-muted">
-            Учёт оплат по участницам — отдельно от суммы на карточке
+            <T k="navPaymentsDesc" />
           </div>
         </Link>
         {profile.role === "hq" && (
@@ -119,9 +127,9 @@ export default async function Home() {
             href="/partners"
             className="w-full max-w-sm rounded-xl border border-border bg-background p-5 text-left shadow-sm transition-colors hover:border-accent"
           >
-            <div className="text-sm font-medium text-foreground">Клубы сети</div>
+            <div className="text-sm font-medium text-foreground"><T k="navPartners" /></div>
             <div className="mt-1 text-xs text-muted">
-              Добавить франчайзи — клуб и логин для входа
+              <T k="navPartnersDesc" />
             </div>
           </Link>
         )}

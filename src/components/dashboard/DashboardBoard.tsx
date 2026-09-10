@@ -1,8 +1,11 @@
+"use client";
+
 import Link from "next/link";
 import type { ReactNode } from "react";
 import type { Period, ProductCount, StageCount } from "@/lib/dashboard";
 import { formatPctDelta, formatPointsDelta, monthLabel, periodLabel } from "@/lib/dashboard";
 import Money from "@/components/currency/Money";
+import { useLocale } from "@/components/i18n/LocaleProvider";
 
 export type ClubRow = {
   id: string;
@@ -46,6 +49,7 @@ function PeriodFilter({
   monthOptions: string[];
   basePath: string;
 }) {
+  const { locale, t } = useLocale();
   return (
     <div className="rounded-xl border border-border bg-background p-4">
       <div className="flex flex-wrap items-center gap-2">
@@ -61,14 +65,14 @@ function PeriodFilter({
                   : "border-border text-ink-2 hover:bg-surface-2"
               }`}
             >
-              {monthLabel(m)}
+              {monthLabel(m, locale)}
             </Link>
           );
         })}
       </div>
       <form action={basePath} method="get" className="mt-3 flex flex-wrap items-end gap-2">
         <label className="flex flex-col text-xs text-muted">
-          С
+          {t("fieldFrom")}
           <input
             type="date"
             name="from"
@@ -77,7 +81,7 @@ function PeriodFilter({
           />
         </label>
         <label className="flex flex-col text-xs text-muted">
-          По
+          {t("fieldTo")}
           <input
             type="date"
             name="to"
@@ -89,11 +93,11 @@ function PeriodFilter({
           type="submit"
           className="rounded-lg border border-border px-3 py-1.5 text-sm font-medium text-ink-2 hover:bg-surface-2"
         >
-          Показать период
+          {t("btnShowPeriod")}
         </button>
         {period.mode === "range" && (
           <Link href={basePath} className="px-1 py-1.5 text-sm text-muted hover:text-ink-2">
-            Сбросить к месяцам
+            {t("linkResetToMonths")}
           </Link>
         )}
       </form>
@@ -101,26 +105,31 @@ function PeriodFilter({
   );
 }
 
-function ProductsTable({ title, rows }: { title: string; rows: ProductCount[] }) {
+function productCountLabel(p: ProductCount, t: (key: string) => string): string {
+  return p.kind === "product" ? p.name : t(p.kind === "deleted" ? "productDeleted" : "productUnassigned");
+}
+
+function ProductsTable({ titleKey, rows }: { titleKey: string; rows: ProductCount[] }) {
+  const { t } = useLocale();
   const total = rows.reduce((sum, r) => sum + r.count, 0);
   return (
     <div className="flex-1 rounded-xl border border-border bg-background">
       <div className="border-b border-border px-5 py-4">
-        <h3 className="text-sm font-semibold text-foreground">{title}</h3>
+        <h3 className="text-sm font-semibold text-foreground">{t(titleKey)}</h3>
       </div>
       {rows.length === 0 ? (
-        <p className="p-5 text-sm text-muted">Нет участниц за этот период.</p>
+        <p className="p-5 text-sm text-muted">{t("emptyNoMembersPeriod")}</p>
       ) : (
         <table className="w-full text-left text-sm">
           <tbody>
-            {rows.map((r) => (
-              <tr key={r.name} className="border-b border-border last:border-0">
-                <td className="px-5 py-2.5 text-foreground">{r.name}</td>
+            {rows.map((r, i) => (
+              <tr key={i} className="border-b border-border last:border-0">
+                <td className="px-5 py-2.5 text-foreground">{productCountLabel(r, t)}</td>
                 <td className="px-5 py-2.5 text-right font-medium text-foreground">{r.count}</td>
               </tr>
             ))}
             <tr>
-              <td className="px-5 py-2.5 font-medium text-ink-2">Всего</td>
+              <td className="px-5 py-2.5 font-medium text-ink-2">{t("total")}</td>
               <td className="px-5 py-2.5 text-right font-semibold text-foreground">{total}</td>
             </tr>
           </tbody>
@@ -148,8 +157,10 @@ export default function DashboardBoard({
   totals: Totals;
   /** The 4th all-time tile — "Клубов в сети" on the network view, "Курсов"
    * (products) on a club's own view. Kept as an explicit prop rather than
-   * inferred from `clubs` so each page states plainly what it means. */
-  fourthTile: { label: string; value: string; delta: string };
+   * inferred from `clubs` so each page states plainly what it means. Keys
+   * into the dictionary rather than literal text since this component
+   * decides the display language, not the (server) page that builds it. */
+  fourthTile: { labelKey: string; value: string; deltaKey: string };
   stageCounts: StageCount[];
   /** Omit on a club's own dashboard — there's nothing to break down by club. */
   clubs?: ClubRow[];
@@ -164,6 +175,7 @@ export default function DashboardBoard({
   productsPeriod: ProductCount[];
   productsAllTime: ProductCount[];
 }) {
+  const { locale, t } = useLocale();
   const maxStage = Math.max(1, ...stageCounts.map((s) => s.count));
   const isRange = period.mode === "range";
   const qs = periodQuery(period);
@@ -173,59 +185,63 @@ export default function DashboardBoard({
       <PeriodFilter period={period} monthOptions={monthOptions} basePath={basePath} />
 
       <p className="text-sm text-muted">
-        Показатели за: <span className="font-medium text-foreground">{periodLabel(period)}</span>
+        {t("metricsForPrefix")} <span className="font-medium text-foreground">{periodLabel(period, locale)}</span>
       </p>
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <StatTile
-          label="Выручка"
+          label={t("statRevenue")}
           value={<Money amountEur={revenue.amount} />}
-          delta={isRange ? "за выбранный период" : formatPctDelta(revenue.delta)}
+          delta={isRange ? t("deltaForPeriod") : formatPctDelta(revenue.delta, locale)}
         />
         <StatTile
-          label="Участниц"
+          label={t("statMembers")}
           value={String(totals.members)}
-          delta={membersAdded > 0 ? `+${membersAdded} за период` : "не добавлено за период"}
+          delta={
+            membersAdded > 0
+              ? t("deltaMembersAdded", { n: membersAdded })
+              : t("deltaMembersNone")
+          }
         />
         <StatTile
-          label="Роялти к оплате"
+          label={t("statRoyaltyDue")}
           value={<Money amountEur={royalty.amount} />}
-          delta={`${royalty.percent}% от выручки за период`}
+          delta={t("deltaRoyaltyPercent", { percent: royalty.percent })}
         />
         <StatTile
-          label="Лид → участница"
+          label={t("statConversion")}
           value={conversion.value === null ? "—" : `${conversion.value}%`}
           delta={
             isRange
               ? conversion.value === null
-                ? "нет лидов за период"
-                : "без сравнения для периода"
-              : formatPointsDelta(conversion.value, conversion.previous)
+                ? t("deltaNoLeadsInPeriod")
+                : t("deltaNoRangeComparison")
+              : formatPointsDelta(conversion.value, conversion.previous, locale)
           }
         />
       </div>
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <StatTile label="Лидов (всего)" value={String(totals.leads)} delta="за всё время" />
+        <StatTile label={t("statLeadsTotal")} value={String(totals.leads)} delta={t("deltaAllTime")} />
         <StatTile
-          label="Собрано (всего)"
+          label={t("statCollectedTotal")}
           value={<Money amountEur={totals.collected} />}
-          delta="за всё время"
+          delta={t("deltaAllTime")}
         />
         <StatTile
-          label="Ожидается"
+          label={t("statPending")}
           value={<Money amountEur={totals.pending} />}
-          delta="ещё не оплачено"
+          delta={t("deltaNotPaidYet")}
         />
-        <StatTile label={fourthTile.label} value={fourthTile.value} delta={fourthTile.delta} />
+        <StatTile label={t(fourthTile.labelKey)} value={fourthTile.value} delta={t(fourthTile.deltaKey)} />
       </div>
 
       <div className="rounded-xl border border-border bg-background p-5">
-        <h2 className="text-sm font-semibold text-foreground">Воронка лидов за период</h2>
+        <h2 className="text-sm font-semibold text-foreground">{t("headingFunnel")}</h2>
         <div className="mt-4 flex flex-col gap-3">
           {stageCounts.map((s) => (
             <div key={s.id} className="flex items-center gap-3">
-              <div className="w-36 shrink-0 text-sm text-ink-2">{s.label}</div>
+              <div className="w-36 shrink-0 text-sm text-ink-2">{t(s.labelKey)}</div>
               <div className="h-2 flex-1 rounded-full bg-surface-2">
                 <div
                   className="h-2 rounded-full bg-foreground"
@@ -241,27 +257,27 @@ export default function DashboardBoard({
       </div>
 
       <div className="flex flex-col gap-3 sm:flex-row">
-        <ProductsTable title="Участницы по продуктам — за период" rows={productsPeriod} />
-        <ProductsTable title="Участницы по продуктам — за всё время" rows={productsAllTime} />
+        <ProductsTable titleKey="headingProductsPeriod" rows={productsPeriod} />
+        <ProductsTable titleKey="headingProductsAllTime" rows={productsAllTime} />
       </div>
 
       {clubs && (
         <div className="rounded-xl border border-border bg-background">
           <div className="border-b border-border px-5 py-4">
-            <h2 className="text-sm font-semibold text-foreground">По клубам за период</h2>
+            <h2 className="text-sm font-semibold text-foreground">{t("headingClubsPeriod")}</h2>
           </div>
           {clubs.length === 0 ? (
-            <p className="p-5 text-sm text-muted">В сети пока нет ни одного клуба.</p>
+            <p className="p-5 text-sm text-muted">{t("emptyNoClubs")}</p>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full min-w-[560px] text-left text-sm">
                 <thead className="border-b border-border text-xs uppercase tracking-wide text-muted">
                   <tr>
-                    <th className="px-5 py-3 font-medium">Клуб</th>
-                    <th className="px-5 py-3 font-medium">Лидов</th>
-                    <th className="px-5 py-3 font-medium">Участниц</th>
-                    <th className="px-5 py-3 font-medium">Собрано</th>
-                    <th className="px-5 py-3 font-medium">Ожидается</th>
+                    <th className="px-5 py-3 font-medium">{t("colClub")}</th>
+                    <th className="px-5 py-3 font-medium">{t("colLeads")}</th>
+                    <th className="px-5 py-3 font-medium">{t("statMembers")}</th>
+                    <th className="px-5 py-3 font-medium">{t("colCollected")}</th>
+                    <th className="px-5 py-3 font-medium">{t("statPending")}</th>
                   </tr>
                 </thead>
                 <tbody>

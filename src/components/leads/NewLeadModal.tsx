@@ -2,8 +2,9 @@
 
 import { useActionState, useMemo, useState } from "react";
 import { createLead, type ActionResult } from "@/app/leads/actions";
-import { COUNTRIES, GENERIC_PLANS, SOURCES, SOURCE_LABELS } from "@/lib/leads";
+import { COUNTRIES, GENERIC_PLANS, SOURCES, sourceLabel } from "@/lib/leads";
 import Money from "@/components/currency/Money";
+import { useLocale } from "@/components/i18n/LocaleProvider";
 import type { Tables } from "@/types/database";
 
 const initialState: ActionResult = { error: null };
@@ -25,6 +26,7 @@ export default function NewLeadModal({
   cohorts: Cohort[];
   onClose: () => void;
 }) {
+  const { locale, t } = useLocale();
   const [state, formAction, pending] = useActionState(
     async (_prev: ActionResult, formData: FormData) => {
       const result = await createLead(formData);
@@ -97,15 +99,15 @@ export default function NewLeadModal({
         onClick={(e) => e.stopPropagation()}
         className="max-h-[90vh] w-full max-w-sm overflow-y-auto rounded-2xl border border-border bg-background p-6 shadow-lg"
       >
-        <h3 className="text-base font-semibold text-foreground">Новый лид</h3>
+        <h3 className="text-base font-semibold text-foreground">{t("headingNewLead")}</h3>
 
         <div className="mt-4 flex flex-col gap-3">
-          <Field label="Имя" name="name" required />
-          <Field label="Email" name="email" type="email" />
-          <Field label="Телефон" name="phone" type="tel" />
+          <Field label={t("colName")} name="name" required />
+          <Field label={t("fieldEmail")} name="email" type="email" />
+          <Field label={t("fieldPhone")} name="phone" type="tel" />
 
           <label className="flex flex-col gap-1.5 text-sm">
-            <span className="font-medium text-ink-2">Источник</span>
+            <span className="font-medium text-ink-2">{t("fieldSource")}</span>
             <select
               name="source"
               defaultValue="Website"
@@ -113,21 +115,21 @@ export default function NewLeadModal({
             >
               {SOURCES.map((s) => (
                 <option key={s} value={s}>
-                  {SOURCE_LABELS[s]}
+                  {sourceLabel(s, locale)}
                 </option>
               ))}
             </select>
           </label>
 
           <label className="flex flex-col gap-1.5 text-sm">
-            <span className="font-medium text-ink-2">Страна</span>
+            <span className="font-medium text-ink-2">{t("fieldCountry")}</span>
             <select
               name="country"
               value={country}
               onChange={(e) => handleCountryChange(e.target.value)}
               className="rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-accent focus:ring-1 focus:ring-accent"
             >
-              <option value="">— не указано —</option>
+              <option value="">{t("optionNotSpecified")}</option>
               {COUNTRIES.map((c) => (
                 <option key={c.name} value={c.name}>
                   {c.name}
@@ -137,7 +139,7 @@ export default function NewLeadModal({
           </label>
 
           <label className="flex flex-col gap-1.5 text-sm">
-            <span className="font-medium text-ink-2">Город</span>
+            <span className="font-medium text-ink-2">{t("fieldCity")}</span>
             <input
               name="city"
               value={city}
@@ -146,17 +148,17 @@ export default function NewLeadModal({
             />
           </label>
 
-          <Field label="Дата рождения" name="birthday" type="date" />
+          <Field label={t("fieldBirthday")} name="birthday" type="date" />
 
           {products.length > 0 && (
             <label className="flex flex-col gap-1.5 text-sm">
-              <span className="font-medium text-ink-2">Курс (необязательно)</span>
+              <span className="font-medium text-ink-2">{t("fieldCourseOptional")}</span>
               <select
                 value={courseId}
                 onChange={(e) => handleCourseChange(e.target.value)}
                 className="rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-accent focus:ring-1 focus:ring-accent"
               >
-                <option value="">— не выбран —</option>
+                <option value="">{t("optionCourseNotChosen")}</option>
                 {products.map((p) => (
                   <option key={p.id} value={p.id}>
                     {p.name} · <Money amountEur={p.price} />
@@ -168,7 +170,7 @@ export default function NewLeadModal({
 
           {!courseId && (
             <label className="flex flex-col gap-1.5 text-sm">
-              <span className="font-medium text-ink-2">Интересует</span>
+              <span className="font-medium text-ink-2">{t("fieldInterestedIn")}</span>
               <select
                 value={
                   interested.kind === "none" ? "" : `${interested.kind}:${interested.id}`
@@ -176,16 +178,16 @@ export default function NewLeadModal({
                 onChange={(e) => handleInterestedChange(e.target.value)}
                 className="rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-accent focus:ring-1 focus:ring-accent"
               >
-                <option value="">— не выбрано —</option>
-                <optgroup label="Членство">
+                <option value="">{t("optionNotChosen")}</option>
+                <optgroup label={t("optgroupMembership")}>
                   {GENERIC_PLANS.map((p) => (
                     <option key={p.id} value={`generic:${p.id}`}>
-                      {p.label} · <Money amountEur={p.price} />
+                      {t(p.id)} · <Money amountEur={p.price} />
                     </option>
                   ))}
                 </optgroup>
                 {products.length > 0 && (
-                  <optgroup label="Курсы">
+                  <optgroup label={t("navCourses")}>
                     {products.map((p) => (
                       <option key={p.id} value={`product:${p.id}`}>
                         {p.name} · <Money amountEur={p.price} />
@@ -199,14 +201,14 @@ export default function NewLeadModal({
 
           {activeProduct && (
             <label className="flex flex-col gap-1.5 text-sm">
-              <span className="font-medium text-ink-2">Начало потока</span>
+              <span className="font-medium text-ink-2">{t("fieldCohortStart")}</span>
               {productCohorts.length > 0 ? (
                 <select
                   value={cohortDate}
                   onChange={(e) => setCohortDate(e.target.value)}
                   className="rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-accent focus:ring-1 focus:ring-accent"
                 >
-                  <option value="">— не выбрано —</option>
+                  <option value="">{t("optionNotChosen")}</option>
                   {productCohorts.map((c) => (
                     <option key={c.id} value={c.start_date}>
                       {c.start_date}
@@ -214,13 +216,13 @@ export default function NewLeadModal({
                   ))}
                 </select>
               ) : (
-                <p className="text-xs text-muted">Нет запланированных потоков</p>
+                <p className="text-xs text-muted">{t("emptyNoCohorts")}</p>
               )}
             </label>
           )}
 
           <label className="flex flex-col gap-1.5 text-sm">
-            <span className="font-medium text-ink-2">Сумма (€)</span>
+            <span className="font-medium text-ink-2">{t("fieldValueEur")}</span>
             <input
               name="value"
               type="number"
@@ -237,7 +239,7 @@ export default function NewLeadModal({
 
         {state.error && (
           <p className="mt-3 rounded-md bg-accent/10 px-3 py-2 text-sm text-accent-strong">
-            {state.error}
+            {t(state.error)}
           </p>
         )}
 
@@ -247,14 +249,14 @@ export default function NewLeadModal({
             onClick={onClose}
             className="rounded-lg border border-border px-4 py-2 text-sm font-medium text-ink-2 hover:bg-surface-2"
           >
-            Отмена
+            {t("cancel")}
           </button>
           <button
             type="submit"
             disabled={pending}
             className="rounded-lg bg-foreground px-4 py-2 text-sm font-medium text-background disabled:opacity-50"
           >
-            {pending ? "..." : "Создать"}
+            {pending ? "..." : t("btnCreate")}
           </button>
         </div>
       </form>

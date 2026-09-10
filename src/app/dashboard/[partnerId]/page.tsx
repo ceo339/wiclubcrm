@@ -10,9 +10,13 @@ import {
   parsePeriodParams,
 } from "@/lib/dashboard";
 import { currencyForCountry } from "@/lib/currency";
+import { localeForCountry } from "@/lib/i18n";
 import CurrencySwitcher from "@/components/currency/CurrencySwitcher";
 import CurrencyScope from "@/components/currency/CurrencyScope";
+import LocaleSwitcher from "@/components/i18n/LocaleSwitcher";
+import LocaleScope from "@/components/i18n/LocaleScope";
 import DashboardBoard from "@/components/dashboard/DashboardBoard";
+import T from "@/components/i18n/T";
 
 export default async function ClubDashboardPage({
   params,
@@ -83,7 +87,7 @@ export default async function ClubDashboardPage({
             href={profile.role === "hq" ? "/dashboard" : "/"}
             className="text-sm text-muted hover:text-ink-2"
           >
-            ← {profile.role === "hq" ? "Сводка по сети" : "WI Club CRM"}
+            ← <T k={profile.role === "hq" ? "headingNetworkSummary" : "appName"} />
           </Link>
           <h1 className="mt-1 text-lg font-semibold tracking-tight text-foreground">
             {partner.name}
@@ -92,13 +96,15 @@ export default async function ClubDashboardPage({
         <div className="flex items-center gap-2">
           <CurrencyScope scope={`club:${partnerId}`} fallback={currencyForCountry(partner.country)} />
           <CurrencySwitcher />
+          <LocaleScope scope={`club:${partnerId}`} fallback={localeForCountry(partner.country)} />
+          <LocaleSwitcher />
         </div>
       </header>
 
       <main className="flex flex-1 flex-col p-6">
         <DashboardBoard
           totals={totals}
-          fourthTile={{ label: "Курсов", value: String((products ?? []).length), delta: "активных" }}
+          fourthTile={{ labelKey: "statCourses", value: String((products ?? []).length), deltaKey: "deltaActiveCourses" }}
           stageCounts={metrics.stageCounts}
           period={period}
           monthOptions={monthOptions}
