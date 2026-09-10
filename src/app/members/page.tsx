@@ -16,9 +16,12 @@ export default async function MembersPage() {
     .order("created_at", { ascending: false });
 
   const canEdit = !!profile.partner_id;
-  const { data: products } = canEdit
-    ? await supabase.from("products").select("*").order("name")
-    : { data: [] };
+  const [{ data: products }, { data: cohorts }] = canEdit
+    ? await Promise.all([
+        supabase.from("products").select("*").order("name"),
+        supabase.from("product_cohorts").select("*").order("start_date"),
+      ])
+    : [{ data: [] }, { data: [] }];
 
   return (
     <div className="flex flex-1 flex-col bg-surface-2">
@@ -52,6 +55,7 @@ export default async function MembersPage() {
                 null,
             }))}
             products={products ?? []}
+            cohorts={cohorts ?? []}
             isHq={profile.role === "hq"}
             canEdit={canEdit}
           />

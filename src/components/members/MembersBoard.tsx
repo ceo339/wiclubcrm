@@ -10,11 +10,13 @@ import MemberDetailModal from "./MemberDetailModal";
 export default function MembersBoard({
   initialMembers,
   products,
+  cohorts,
   isHq,
   canEdit,
 }: {
   initialMembers: Member[];
   products: Tables<"products">[];
+  cohorts: Tables<"product_cohorts">[];
   isHq: boolean;
   canEdit: boolean;
 }) {
@@ -118,7 +120,11 @@ export default function MembersBoard({
       )}
 
       {showNew && (
-        <NewMemberModal products={products} onClose={() => setShowNew(false)} />
+        <NewMemberModal
+          products={products}
+          cohorts={cohorts}
+          onClose={() => setShowNew(false)}
+        />
       )}
       {selected && (
         <MemberDetailModal

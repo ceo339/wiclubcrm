@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useState } from "react";
+import { useActionState, useMemo, useState } from "react";
 import { createMember, type ActionResult } from "@/app/members/actions";
 import { currentMonthYear, STATUSES } from "@/lib/members";
 import type { Tables } from "@/types/database";
@@ -9,9 +9,11 @@ const initialState: ActionResult = { error: null };
 
 export default function NewMemberModal({
   products,
+  cohorts,
   onClose,
 }: {
   products: Tables<"products">[];
+  cohorts: Tables<"product_cohorts">[];
   onClose: () => void;
 }) {
   const [state, formAction, pending] = useActionState(
@@ -25,9 +27,16 @@ export default function NewMemberModal({
 
   const [productId, setProductId] = useState("");
   const [price, setPrice] = useState("");
+  const [startDate, setStartDate] = useState("");
+
+  const productCohorts = useMemo(
+    () => cohorts.filter((c) => c.product_id === productId).sort((a, b) => a.start_date.localeCompare(b.start_date)),
+    [cohorts, productId]
+  );
 
   function handleProductChange(id: string) {
     setProductId(id);
+    setStartDate("");
     const product = products.find((p) => p.id === id);
     if (product) setPrice(String(product.price));
   }
@@ -88,14 +97,41 @@ export default function NewMemberModal({
             </label>
           )}
 
-          <label className="flex flex-col gap-1.5 text-sm">
-            <span className="font-medium text-ink-2">Дата начала</span>
-            <input
-              name="start_date"
-              type="date"
-              className="rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-accent focus:ring-1 focus:ring-accent"
-            />
-          </label>
+          {productId ? (
+            <label className="flex flex-col gap-1.5 text-sm">
+              <span className="font-medium text-ink-2">Начало потока</span>
+              {productCohorts.length > 0 ? (
+                <select
+                  name="start_date"
+                  value={startDate}
+                  onChange={(e) => setStartDate(e.target.value)}
+                  className="rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-accent focus:ring-1 focus:ring-accent"
+                >
+                  <option value="">— не выбрано —</option>
+                  {productCohorts.map((c) => (
+                    <option key={c.id} value={c.start_date}>
+                      {c.start_date}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <p className="text-xs text-muted">
+                  У этого курса нет запланированных потоков — добавьте дату в разделе «Курсы».
+                </p>
+              )}
+            </label>
+          ) : (
+            <label className="flex flex-col gap-1.5 text-sm">
+              <span className="font-medium text-ink-2">Дата начала</span>
+              <input
+                name="start_date"
+                type="date"
+                value={startDate}
+                onChange={(e) => setStartDate(e.target.value)}
+                className="rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-accent focus:ring-1 focus:ring-accent"
+              />
+            </label>
+          )}
 
           <label className="flex flex-col gap-1.5 text-sm">
             <span className="font-medium text-ink-2">Город</span>
