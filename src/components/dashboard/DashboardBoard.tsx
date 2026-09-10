@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { formatDateRu, formatPctDelta, formatPointsDelta, monthLabel } from "@/lib/dashboard";
+import type { Period, ProductCount, StageCount } from "@/lib/dashboard";
+import { formatPctDelta, formatPointsDelta, monthLabel, periodLabel } from "@/lib/dashboard";
 
 export type ClubRow = {
   id: string;
@@ -9,10 +10,6 @@ export type ClubRow = {
   collected: number;
   pending: number;
 };
-
-export type Period = { mode: "month"; month: string } | { mode: "range"; from: string; to: string };
-
-type StageCount = { id: string; label: string; count: number };
 
 type Totals = {
   leads: number;
@@ -31,13 +28,22 @@ function StatTile({ label, value, delta }: { label: string; value: string; delta
   );
 }
 
-function periodLabel(period: Period): string {
-  return period.mode === "month"
-    ? monthLabel(period.month)
-    : `${formatDateRu(period.from)} – ${formatDateRu(period.to)}`;
+/** Builds the "?month=..." / "?from=...&to=..." query string for the given
+ * period, so links to a club's own dashboard keep the currently selected
+ * period instead of resetting it. */
+function periodQuery(period: Period): string {
+  return period.mode === "month" ? `?month=${period.month}` : `?from=${period.from}&to=${period.to}`;
 }
 
-function PeriodFilter({ period, monthOptions }: { period: Period; monthOptions: string[] }) {
+function PeriodFilter({
+  period,
+  monthOptions,
+  basePath,
+}: {
+  period: Period;
+  monthOptions: string[];
+  basePath: string;
+}) {
   return (
     <div className="rounded-xl border border-border bg-background p-4">
       <div className="flex flex-wrap items-center gap-2">
@@ -46,7 +52,7 @@ function PeriodFilter({ period, monthOptions }: { period: Period; monthOptions: 
           return (
             <Link
               key={m}
-              href={`/dashboard?month=${m}`}
+              href={`${basePath}?month=${m}`}
               className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
                 isActive
                   ? "border-foreground bg-foreground text-background"
@@ -58,7 +64,7 @@ function PeriodFilter({ period, monthOptions }: { period: Period; monthOptions: 
           );
         })}
       </div>
-      <form action="/dashboard" method="get" className="mt-3 flex flex-wrap items-end gap-2">
+      <form action={basePath} method="get" className="mt-3 flex flex-wrap items-end gap-2">
         <label className="flex flex-col text-xs text-muted">
           С
           <input
@@ -84,7 +90,7 @@ function PeriodFilter({ period, monthOptions }: { period: Period; monthOptions: 
           Показать период
         </button>
         {period.mode === "range" && (
-          <Link href="/dashboard" className="px-1 py-1.5 text-sm text-muted hover:text-ink-2">
+          <Link href={basePath} className="px-1 py-1.5 text-sm text-muted hover:text-ink-2">
             Сбросить к месяцам
           </Link>
         )}
@@ -93,33 +99,76 @@ function PeriodFilter({ period, monthOptions }: { period: Period; monthOptions: 
   );
 }
 
+function ProductsTable({ title, rows }: { title: string; rows: ProductCount[] }) {
+  const total = rows.reduce((sum, r) => sum + r.count, 0);
+  return (
+    <div className="flex-1 rounded-xl border border-border bg-background">
+      <div className="border-b border-border px-5 py-4">
+        <h3 className="text-sm font-semibold text-foreground">{title}</h3>
+      </div>
+      {rows.length === 0 ? (
+        <p className="p-5 text-sm text-muted">Нет участниц за этот период.</p>
+      ) : (
+        <table className="w-full text-left text-sm">
+          <tbody>
+            {rows.map((r) => (
+              <tr key={r.name} className="border-b border-border last:border-0">
+                <td className="px-5 py-2.5 text-foreground">{r.name}</td>
+                <td className="px-5 py-2.5 text-right font-medium text-foreground">{r.count}</td>
+              </tr>
+            ))}
+            <tr>
+              <td className="px-5 py-2.5 font-medium text-ink-2">Всего</td>
+              <td className="px-5 py-2.5 text-right font-semibold text-foreground">{total}</td>
+            </tr>
+          </tbody>
+        </table>
+      )}
+    </div>
+  );
+}
+
 export default function DashboardBoard({
   totals,
+  fourthTile,
   stageCounts,
   clubs,
   period,
   monthOptions,
+  basePath,
   revenue,
   membersAdded,
   conversion,
   royalty,
+  productsPeriod,
+  productsAllTime,
 }: {
   totals: Totals;
+  /** The 4th all-time tile — "Клубов в сети" on the network view, "Курсов"
+   * (products) on a club's own view. Kept as an explicit prop rather than
+   * inferred from `clubs` so each page states plainly what it means. */
+  fourthTile: { label: string; value: string; delta: string };
   stageCounts: StageCount[];
-  clubs: ClubRow[];
+  /** Omit on a club's own dashboard — there's nothing to break down by club. */
+  clubs?: ClubRow[];
   period: Period;
   monthOptions: string[];
+  /** "/dashboard" for the network view, "/dashboard/<id>" for a club's own. */
+  basePath: string;
   revenue: { amount: number; delta: number | null };
   membersAdded: number;
   conversion: { value: number | null; previous: number | null };
   royalty: { amount: number; percent: number };
+  productsPeriod: ProductCount[];
+  productsAllTime: ProductCount[];
 }) {
   const maxStage = Math.max(1, ...stageCounts.map((s) => s.count));
   const isRange = period.mode === "range";
+  const qs = periodQuery(period);
 
   return (
     <div className="flex flex-1 flex-col gap-6">
-      <PeriodFilter period={period} monthOptions={monthOptions} />
+      <PeriodFilter period={period} monthOptions={monthOptions} basePath={basePath} />
 
       <p className="text-sm text-muted">
         Показатели за: <span className="font-medium text-foreground">{periodLabel(period)}</span>
@@ -127,13 +176,13 @@ export default function DashboardBoard({
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <StatTile
-          label="Выручка сети"
+          label="Выручка"
           value={`€${revenue.amount}`}
           delta={isRange ? "за выбранный период" : formatPctDelta(revenue.delta)}
         />
         <StatTile
-          label="Новых участниц"
-          value={String(membersAdded)}
+          label="Участниц"
+          value={String(totals.members)}
           delta={membersAdded > 0 ? `+${membersAdded} за период` : "не добавлено за период"}
         />
         <StatTile
@@ -155,10 +204,10 @@ export default function DashboardBoard({
       </div>
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <StatTile label="Лидов по сети (всего)" value={String(totals.leads)} delta="за всё время" />
+        <StatTile label="Лидов (всего)" value={String(totals.leads)} delta="за всё время" />
         <StatTile label="Собрано (всего)" value={`€${totals.collected}`} delta="за всё время" />
         <StatTile label="Ожидается" value={`€${totals.pending}`} delta="ещё не оплачено" />
-        <StatTile label="Клубов в сети" value={String(clubs.length)} delta="действующих" />
+        <StatTile label={fourthTile.label} value={fourthTile.value} delta={fourthTile.delta} />
       </div>
 
       <div className="rounded-xl border border-border bg-background p-5">
@@ -181,39 +230,50 @@ export default function DashboardBoard({
         </div>
       </div>
 
-      <div className="rounded-xl border border-border bg-background">
-        <div className="border-b border-border px-5 py-4">
-          <h2 className="text-sm font-semibold text-foreground">По клубам за период</h2>
-        </div>
-        {clubs.length === 0 ? (
-          <p className="p-5 text-sm text-muted">В сети пока нет ни одного клуба.</p>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[560px] text-left text-sm">
-              <thead className="border-b border-border text-xs uppercase tracking-wide text-muted">
-                <tr>
-                  <th className="px-5 py-3 font-medium">Клуб</th>
-                  <th className="px-5 py-3 font-medium">Лидов</th>
-                  <th className="px-5 py-3 font-medium">Участниц</th>
-                  <th className="px-5 py-3 font-medium">Собрано</th>
-                  <th className="px-5 py-3 font-medium">Ожидается</th>
-                </tr>
-              </thead>
-              <tbody>
-                {clubs.map((c) => (
-                  <tr key={c.id} className="border-b border-border last:border-0">
-                    <td className="px-5 py-3 font-medium text-foreground">{c.name}</td>
-                    <td className="px-5 py-3 text-muted">{c.leadsCount}</td>
-                    <td className="px-5 py-3 text-muted">{c.membersCount}</td>
-                    <td className="px-5 py-3 text-muted">€{c.collected}</td>
-                    <td className="px-5 py-3 text-muted">€{c.pending}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
+      <div className="flex flex-col gap-3 sm:flex-row">
+        <ProductsTable title="Участницы по продуктам — за период" rows={productsPeriod} />
+        <ProductsTable title="Участницы по продуктам — за всё время" rows={productsAllTime} />
       </div>
+
+      {clubs && (
+        <div className="rounded-xl border border-border bg-background">
+          <div className="border-b border-border px-5 py-4">
+            <h2 className="text-sm font-semibold text-foreground">По клубам за период</h2>
+          </div>
+          {clubs.length === 0 ? (
+            <p className="p-5 text-sm text-muted">В сети пока нет ни одного клуба.</p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[560px] text-left text-sm">
+                <thead className="border-b border-border text-xs uppercase tracking-wide text-muted">
+                  <tr>
+                    <th className="px-5 py-3 font-medium">Клуб</th>
+                    <th className="px-5 py-3 font-medium">Лидов</th>
+                    <th className="px-5 py-3 font-medium">Участниц</th>
+                    <th className="px-5 py-3 font-medium">Собрано</th>
+                    <th className="px-5 py-3 font-medium">Ожидается</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {clubs.map((c) => (
+                    <tr key={c.id} className="border-b border-border last:border-0">
+                      <td className="px-5 py-3 font-medium text-foreground">
+                        <Link href={`/dashboard/${c.id}${qs}`} className="hover:text-accent hover:underline">
+                          {c.name}
+                        </Link>
+                      </td>
+                      <td className="px-5 py-3 text-muted">{c.leadsCount}</td>
+                      <td className="px-5 py-3 text-muted">{c.membersCount}</td>
+                      <td className="px-5 py-3 text-muted">€{c.collected}</td>
+                      <td className="px-5 py-3 text-muted">€{c.pending}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }

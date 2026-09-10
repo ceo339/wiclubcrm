@@ -49,6 +49,17 @@ export default async function Home() {
             </div>
           </Link>
         )}
+        {profile.partner_id && (
+          <Link
+            href={`/dashboard/${profile.partner_id}`}
+            className="w-full max-w-sm rounded-xl border border-border bg-background p-5 text-left shadow-sm transition-colors hover:border-accent"
+          >
+            <div className="text-sm font-medium text-foreground">Моя сводка</div>
+            <div className="mt-1 text-xs text-muted">
+              Выручка, роялти, конверсия и участницы по продуктам за период
+            </div>
+          </Link>
+        )}
         <Link
           href="/leads"
           className="w-full max-w-sm rounded-xl border border-border bg-background p-5 text-left shadow-sm transition-colors hover:border-accent"
