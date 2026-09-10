@@ -38,6 +38,17 @@ export default async function Home() {
       </header>
 
       <main className="flex flex-1 flex-col items-center gap-4 p-8">
+        {profile.role === "hq" && (
+          <Link
+            href="/dashboard"
+            className="w-full max-w-sm rounded-xl border border-border bg-background p-5 text-left shadow-sm transition-colors hover:border-accent"
+          >
+            <div className="text-sm font-medium text-foreground">Сводка по сети</div>
+            <div className="mt-1 text-xs text-muted">
+              Лиды, участницы и оплаты по всей сети и по каждому клубу
+            </div>
+          </Link>
+        )}
         <Link
           href="/leads"
           className="w-full max-w-sm rounded-xl border border-border bg-background p-5 text-left shadow-sm transition-colors hover:border-accent"
