@@ -1,3 +1,5 @@
+import { formatPctDelta, formatPointsDelta } from "@/lib/dashboard";
+
 export type ClubRow = {
   id: string;
   name: string;
@@ -16,11 +18,12 @@ type Totals = {
   pending: number;
 };
 
-function StatTile({ label, value }: { label: string; value: string }) {
+function StatTile({ label, value, delta }: { label: string; value: string; delta: string }) {
   return (
     <div className="rounded-xl border border-border bg-background p-4">
       <div className="text-xs uppercase tracking-wide text-muted">{label}</div>
       <div className="mt-1 text-2xl font-semibold text-foreground">{value}</div>
+      <div className="mt-1 text-xs text-muted">{delta}</div>
     </div>
   );
 }
@@ -29,20 +32,55 @@ export default function DashboardBoard({
   totals,
   stageCounts,
   clubs,
+  revenue,
+  membersAddedThisMonth,
+  conversion,
+  royalty,
 }: {
   totals: Totals;
   stageCounts: StageCount[];
   clubs: ClubRow[];
+  revenue: { thisMonth: number; delta: number | null };
+  membersAddedThisMonth: number;
+  conversion: { thisMonth: number | null; lastMonth: number | null };
+  royalty: { amount: number; percent: number };
 }) {
   const maxStage = Math.max(1, ...stageCounts.map((s) => s.count));
 
   return (
     <div className="flex flex-1 flex-col gap-6">
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <StatTile label="Лидов по сети" value={String(totals.leads)} />
-        <StatTile label="Участниц по сети" value={String(totals.members)} />
-        <StatTile label="Собрано" value={`€${totals.collected}`} />
-        <StatTile label="Ожидается" value={`€${totals.pending}`} />
+        <StatTile
+          label="Выручка сети (этот месяц)"
+          value={`€${revenue.thisMonth}`}
+          delta={formatPctDelta(revenue.delta)}
+        />
+        <StatTile
+          label="Участниц по сети"
+          value={String(totals.members)}
+          delta={
+            membersAddedThisMonth > 0
+              ? `+${membersAddedThisMonth} в этом месяце`
+              : "никого не добавлено в этом месяце"
+          }
+        />
+        <StatTile
+          label="Роялти к оплате"
+          value={`€${royalty.amount}`}
+          delta={`${royalty.percent}% от выручки этого месяца`}
+        />
+        <StatTile
+          label="Лид → участница"
+          value={conversion.thisMonth === null ? "—" : `${conversion.thisMonth}%`}
+          delta={formatPointsDelta(conversion.thisMonth, conversion.lastMonth)}
+        />
+      </div>
+
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <StatTile label="Лидов по сети (всего)" value={String(totals.leads)} delta="за всё время" />
+        <StatTile label="Собрано (всего)" value={`€${totals.collected}`} delta="за всё время" />
+        <StatTile label="Ожидается" value={`€${totals.pending}`} delta="ещё не оплачено" />
+        <StatTile label="Клубов в сети" value={String(clubs.length)} delta="действующих" />
       </div>
 
       <div className="rounded-xl border border-border bg-background p-5">
