@@ -52,6 +52,117 @@ export type Database = {
           },
         ]
       }
+      email_campaign_recipients: {
+        Row: {
+          campaign_id: string
+          clicked_at: string | null
+          created_at: string
+          email: string
+          entity_id: string
+          entity_type: string
+          error: string | null
+          id: string
+          opened_at: string | null
+          partner_id: string
+          resend_message_id: string | null
+          status: string
+        }
+        Insert: {
+          campaign_id: string
+          clicked_at?: string | null
+          created_at?: string
+          email: string
+          entity_id: string
+          entity_type: string
+          error?: string | null
+          id?: string
+          opened_at?: string | null
+          partner_id: string
+          resend_message_id?: string | null
+          status?: string
+        }
+        Update: {
+          campaign_id?: string
+          clicked_at?: string | null
+          created_at?: string
+          email?: string
+          entity_id?: string
+          entity_type?: string
+          error?: string | null
+          id?: string
+          opened_at?: string | null
+          partner_id?: string
+          resend_message_id?: string | null
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "email_campaign_recipients_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "email_campaigns"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "email_campaign_recipients_partner_id_fkey"
+            columns: ["partner_id"]
+            isOneToOne: false
+            referencedRelation: "partners"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      email_campaigns: {
+        Row: {
+          audience: string
+          body: string
+          created_at: string
+          created_by: string | null
+          id: string
+          partner_id: string
+          sent_at: string | null
+          status: string
+          subject: string
+        }
+        Insert: {
+          audience: string
+          body: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          partner_id: string
+          sent_at?: string | null
+          status?: string
+          subject: string
+        }
+        Update: {
+          audience?: string
+          body?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          partner_id?: string
+          sent_at?: string | null
+          status?: string
+          subject?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "email_campaigns_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "email_campaigns_partner_id_fkey"
+            columns: ["partner_id"]
+            isOneToOne: false
+            referencedRelation: "partners"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       leads: {
         Row: {
           added_date: string
@@ -144,6 +255,7 @@ export type Database = {
           attended: Json
           city: string | null
           created_at: string
+          email: string | null
           id: string
           member_since: string | null
           name: string
@@ -158,6 +270,7 @@ export type Database = {
           attended?: Json
           city?: string | null
           created_at?: string
+          email?: string | null
           id?: string
           member_since?: string | null
           name: string
@@ -172,6 +285,7 @@ export type Database = {
           attended?: Json
           city?: string | null
           created_at?: string
+          email?: string | null
           id?: string
           member_since?: string | null
           name?: string
@@ -473,7 +587,7 @@ export type Database = {
 
 type DatabaseWithoutInternals = Omit<Database, "__InternalSupabase">
 
-type DefaultSchema = DatabaseWithoutInternals["public"]
+type DefaultSchema = DatabaseWithoutInternals[Extract<keyof Database, "public">]
 
 export type Tables<
   DefaultSchemaTableNameOrOptions extends

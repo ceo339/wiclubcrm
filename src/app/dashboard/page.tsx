@@ -8,6 +8,7 @@ import {
   findDecliningClubs,
   findStaleLeads,
   inPeriod,
+  monthlyRevenue,
   monthsWithActivity,
   parsePeriodParams,
 } from "@/lib/dashboard";
@@ -124,6 +125,7 @@ export default async function DashboardPage({
           monthOptions={monthOptions}
           basePath="/dashboard"
           revenue={metrics.revenue}
+          revenueTrend={monthlyRevenue(allPayments)}
           membersAdded={metrics.membersAdded}
           conversion={metrics.conversion}
           royalty={metrics.royalty}

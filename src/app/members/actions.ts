@@ -32,6 +32,7 @@ export async function createMember(formData: FormData): Promise<ActionResult> {
   const productId = String(formData.get("product_id") || "").trim() || null;
   const startDate = String(formData.get("start_date") || "").trim() || null;
   const city = String(formData.get("city") || "").trim() || null;
+  const email = String(formData.get("email") || "").trim() || null;
   const memberSince = String(formData.get("member_since") || "").trim() || currentMonthYear();
   const priceRaw = String(formData.get("price_collected") || "0").replace(",", ".");
   const priceCollected = Number.isFinite(Number(priceRaw)) ? Number(priceRaw) : 0;
@@ -57,6 +58,7 @@ export async function createMember(formData: FormData): Promise<ActionResult> {
     product_id: verifiedProductId,
     start_date: startDate,
     city,
+    email,
     member_since: memberSince,
     price_collected: priceCollected,
     paid,
@@ -82,6 +84,7 @@ export async function updateMember(memberId: string, formData: FormData): Promis
   const status = normalizeStatus(String(formData.get("status") || ""));
   const startDate = String(formData.get("start_date") || "").trim() || null;
   const city = String(formData.get("city") || "").trim() || null;
+  const email = String(formData.get("email") || "").trim() || null;
   const memberSince = String(formData.get("member_since") || "").trim() || null;
   const priceRaw = String(formData.get("price_collected") || "0").replace(",", ".");
   const priceCollected = Number.isFinite(Number(priceRaw)) ? Number(priceRaw) : 0;
@@ -95,6 +98,7 @@ export async function updateMember(memberId: string, formData: FormData): Promis
       status,
       start_date: startDate,
       city,
+      email,
       member_since: memberSince,
       price_collected: priceCollected,
       paid,

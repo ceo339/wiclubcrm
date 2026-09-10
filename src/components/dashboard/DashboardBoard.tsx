@@ -6,6 +6,7 @@ import type { ReactNode } from "react";
 import type {
   DecliningClub,
   FunnelStage,
+  MonthlyRevenue,
   Period,
   ProductCount,
   SourceConversion,
@@ -278,6 +279,44 @@ function SourceConversionTable({ rows }: { rows: SourceConversion[] }) {
   );
 }
 
+/**
+ * "Что заработал клуб" — real collected revenue per month, last 6 months,
+ * always ending on the current (in-progress) month. Deliberately no
+ * forecast bars past "today": see the doc comment on monthlyRevenue in
+ * lib/dashboard.ts for why that was left out rather than approximated.
+ */
+function RevenueTrendChart({ months }: { months: MonthlyRevenue[] }) {
+  const { locale, t } = useLocale();
+  const max = Math.max(1, ...months.map((m) => m.amount));
+  const hasAnyRevenue = months.some((m) => m.amount > 0);
+
+  return (
+    <div className="rounded-xl border border-border bg-background p-5">
+      <h2 className="text-sm font-semibold text-foreground">{t("headingRevenueTrend")}</h2>
+      {!hasAnyRevenue ? (
+        <p className="mt-3 text-sm text-muted">{t("emptyNoRevenueHistory")}</p>
+      ) : (
+        <div className="mt-5 flex items-end gap-3">
+          {months.map((m) => (
+            <div key={m.monthKey} className="flex flex-1 flex-col items-center gap-2">
+              <div className="text-xs font-medium text-foreground">
+                <Money amountEur={m.amount} />
+              </div>
+              <div className="flex h-32 w-full items-end">
+                <div
+                  className="w-full rounded-t-md bg-foreground"
+                  style={{ height: `${Math.max(2, (m.amount / max) * 100)}%` }}
+                />
+              </div>
+              <div className="text-[11px] text-muted">{monthLabel(m.monthKey, locale).split(" ")[0]}</div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 type ClubSortKey = "name" | "leads" | "members" | "collected" | "pending";
 
 function ClubSortHeader({
@@ -412,6 +451,7 @@ export default function DashboardBoard({
   monthOptions,
   basePath,
   revenue,
+  revenueTrend,
   membersAdded,
   conversion,
   royalty,
@@ -439,6 +479,7 @@ export default function DashboardBoard({
   /** "/dashboard" for the network view, "/dashboard/<id>" for a club's own. */
   basePath: string;
   revenue: { amount: number; delta: number | null };
+  revenueTrend: MonthlyRevenue[];
   membersAdded: number;
   conversion: { value: number | null; previous: number | null };
   royalty: { amount: number; percent: number };
@@ -509,6 +550,8 @@ export default function DashboardBoard({
         />
         <StatTile label={t(fourthTile.labelKey)} value={fourthTile.value} delta={t(fourthTile.deltaKey)} />
       </div>
+
+      <RevenueTrendChart months={revenueTrend} />
 
       <div className="rounded-xl border border-border bg-background p-5">
         <h2 className="text-sm font-semibold text-foreground">{t("headingFunnel")}</h2>

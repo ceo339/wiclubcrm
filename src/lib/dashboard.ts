@@ -150,6 +150,37 @@ export function monthsWithActivity(
   return [...set].sort().reverse().slice(0, limit);
 }
 
+export type MonthlyRevenue = { monthKey: string; amount: number };
+
+/**
+ * Real collected revenue for each of the last `months` calendar months,
+ * oldest first, ending with the current (in-progress) month — independent
+ * of the page's period filter, same as findStaleLeads/findDecliningClubs
+ * below. Deliberately no projection into future months: the prototype's
+ * "Что заработал клуб" widget drew a dashed forecast 2 months ahead, but
+ * with a network this young there's no honest trend to extrapolate from
+ * yet, and Anastasiia chose to leave it out (10 сен 2026) rather than show
+ * an estimate dressed up as a chart.
+ */
+export function monthlyRevenue(
+  payments: { amount: number; status: string | null; paid_date: string }[],
+  months = 6
+): MonthlyRevenue[] {
+  const paid = payments.filter((p) => p.status === "paid");
+  const keys: string[] = [];
+  let key = currentMonthKey();
+  for (let i = 0; i < months; i++) {
+    keys.unshift(key);
+    key = shiftMonthKey(key, -1);
+  }
+  return keys.map((monthKey) => ({
+    monthKey,
+    amount: paid
+      .filter((p) => monthKeyOf(p.paid_date) === monthKey)
+      .reduce((sum, p) => sum + Number(p.amount), 0),
+  }));
+}
+
 export function conversionRate(rows: { stage: string }[]): number | null {
   return rows.length === 0
     ? null

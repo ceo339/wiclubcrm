@@ -6,6 +6,7 @@ import {
   computeCoreMetrics,
   countByProduct,
   inPeriod,
+  monthlyRevenue,
   monthsWithActivity,
   parsePeriodParams,
 } from "@/lib/dashboard";
@@ -112,6 +113,7 @@ export default async function ClubDashboardPage({
           monthOptions={monthOptions}
           basePath={`/dashboard/${partnerId}`}
           revenue={metrics.revenue}
+          revenueTrend={monthlyRevenue(clubPayments)}
           membersAdded={metrics.membersAdded}
           conversion={metrics.conversion}
           royalty={metrics.royalty}

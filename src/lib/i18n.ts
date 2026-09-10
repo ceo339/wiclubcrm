@@ -276,6 +276,11 @@ export const DICT: Record<string, Entry> = {
     ru: "Добавить франчайзи — клуб и логин для входа",
     bg: "Добавяне на франчайзополучател — клуб и данни за вход",
   },
+  navEmail: { ru: "Email", bg: "Имейл" },
+  navEmailDesc: {
+    ru: "Письма участницам и лидам, с реальной статистикой открытий",
+    bg: "Писма до участнички и запитвания, с реална статистика на отваряния",
+  },
 
   // ---- home page: "Мои задачи" widget ----
   headingMyTasks: { ru: "Мои задачи", bg: "Моите задачи" },
@@ -585,6 +590,56 @@ export const DICT: Record<string, Entry> = {
     bg: "Не е настроен сървърен ключ на Supabase (SUPABASE_SERVICE_ROLE_KEY) — добавете го в променливите на средата във Vercel.",
   },
   errCreateLoginFailed: { ru: "Не удалось создать логин: {message}", bg: "Неуспешно създаване на вход: {message}" },
+
+  // ---- Email campaigns ----
+  headingEmail: { ru: "Email", bg: "Имейл" },
+  btnNewCampaign: { ru: "Написать письмо", bg: "Ново писмо" },
+  headingNewCampaign: { ru: "Новое письмо", bg: "Ново писмо" },
+  fieldSubject: { ru: "Тема письма", bg: "Тема на писмото" },
+  fieldBody: { ru: "Текст письма", bg: "Текст на писмото" },
+  fieldAudience: { ru: "Кому", bg: "До кого" },
+  audienceMembers: { ru: "Все участницы", bg: "Всички участнички" },
+  audienceLeadsActive: { ru: "Активные лиды (не оплатившие, не отказавшиеся)", bg: "Активни запитвания (без платили и отказали)" },
+  audienceLeadsAll: { ru: "Все лиды", bg: "Всички запитвания" },
+  audiencePreviewCount: { ru: "Получат письмо: {n}", bg: "Ще получат писмото: {n}" },
+  audiencePreviewSkipped: {
+    ru: "ещё {n} без email на карточке — им письмо не уйдёт",
+    bg: "още {n} без имейл в картата — до тях писмото няма да стигне",
+  },
+  audiencePreviewLoading: { ru: "Считаем получателей…", bg: "Изчисляваме получателите…" },
+  btnSendCampaign: { ru: "Отправить", bg: "Изпрати" },
+  sendingCampaign: { ru: "Отправка…", bg: "Изпращане…" },
+  colSubject: { ru: "Тема", bg: "Тема" },
+  colAudience: { ru: "Кому", bg: "До кого" },
+  colRecipients: { ru: "В списке", bg: "В списъка" },
+  colOpenedPct: { ru: "Открыли", bg: "Отвориха" },
+  colClickedPct: { ru: "Кликнули", bg: "Кликнаха" },
+  colSentDate: { ru: "Отправлено", bg: "Изпратено" },
+  campaignStatusSending: { ru: "Отправляется", bg: "Изпраща се" },
+  campaignStatusSent: { ru: "Отправлено", bg: "Изпратено" },
+  campaignStatusFailed: { ru: "Ошибка отправки", bg: "Грешка при изпращане" },
+  emptyNoCampaigns: { ru: "Писем пока не было — начните с кнопки выше.", bg: "Все още няма писма — започнете с бутона по-горе." },
+  statListSize: { ru: "В списке для рассылки", bg: "В списъка за разпращане" },
+  deltaListBreakdown: { ru: "{members} участниц · {leads} лидов с email", bg: "{members} участнички · {leads} запитвания с имейл" },
+  errEnterSubject: { ru: "Укажите тему письма", bg: "Въведете тема на писмото" },
+  errEnterBody: { ru: "Укажите текст письма", bg: "Въведете текст на писмото" },
+  errChooseAudience: { ru: "Выберите, кому отправить", bg: "Изберете до кого да изпратите" },
+  errNoRecipientsWithEmail: {
+    ru: "У выбранной аудитории нет ни одного email на карточке — отправлять некому.",
+    bg: "При избраната аудитория няма нито един имейл в картите — няма на кого да изпратите.",
+  },
+  errResendNotConfigured: {
+    ru: "Отправка писем не настроена (RESEND_API_KEY) — добавьте его в переменные окружения на Vercel.",
+    bg: "Изпращането на писма не е настроено (RESEND_API_KEY) — добавете го в променливите на средата във Vercel.",
+  },
+  errSendFailed: {
+    ru: "Не получилось отправить ни одного письма — проверьте настройку Resend (домен отправителя должен быть подтверждён).",
+    bg: "Нито едно писмо не бе изпратено — проверете настройката на Resend (изпращащият домейн трябва да е потвърден).",
+  },
+
+  // ---- revenue trend widget ----
+  headingRevenueTrend: { ru: "Динамика выручки", bg: "Динамика на прихода" },
+  emptyNoRevenueHistory: { ru: "Пока недостаточно данных за прошлые месяцы.", bg: "Все още няма достатъчно данни за минали месеци." },
 };
 
 /**

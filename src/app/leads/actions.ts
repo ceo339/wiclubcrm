@@ -338,6 +338,7 @@ export async function convertLeadToMember(leadId: string): Promise<ActionResult>
     product_id: lead.product_id,
     start_date: lead.cohort_start_date,
     city: lead.city,
+    email: lead.email,
     member_since: currentMonthYear(),
     price_collected: lead.value ?? 0,
     paid: true,

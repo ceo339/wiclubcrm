@@ -172,6 +172,15 @@ export default async function Home() {
             <T k="navPaymentsDesc" />
           </div>
         </Link>
+        <Link
+          href="/email"
+          className="w-full max-w-sm rounded-xl border border-border bg-background p-5 text-left shadow-sm transition-colors hover:border-accent"
+        >
+          <div className="text-sm font-medium text-foreground"><T k="navEmail" /></div>
+          <div className="mt-1 text-xs text-muted">
+            <T k="navEmailDesc" />
+          </div>
+        </Link>
         {profile.role === "hq" && (
           <Link
             href="/partners"

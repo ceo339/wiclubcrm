@@ -110,6 +110,8 @@ function ReadView({
         <dd className="text-ink-2">
           {member.price_collected ? <Money amountEur={member.price_collected} /> : "—"}
         </dd>
+        <dt className="text-muted">{t("fieldEmail")}</dt>
+        <dd className="text-ink-2">{member.email ?? "—"}</dd>
       </dl>
 
       {canEdit && (
@@ -179,6 +181,16 @@ function EditForm({
         <input
           name="city"
           defaultValue={member.city ?? ""}
+          className="rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-accent focus:ring-1 focus:ring-accent"
+        />
+      </label>
+
+      <label className="flex flex-col gap-1.5 text-sm">
+        <span className="font-medium text-ink-2">{t("fieldEmail")}</span>
+        <input
+          name="email"
+          type="email"
+          defaultValue={member.email ?? ""}
           className="rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-accent focus:ring-1 focus:ring-accent"
         />
       </label>
