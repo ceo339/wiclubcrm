@@ -9,6 +9,12 @@ export type Profile = Tables<"profiles"> & {
    * having to fetch the partner row itself. Null for hq accounts, which
    * aren't tied to a single club/currency. */
   partner_country: string | null;
+  /** Where a customer's reply to this club's campaign/direct emails should
+   * land — see partners.reply_to_email. Null for hq accounts and for any
+   * club that hasn't set one yet (Resend then falls back to its own
+   * default, i.e. replies go to the shared From address, not this club's
+   * real inbox). */
+  partner_reply_to_email: string | null;
 };
 
 /**
@@ -27,7 +33,7 @@ export async function getCurrentProfile(): Promise<Profile | null> {
 
   const { data: profile } = await supabase
     .from("profiles")
-    .select("*, partners(name, country)")
+    .select("*, partners(name, country, reply_to_email)")
     .eq("id", user.id)
     .single();
 
@@ -37,5 +43,6 @@ export async function getCurrentProfile(): Promise<Profile | null> {
     ...profile,
     partner_name: profile.partners?.name ?? null,
     partner_country: profile.partners?.country ?? null,
+    partner_reply_to_email: profile.partners?.reply_to_email ?? null,
   };
 }

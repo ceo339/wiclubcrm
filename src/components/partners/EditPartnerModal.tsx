@@ -79,6 +79,18 @@ export default function EditPartnerModal({
                 className="rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-accent focus:ring-1 focus:ring-accent"
               />
             </label>
+
+            <label className="flex flex-col gap-1.5 text-sm">
+              <span className="font-medium text-ink-2">{t("fieldReplyToEmail")}</span>
+              <input
+                name="reply_to_email"
+                type="email"
+                defaultValue={partner.reply_to_email ?? ""}
+                placeholder="club@example.com"
+                className="rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-accent focus:ring-1 focus:ring-accent"
+              />
+              <span className="text-xs text-muted">{t("fieldReplyToEmailHint")}</span>
+            </label>
           </div>
 
           {state.error && (

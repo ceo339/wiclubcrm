@@ -64,9 +64,14 @@ async function createSendAndTrackCampaign(
     bodyText: string;
     audience: string;
     recipients: AudienceRecipient[];
+    /** The club's real, monitored mailbox for customer replies — see
+     * partners.reply_to_email. Null/undefined leaves Resend's default (no
+     * reply-to header), so replies would land on the shared From address,
+     * which isn't a real inbox anyone reads. */
+    replyTo?: string | null;
   }
 ): Promise<ActionResult> {
-  const { partnerId, createdBy, subject, bodyText, audience, recipients } = params;
+  const { partnerId, createdBy, subject, bodyText, audience, recipients, replyTo } = params;
   if (recipients.length === 0) return { error: "errNoRecipientsWithEmail" };
 
   const { data: campaign, error: campaignError } = await supabase
@@ -116,7 +121,13 @@ async function createSendAndTrackCampaign(
 
   for (const batch of chunk(recipientRows, RESEND_BATCH_SIZE)) {
     const { data, error } = await resend.batch.send(
-      batch.map((r) => ({ from, to: [r.email], subject, html }))
+      batch.map((r) => ({
+        from,
+        to: [r.email],
+        subject,
+        html,
+        ...(replyTo ? { replyTo } : {}),
+      }))
     );
 
     if (error || !data) {
@@ -194,6 +205,7 @@ export async function createAndSendCampaign(formData: FormData): Promise<ActionR
     bodyText,
     audience: audienceRaw,
     recipients,
+    replyTo: profile.partner_reply_to_email,
   });
 
   revalidatePath("/email");
@@ -244,6 +256,7 @@ export async function sendDirectEmail(
     bodyText: trimmedBody,
     audience: "single",
     recipients: [{ entityType, entityId: entity.id, email: entity.email }],
+    replyTo: profile.partner_reply_to_email,
   });
 
   revalidatePath("/email");

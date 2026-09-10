@@ -38,6 +38,7 @@ export async function createClubPartner(formData: FormData): Promise<ActionResul
   const city = String(formData.get("city") || "").trim();
   const country = String(formData.get("country") || "").trim();
   const email = String(formData.get("email") || "").trim().toLowerCase();
+  const replyToEmail = String(formData.get("reply_to_email") || "").trim().toLowerCase();
 
   if (!name) return { error: "errEnterClubName" };
   if (!city) return { error: "errEnterCity" };
@@ -53,7 +54,7 @@ export async function createClubPartner(formData: FormData): Promise<ActionResul
 
   const { data: partner, error: partnerError } = await admin
     .from("partners")
-    .insert({ name, city, country })
+    .insert({ name, city, country, reply_to_email: replyToEmail || null })
     .select("id")
     .single();
 
@@ -97,6 +98,7 @@ export async function updatePartner(
   const name = String(formData.get("name") || "").trim();
   const city = String(formData.get("city") || "").trim();
   const country = String(formData.get("country") || "").trim();
+  const replyToEmail = String(formData.get("reply_to_email") || "").trim().toLowerCase();
 
   if (!name) return { error: "errEnterClubName" };
   if (!city) return { error: "errEnterCity" };
@@ -111,7 +113,7 @@ export async function updatePartner(
 
   const { error } = await admin
     .from("partners")
-    .update({ name, city, country })
+    .update({ name, city, country, reply_to_email: replyToEmail || null })
     .eq("id", partnerId);
 
   if (error) return { error: error.message };

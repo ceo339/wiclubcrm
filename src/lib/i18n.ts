@@ -574,6 +574,11 @@ export const DICT: Record<string, Entry> = {
   fieldClubName: { ru: "Название клуба", bg: "Наименование на клуба" },
   optionSelectGeneric: { ru: "— выберите —", bg: "— изберете —" },
   fieldEmailForLogin: { ru: "Email для входа", bg: "Email за вход" },
+  fieldReplyToEmail: { ru: "Email для ответов клиентам", bg: "Email за отговори на клиенти" },
+  fieldReplyToEmailHint: {
+    ru: "Настоящий почтовый ящик, который клуб реально читает — на него будут приходить ответы клиентов на письма. Необязательно.",
+    bg: "Истинска пощенска кутия, която клубът реално чете — на нея ще пристигат отговорите на клиентите. Незадължително.",
+  },
 
   // ---- edit partner modal ----
   headingEditClub: { ru: "Редактировать клуб", bg: "Редакция на клуб" },
