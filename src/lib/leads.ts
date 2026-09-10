@@ -42,3 +42,33 @@ export const DECLINE_REASONS = [
 
 export const declineReasonLabel = (id: string | null) =>
   DECLINE_REASONS.find((r) => r.id === id)?.label ?? id ?? "";
+
+// Country list + default city, mirrors the prototype's COUNTRIES array
+// (velora-final2.html) so the Add Lead form behaves the same way.
+export const COUNTRIES: { name: string; city?: string }[] = [
+  { name: "Sweden" },
+  { name: "USA" },
+  { name: "United Kingdom" },
+  { name: "Germany" },
+  { name: "France" },
+  { name: "Italy" },
+  { name: "Latvia" },
+  { name: "Denmark" },
+  { name: "Ukraine" },
+  { name: "Georgia", city: "Batumi" },
+  { name: "Bulgaria", city: "Sofia" },
+];
+
+// Generic membership/course plans offered when a lead isn't tied to a real
+// product yet — mirrors the prototype's "Интересует" fallback dropdown.
+export const GENERIC_PLANS: { id: string; label: string; price: number }[] = [
+  { id: "plAnnual", label: "Годовое членство", price: 1200 },
+  { id: "plMonthly", label: "Ежемесячное членство", price: 520 },
+  { id: "plCourse", label: "Курс «Женское лидерство»", price: 390 },
+  { id: "plCoaching", label: "Личный коучинг", price: 850 },
+];
+
+export const genericPlanLabel = (id: string | null) => {
+  const plan = GENERIC_PLANS.find((p) => p.id === id);
+  return plan ? `${plan.label} · $${plan.price}` : id ?? "";
+};

@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { SOURCES, SOURCE_LABELS } from "@/lib/leads";
+import type { Tables } from "@/types/database";
 import type { Lead } from "./types";
 import KanbanBoard from "./KanbanBoard";
 import LeadsList from "./LeadsList";
@@ -12,10 +13,14 @@ export default function LeadsBoard({
   initialLeads,
   isHq,
   canEdit,
+  products,
+  cohorts,
 }: {
   initialLeads: Lead[];
   isHq: boolean;
   canEdit: boolean;
+  products: Tables<"products">[];
+  cohorts: Tables<"product_cohorts">[];
 }) {
   const [view, setView] = useState<"board" | "list">("board");
   const [search, setSearch] = useState("");
@@ -98,7 +103,13 @@ export default function LeadsBoard({
         <LeadsList leads={filtered} showPartner={isHq} />
       )}
 
-      {showNewLead && <NewLeadModal onClose={() => setShowNewLead(false)} />}
+      {showNewLead && (
+        <NewLeadModal
+          products={products}
+          cohorts={cohorts}
+          onClose={() => setShowNewLead(false)}
+        />
+      )}
       {showImport && <ImportModal onClose={() => setShowImport(false)} />}
     </div>
   );

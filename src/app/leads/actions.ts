@@ -59,7 +59,30 @@ export async function createLead(formData: FormData): Promise<ActionResult> {
   const valueRaw = String(formData.get("value") || "0").replace(",", ".");
   const value = Number.isFinite(Number(valueRaw)) ? Number(valueRaw) : 0;
 
+  const country = String(formData.get("country") || "").trim() || null;
+  const city = String(formData.get("city") || "").trim() || null;
+  const birthday = String(formData.get("birthday") || "").trim() || null;
+  let productId = String(formData.get("product_id") || "").trim() || null;
+  let cohortStartDate = String(formData.get("cohort_start_date") || "").trim() || null;
+  const plan = String(formData.get("plan") || "").trim() || null;
+
   const supabase = await createClient();
+
+  // The product id/cohort date arrive via a hidden form field, so re-verify
+  // the product actually belongs to this partner before trusting it.
+  if (productId) {
+    const { data: product } = await supabase
+      .from("products")
+      .select("id")
+      .eq("id", productId)
+      .eq("partner_id", profile.partner_id)
+      .maybeSingle();
+    if (!product) {
+      productId = null;
+      cohortStartDate = null;
+    }
+  }
+
   const { error } = await supabase.from("leads").insert({
     partner_id: profile.partner_id,
     name,
@@ -67,6 +90,12 @@ export async function createLead(formData: FormData): Promise<ActionResult> {
     email,
     source,
     value,
+    country,
+    city,
+    birthday,
+    product_id: productId,
+    cohort_start_date: cohortStartDate,
+    plan,
     stage: "new",
   });
 

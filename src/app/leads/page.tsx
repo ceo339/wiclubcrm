@@ -16,6 +16,14 @@ export default async function LeadsPage() {
     .select("*, partners(name)")
     .order("added_date", { ascending: false });
 
+  const canEdit = !!profile.partner_id;
+  const [{ data: products }, { data: cohorts }] = canEdit
+    ? await Promise.all([
+        supabase.from("products").select("*").order("name"),
+        supabase.from("product_cohorts").select("*").order("start_date"),
+      ])
+    : [{ data: [] }, { data: [] }];
+
   return (
     <div className="flex flex-1 flex-col bg-surface-2">
       <header className="flex items-center justify-between border-b border-border bg-background px-6 py-4">
@@ -41,7 +49,9 @@ export default async function LeadsPage() {
               partner_name: (l as { partners?: { name: string } | null }).partners?.name ?? null,
             }))}
             isHq={profile.role === "hq"}
-            canEdit={!!profile.partner_id}
+            canEdit={canEdit}
+            products={products ?? []}
+            cohorts={cohorts ?? []}
           />
         )}
       </main>
