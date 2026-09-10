@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { STATUSES, statusLabel } from "@/lib/members";
 import Money from "@/components/currency/Money";
 import { useLocale } from "@/components/i18n/LocaleProvider";
@@ -28,7 +29,10 @@ export default function MembersBoard({
   const [productId, setProductId] = useState<string>("all");
   const [startDate, setStartDate] = useState<string>("all");
   const [showNew, setShowNew] = useState(false);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  // "?open=<id>" — same deep-link mechanism as LeadsBoard, for the home
+  // page's "Мои задачи" widget.
+  const searchParams = useSearchParams();
+  const [selectedId, setSelectedId] = useState<string | null>(() => searchParams.get("open"));
 
   const productOptions = useMemo(() => {
     const seen = new Map<string, string>();

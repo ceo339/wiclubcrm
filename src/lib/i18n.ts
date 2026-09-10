@@ -267,6 +267,12 @@ export const DICT: Record<string, Entry> = {
     bg: "Добавяне на франчайзополучател — клуб и данни за вход",
   },
 
+  // ---- home page: "Мои задачи" widget ----
+  headingMyTasks: { ru: "Мои задачи", bg: "Моите задачи" },
+  headingNetworkTasks: { ru: "Задачи по сети", bg: "Задачи в мрежата" },
+  emptyNoOpenTasks: { ru: "Открытых задач нет.", bg: "Няма открити задачи." },
+  taskNoDueDate: { ru: "без срока", bg: "без срок" },
+
   // ---- load-error prefixes (page.tsx list screens) ----
   errLoadLeadsFailed: { ru: "Не удалось загрузить лиды", bg: "Неуспешно зареждане на запитванията" },
   errLoadMembersFailed: { ru: "Не удалось загрузить участниц", bg: "Неуспешно зареждане на участничките" },

@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { SOURCES, sourceLabel } from "@/lib/leads";
 import { useLocale } from "@/components/i18n/LocaleProvider";
 import type { Tables } from "@/types/database";
@@ -30,7 +31,11 @@ export default function LeadsBoard({
   const [source, setSource] = useState<string>("all");
   const [showNewLead, setShowNewLead] = useState(false);
   const [showImport, setShowImport] = useState(false);
-  const [selectedLeadId, setSelectedLeadId] = useState<string | null>(null);
+  // "?open=<id>" — how a link from outside this page (the home page's
+  // "Мои задачи" widget) opens a specific lead's card directly, instead of
+  // landing on the board and making you search for it.
+  const searchParams = useSearchParams();
+  const [selectedLeadId, setSelectedLeadId] = useState<string | null>(() => searchParams.get("open"));
   const selectedLead = initialLeads.find((l) => l.id === selectedLeadId) ?? null;
 
   const filtered = useMemo(() => {
