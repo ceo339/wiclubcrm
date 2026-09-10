@@ -65,6 +65,17 @@ export default async function Home() {
             Продукты клуба и даты потоков — для формы «Новый лид»
           </div>
         </Link>
+        {profile.role === "hq" && (
+          <Link
+            href="/partners"
+            className="w-full max-w-sm rounded-xl border border-border bg-background p-5 text-left shadow-sm transition-colors hover:border-accent"
+          >
+            <div className="text-sm font-medium text-foreground">Клубы сети</div>
+            <div className="mt-1 text-xs text-muted">
+              Добавить франчайзи — клуб и логин для входа
+            </div>
+          </Link>
+        )}
       </main>
     </div>
   );
