@@ -18,6 +18,23 @@ export function isAudience(value: string | null | undefined): value is CampaignA
   return value === "members" || value === "leads_active" || value === "leads_all";
 }
 
+/** Every value email_campaigns.audience can actually hold — the three
+ * broadcast audiences above, plus "single": a one-off email sent from a
+ * lead/member's own card (see sendDirectEmail in app/email/actions.ts).
+ * "single" is deliberately not offered in the compose picker (AUDIENCES
+ * above) since it only ever comes from that one entity's own card, but it
+ * still needs a label wherever campaigns are listed. */
+const AUDIENCE_LABEL_KEYS: Record<string, string> = {
+  members: "audienceMembers",
+  leads_active: "audienceLeadsActive",
+  leads_all: "audienceLeadsAll",
+  single: "audienceSingle",
+};
+
+export function audienceLabelKey(audience: string): string {
+  return AUDIENCE_LABEL_KEYS[audience] ?? audience;
+}
+
 export type RecipientStatus =
   | "queued"
   | "sent"

@@ -2,18 +2,12 @@
 
 import { useState } from "react";
 import type { Tables } from "@/types/database";
-import { computeCampaignStats } from "@/lib/email";
+import { audienceLabelKey, computeCampaignStats } from "@/lib/email";
 import { useLocale } from "@/components/i18n/LocaleProvider";
 import NewCampaignModal from "./NewCampaignModal";
 
 type Campaign = Tables<"email_campaigns"> & {
   email_campaign_recipients: { status: string }[];
-};
-
-const AUDIENCE_LABEL_KEYS: Record<string, string> = {
-  members: "audienceMembers",
-  leads_active: "audienceLeadsActive",
-  leads_all: "audienceLeadsAll",
 };
 
 /**
@@ -79,9 +73,7 @@ export default function EmailBoard({
                   return (
                     <tr key={c.id} className="border-b border-border last:border-0">
                       <td className="px-5 py-3 font-medium text-foreground">{c.subject}</td>
-                      <td className="px-5 py-3 text-muted">
-                        {t(AUDIENCE_LABEL_KEYS[c.audience] ?? c.audience)}
-                      </td>
+                      <td className="px-5 py-3 text-muted">{t(audienceLabelKey(c.audience))}</td>
                       <td className="px-5 py-3 text-right text-muted">{stats.recipientsCount}</td>
                       <td className="px-5 py-3 text-right text-muted">
                         {c.status === "sending"

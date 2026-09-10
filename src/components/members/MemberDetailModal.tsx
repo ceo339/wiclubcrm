@@ -13,6 +13,7 @@ import {
 import { attendedArray, STATUSES, statusLabel } from "@/lib/members";
 import Money from "@/components/currency/Money";
 import { useLocale, useT } from "@/components/i18n/LocaleProvider";
+import SendEmailButton from "@/components/email/SendEmailButton";
 import type { Member } from "./types";
 
 export default function MemberDetailModal({
@@ -115,13 +116,16 @@ function ReadView({
       </dl>
 
       {canEdit && (
-        <button
-          type="button"
-          onClick={onEdit}
-          className="mt-4 self-start rounded-lg border border-border px-3 py-1.5 text-xs font-medium text-ink-2 hover:bg-surface-2"
-        >
-          {t("edit")}
-        </button>
+        <div className="mt-4 flex flex-wrap items-start gap-2">
+          <button
+            type="button"
+            onClick={onEdit}
+            className="self-start rounded-lg border border-border px-3 py-1.5 text-xs font-medium text-ink-2 hover:bg-surface-2"
+          >
+            {t("edit")}
+          </button>
+          <SendEmailButton entityType="member" entityId={member.id} email={member.email} />
+        </div>
       )}
     </>
   );

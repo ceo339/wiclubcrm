@@ -601,6 +601,10 @@ export const DICT: Record<string, Entry> = {
   audienceMembers: { ru: "Все участницы", bg: "Всички участнички" },
   audienceLeadsActive: { ru: "Активные лиды (не оплатившие, не отказавшиеся)", bg: "Активни запитвания (без платили и отказали)" },
   audienceLeadsAll: { ru: "Все лиды", bg: "Всички запитвания" },
+  audienceSingle: { ru: "Лично", bg: "Лично" },
+  btnWriteEmail: { ru: "Написать письмо", bg: "Напиши писмо" },
+  emailSentToRecipient: { ru: "Письмо отправлено.", bg: "Писмото е изпратено." },
+  errRecipientHasNoEmail: { ru: "На карточке нет email — некуда отправлять.", bg: "В картата няма имейл — няма къде да се изпрати." },
   audiencePreviewCount: { ru: "Получат письмо: {n}", bg: "Ще получат писмото: {n}" },
   audiencePreviewSkipped: {
     ru: "ещё {n} без email на карточке — им письмо не уйдёт",

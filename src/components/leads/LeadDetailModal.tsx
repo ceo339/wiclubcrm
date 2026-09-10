@@ -20,6 +20,7 @@ import {
 import Money from "@/components/currency/Money";
 import { useLocale, useT } from "@/components/i18n/LocaleProvider";
 import T from "@/components/i18n/T";
+import SendEmailButton from "@/components/email/SendEmailButton";
 import type { Lead } from "./types";
 
 export default function LeadDetailModal({
@@ -152,7 +153,7 @@ function ReadView({
       )}
 
       {canEdit && (
-        <div className="mt-4 flex flex-wrap gap-2">
+        <div className="mt-4 flex flex-wrap items-start gap-2">
           <button
             type="button"
             onClick={onEdit}
@@ -161,6 +162,7 @@ function ReadView({
             {t("edit")}
           </button>
           {lead.stage === "paid" && <ConvertToMemberButton leadId={lead.id} />}
+          <SendEmailButton entityType="lead" entityId={lead.id} email={lead.email} />
         </div>
       )}
     </>
