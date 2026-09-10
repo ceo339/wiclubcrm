@@ -156,14 +156,96 @@ export function conversionRate(rows: { stage: string }[]): number | null {
     : Math.round((100 * rows.filter((l) => l.stage === "paid").length) / rows.length);
 }
 
-export type StageCount = { id: string; labelKey: string; count: number };
+/** `part` as a percentage of `whole`, rounded. Null (not 0 or 100) when
+ * there's no real denominator to divide by — same "no fabricated number"
+ * rule as pctChange above. */
+export function pctOf(part: number, whole: number): number | null {
+  if (whole <= 0) return null;
+  return Math.round((100 * part) / whole);
+}
+
+/**
+ * One step of the "От первого «привет» до участницы" funnel — a running
+ * total of leads currently at this stage or any stage further along,
+ * plus what fraction of the previous step's total that represents.
+ *
+ * This is a snapshot over CURRENT stage, not a reconstructed history: a
+ * lead's row only ever holds where it is right now, not every stage it
+ * passed through. Two things follow from that, both accepted deliberately
+ * (confirmed with Anastasiia rather than assumed):
+ *  - it assumes leads only move forward through the Kanban — a lead
+ *    dragged backward would undercount the stage it already reached;
+ *  - a declined lead drops out of every step from "declined" onward,
+ *    even if it had genuinely reached "Выставлен счёт" first, because
+ *    that path isn't recorded anywhere. Declined leads are reported
+ *    separately (`declinedCount` on CoreMetrics) rather than folded into
+ *    a stage they may never have reached, but this does mean the
+ *    "% идут дальше" figures run somewhat pessimistic as more leads get
+ *    declined — they're a floor on real conversion, not the exact figure.
+ */
+export type FunnelStage = {
+  id: string;
+  labelKey: string;
+  count: number;
+  /** Null on the first stage (nothing before it) and when the previous
+   * stage's count is 0 (no baseline to take a percentage of). */
+  pctFromPrevious: number | null;
+};
+
+export function computeFunnel(leads: { stage: string }[]): FunnelStage[] {
+  const forward = STAGES.filter((s) => !s.lost); // new → progress → presented → invoiced → paid, in order
+  const counts = forward.map(
+    (_, i) => leads.filter((l) => forward.findIndex((f) => f.id === l.stage) >= i).length
+  );
+  return forward.map((s, i) => ({
+    id: s.id,
+    labelKey: s.labelKey,
+    count: counts[i],
+    pctFromPrevious: i === 0 ? null : pctOf(counts[i], counts[i - 1]),
+  }));
+}
+
+// ---------------------------------------------------------------------------
+// "Какой канал приводит участниц" — real leads by source, real fraction of
+// each source that reached "Оплата". "Reached Оплата" is the same stage
+// the "Лид → участница" tile already uses as its definition of a won
+// lead — a real, if approximate, stand-in for "стала участницей", since a
+// lead becoming a member is a separate manual copy, not a hard link.
+
+export type SourceConversion = {
+  source: string;
+  leadsCount: number;
+  paidCount: number;
+  pctPaid: number | null;
+};
+
+export function computeSourceConversion(leads: { source: string | null; stage: string }[]): SourceConversion[] {
+  const bySource = new Map<string, { total: number; paid: number }>();
+  for (const l of leads) {
+    const key = l.source ?? "";
+    const entry = bySource.get(key) ?? { total: 0, paid: 0 };
+    entry.total += 1;
+    if (l.stage === "paid") entry.paid += 1;
+    bySource.set(key, entry);
+  }
+  return [...bySource.entries()]
+    .map(([source, { total, paid }]) => ({
+      source,
+      leadsCount: total,
+      paidCount: paid,
+      pctPaid: pctOf(paid, total),
+    }))
+    .sort((a, b) => b.leadsCount - a.leadsCount);
+}
 
 export type CoreMetrics = {
   revenue: { amount: number; delta: number | null };
   membersAdded: number;
   conversion: { value: number | null; previous: number | null };
   royalty: { amount: number; percent: number };
-  stageCounts: StageCount[];
+  funnel: FunnelStage[];
+  declinedCount: number;
+  sourceConversion: SourceConversion[];
 };
 
 /**
@@ -178,7 +260,7 @@ export function computeCoreMetrics({
   payments,
   period,
 }: {
-  leads: { stage: string; added_date: string }[];
+  leads: { stage: string; added_date: string; source: string | null }[];
   members: { created_at: string }[];
   payments: { amount: number; status: string | null; paid_date: string }[];
   period: Period;
@@ -203,11 +285,9 @@ export function computeCoreMetrics({
     membersAdded,
     conversion: { value: conversion, previous: conversionPrevious },
     royalty: { amount: royaltyAmount, percent: ROYALTY_PERCENT },
-    stageCounts: STAGES.map((s) => ({
-      id: s.id,
-      labelKey: s.labelKey,
-      count: leadsInPeriod.filter((l) => l.stage === s.id).length,
-    })),
+    funnel: computeFunnel(leadsInPeriod),
+    declinedCount: leadsInPeriod.filter((l) => l.stage === "declined").length,
+    sourceConversion: computeSourceConversion(leadsInPeriod),
   };
 }
 

@@ -50,7 +50,7 @@ export default async function ClubDashboardPage({
   if (!partner) notFound();
 
   const [{ data: leads }, { data: members }, { data: payments }, { data: products }] = await Promise.all([
-    supabase.from("leads").select("stage, added_date").eq("partner_id", partnerId),
+    supabase.from("leads").select("stage, source, added_date").eq("partner_id", partnerId),
     supabase.from("members").select("created_at, product_id").eq("partner_id", partnerId),
     supabase.from("payments").select("amount, status, paid_date").eq("partner_id", partnerId),
     supabase.from("products").select("id, name").eq("partner_id", partnerId),
@@ -105,7 +105,9 @@ export default async function ClubDashboardPage({
         <DashboardBoard
           totals={totals}
           fourthTile={{ labelKey: "statCourses", value: String((products ?? []).length), deltaKey: "deltaActiveCourses" }}
-          stageCounts={metrics.stageCounts}
+          funnel={metrics.funnel}
+          declinedCount={metrics.declinedCount}
+          sourceConversion={metrics.sourceConversion}
           period={period}
           monthOptions={monthOptions}
           basePath={`/dashboard/${partnerId}`}

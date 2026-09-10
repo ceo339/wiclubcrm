@@ -3,10 +3,17 @@
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import type { ReactNode } from "react";
-import type { DecliningClub, Period, ProductCount, StageCount, StaleLead } from "@/lib/dashboard";
+import type {
+  DecliningClub,
+  FunnelStage,
+  Period,
+  ProductCount,
+  SourceConversion,
+  StaleLead,
+} from "@/lib/dashboard";
 import { formatPctDelta, formatPointsDelta, monthLabel, periodLabel } from "@/lib/dashboard";
 import Money from "@/components/currency/Money";
-import { stageLabel } from "@/lib/leads";
+import { sourceLabel, stageLabel } from "@/lib/leads";
 import { useLocale } from "@/components/i18n/LocaleProvider";
 
 export type ClubRow = {
@@ -228,6 +235,49 @@ function AttentionSection({
   );
 }
 
+/**
+ * "Какой канал приводит участниц" — real leads by source for the period,
+ * with the real fraction of each that reached "Оплата". See the doc
+ * comment on SourceConversion in lib/dashboard.ts for why "reached Оплата"
+ * stands in for "стала участницей".
+ */
+function SourceConversionTable({ rows }: { rows: SourceConversion[] }) {
+  const { locale, t } = useLocale();
+  return (
+    <div className="rounded-xl border border-border bg-background">
+      <div className="border-b border-border px-5 py-4">
+        <h2 className="text-sm font-semibold text-foreground">{t("headingSourceConversion")}</h2>
+      </div>
+      {rows.length === 0 ? (
+        <p className="p-5 text-sm text-muted">{t("emptyNoLeadsPeriod")}</p>
+      ) : (
+        <table className="w-full text-left text-sm">
+          <thead className="border-b border-border text-xs uppercase tracking-wide text-muted">
+            <tr>
+              <th className="px-5 py-2.5 font-medium">{t("colSource")}</th>
+              <th className="px-5 py-2.5 text-right font-medium">{t("colLeads")}</th>
+              <th className="px-5 py-2.5 text-right font-medium">{t("colSourcePctPaid")}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((r) => (
+              <tr key={r.source || "—"} className="border-b border-border last:border-0">
+                <td className="px-5 py-2.5 font-medium text-foreground">
+                  {r.source ? sourceLabel(r.source, locale) : t("sourceUnknown")}
+                </td>
+                <td className="px-5 py-2.5 text-right text-muted">{r.leadsCount}</td>
+                <td className="px-5 py-2.5 text-right text-muted">
+                  {r.pctPaid === null ? t("dash") : `${r.pctPaid}%`}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+    </div>
+  );
+}
+
 type ClubSortKey = "name" | "leads" | "members" | "collected" | "pending";
 
 function ClubSortHeader({
@@ -352,7 +402,9 @@ function ClubsTable({ clubs, qs }: { clubs: ClubRow[]; qs: string }) {
 export default function DashboardBoard({
   totals,
   fourthTile,
-  stageCounts,
+  funnel,
+  declinedCount,
+  sourceConversion,
   clubs,
   staleLeads,
   decliningClubs,
@@ -373,7 +425,9 @@ export default function DashboardBoard({
    * into the dictionary rather than literal text since this component
    * decides the display language, not the (server) page that builds it. */
   fourthTile: { labelKey: string; value: string; deltaKey: string };
-  stageCounts: StageCount[];
+  funnel: FunnelStage[];
+  declinedCount: number;
+  sourceConversion: SourceConversion[];
   /** Omit on a club's own dashboard — there's nothing to break down by club. */
   clubs?: ClubRow[];
   /** Omit on a club's own dashboard, same as `clubs` — "требует внимания" is
@@ -392,7 +446,7 @@ export default function DashboardBoard({
   productsAllTime: ProductCount[];
 }) {
   const { locale, t } = useLocale();
-  const maxStage = Math.max(1, ...stageCounts.map((s) => s.count));
+  const maxFunnel = Math.max(1, ...funnel.map((s) => s.count));
   const isRange = period.mode === "range";
   const qs = periodQuery(period);
 
@@ -459,22 +513,34 @@ export default function DashboardBoard({
       <div className="rounded-xl border border-border bg-background p-5">
         <h2 className="text-sm font-semibold text-foreground">{t("headingFunnel")}</h2>
         <div className="mt-4 flex flex-col gap-3">
-          {stageCounts.map((s) => (
+          {funnel.map((s, i) => (
             <div key={s.id} className="flex items-center gap-3">
               <div className="w-36 shrink-0 text-sm text-ink-2">{t(s.labelKey)}</div>
               <div className="h-2 flex-1 rounded-full bg-surface-2">
                 <div
                   className="h-2 rounded-full bg-foreground"
-                  style={{ width: `${(s.count / maxStage) * 100}%` }}
+                  style={{ width: `${(s.count / maxFunnel) * 100}%` }}
                 />
               </div>
               <div className="w-8 shrink-0 text-right text-sm font-medium text-foreground">
                 {s.count}
               </div>
+              <div className="w-28 shrink-0 text-right text-xs text-muted">
+                {i === 0
+                  ? t("funnelStart")
+                  : s.pctFromPrevious === null
+                    ? t("dash")
+                    : t("funnelPctContinue", { percent: s.pctFromPrevious })}
+              </div>
             </div>
           ))}
         </div>
+        {declinedCount > 0 && (
+          <p className="mt-3 text-xs text-muted">{t("funnelDeclinedNote", { n: declinedCount })}</p>
+        )}
       </div>
+
+      <SourceConversionTable rows={sourceConversion} />
 
       <div className="flex flex-col gap-3 sm:flex-row">
         <ProductsTable titleKey="headingProductsPeriod" rows={productsPeriod} />
