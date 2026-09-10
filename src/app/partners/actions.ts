@@ -78,3 +78,45 @@ export async function createClubPartner(formData: FormData): Promise<ActionResul
   revalidatePath("/partners");
   return { error: null, tempPassword };
 }
+
+/**
+ * HQ-only: edits an existing club's name/country/city. Does not touch the
+ * login (email/password) — that's a separate concern handled by Supabase
+ * Auth, not this form.
+ */
+export async function updatePartner(
+  partnerId: string,
+  formData: FormData
+): Promise<{ error: string | null }> {
+  const profile = await getCurrentProfile();
+  if (!profile) return { error: "Не авторизовано" };
+  if (profile.role !== "hq") return { error: "Редактировать клубы может только HQ" };
+
+  const name = String(formData.get("name") || "").trim();
+  const city = String(formData.get("city") || "").trim();
+  const country = String(formData.get("country") || "").trim();
+
+  if (!name) return { error: "Укажите название клуба" };
+  if (!city) return { error: "Укажите город" };
+  if (!country) return { error: "Укажите страну" };
+
+  let admin;
+  try {
+    admin = createAdminClient();
+  } catch {
+    return {
+      error:
+        "Не настроен серверный ключ Supabase (SUPABASE_SERVICE_ROLE_KEY) — добавьте его в переменные окружения на Vercel.",
+    };
+  }
+
+  const { error } = await admin
+    .from("partners")
+    .update({ name, city, country })
+    .eq("id", partnerId);
+
+  if (error) return { error: error.message };
+
+  revalidatePath("/partners");
+  return { error: null };
+}

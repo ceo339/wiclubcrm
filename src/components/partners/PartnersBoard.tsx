@@ -3,6 +3,7 @@
 import { useState } from "react";
 import type { Tables } from "@/types/database";
 import NewPartnerModal from "./NewPartnerModal";
+import EditPartnerModal from "./EditPartnerModal";
 
 export default function PartnersBoard({
   initialPartners,
@@ -10,6 +11,8 @@ export default function PartnersBoard({
   initialPartners: Tables<"partners">[];
 }) {
   const [showNew, setShowNew] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const editingPartner = initialPartners.find((p) => p.id === editingId) ?? null;
 
   return (
     <div className="flex flex-1 flex-col gap-4">
@@ -44,7 +47,11 @@ export default function PartnersBoard({
             </thead>
             <tbody>
               {initialPartners.map((p) => (
-                <tr key={p.id} className="border-b border-border last:border-0">
+                <tr
+                  key={p.id}
+                  onClick={() => setEditingId(p.id)}
+                  className="cursor-pointer border-b border-border last:border-0 hover:bg-surface-2"
+                >
                   <td className="px-4 py-3 font-medium text-foreground">{p.name}</td>
                   <td className="px-4 py-3 text-muted">{p.country ?? "—"}</td>
                   <td className="px-4 py-3 text-muted">{p.city ?? "—"}</td>
@@ -59,6 +66,9 @@ export default function PartnersBoard({
       )}
 
       {showNew && <NewPartnerModal onClose={() => setShowNew(false)} />}
+      {editingPartner && (
+        <EditPartnerModal partner={editingPartner} onClose={() => setEditingId(null)} />
+      )}
     </div>
   );
 }
