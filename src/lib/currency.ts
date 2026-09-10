@@ -4,12 +4,13 @@
 // far, including Sofia now that Bulgaria is on the euro) — this only
 // changes how an amount is *displayed*, exactly like the prototype did.
 
-export type CurrencyCode = "EUR" | "USD" | "GEL";
+export type CurrencyCode = "EUR" | "USD" | "GEL" | "UAH";
 
 export const CURRENCIES: { code: CurrencyCode; symbol: string }[] = [
   { code: "EUR", symbol: "€" },
   { code: "USD", symbol: "$" },
   { code: "GEL", symbol: "₾" },
+  { code: "UAH", symbol: "₴" },
 ];
 
 /** Every amount in the database is stored in this currency. */
@@ -27,15 +28,16 @@ export function scopeStorageKey(scope: string): string {
 /**
  * The currency a club's own country normally trades in — used as the
  * *default* display currency for that club (Georgia's lari, Bulgaria's
- * euro). Ukraine is mapped to dollars rather than the hryvnia, per
- * Anastasiia: that's what's actually tracked internally there, not the
- * local currency. Anastasiia confirmed this mapping directly; any country
- * not listed here (no real club operates there yet) falls back to EUR.
+ * euro, Ukraine's hryvnia). Anastasiia confirmed this mapping directly;
+ * any country not listed here (no real club operates there yet) falls
+ * back to EUR. Separate from the network-wide rollup default (dollars,
+ * see scopeForProfile) — that's about a mixed multi-club total, not any
+ * one country's own currency.
  */
 export const COUNTRY_CURRENCY: Record<string, CurrencyCode> = {
   Georgia: "GEL",
   Bulgaria: "EUR",
-  Ukraine: "USD",
+  Ukraine: "UAH",
 };
 
 export function currencyForCountry(country: string | null | undefined): CurrencyCode {
