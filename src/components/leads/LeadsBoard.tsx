@@ -6,6 +6,7 @@ import type { Lead } from "./types";
 import KanbanBoard from "./KanbanBoard";
 import LeadsList from "./LeadsList";
 import NewLeadModal from "./NewLeadModal";
+import ImportModal from "./ImportModal";
 
 export default function LeadsBoard({
   initialLeads,
@@ -20,6 +21,7 @@ export default function LeadsBoard({
   const [search, setSearch] = useState("");
   const [source, setSource] = useState<string>("all");
   const [showNewLead, setShowNewLead] = useState(false);
+  const [showImport, setShowImport] = useState(false);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -66,12 +68,20 @@ export default function LeadsBoard({
             </ViewTab>
           </div>
           {canEdit && (
-            <button
-              onClick={() => setShowNewLead(true)}
-              className="rounded-lg bg-foreground px-4 py-2 text-sm font-medium text-background"
-            >
-              + Лид
-            </button>
+            <>
+              <button
+                onClick={() => setShowImport(true)}
+                className="rounded-lg border border-border px-4 py-2 text-sm font-medium text-ink-2 hover:bg-surface-2"
+              >
+                Импорт
+              </button>
+              <button
+                onClick={() => setShowNewLead(true)}
+                className="rounded-lg bg-foreground px-4 py-2 text-sm font-medium text-background"
+              >
+                + Лид
+              </button>
+            </>
           )}
         </div>
       </div>
@@ -89,6 +99,7 @@ export default function LeadsBoard({
       )}
 
       {showNewLead && <NewLeadModal onClose={() => setShowNewLead(false)} />}
+      {showImport && <ImportModal onClose={() => setShowImport(false)} />}
     </div>
   );
 }

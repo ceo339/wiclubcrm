@@ -3,9 +3,15 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentProfile } from "@/lib/auth";
-import type { StageId } from "@/lib/leads";
+import { SOURCES, type StageId } from "@/lib/leads";
 
 export type ActionResult = { error: string | null };
+
+function normalizeSource(raw: string | undefined | null): string | null {
+  if (!raw) return null;
+  const match = SOURCES.find((s) => s.toLowerCase() === raw.trim().toLowerCase());
+  return match ?? null;
+}
 
 /**
  * Moves a lead to a new stage. RLS enforces that only the owning partner
@@ -49,7 +55,7 @@ export async function createLead(formData: FormData): Promise<ActionResult> {
 
   const phone = String(formData.get("phone") || "").trim() || null;
   const email = String(formData.get("email") || "").trim() || null;
-  const source = String(formData.get("source") || "Website");
+  const source = normalizeSource(String(formData.get("source") || "Website")) ?? "Website";
   const valueRaw = String(formData.get("value") || "0").replace(",", ".");
   const value = Number.isFinite(Number(valueRaw)) ? Number(valueRaw) : 0;
 
@@ -68,4 +74,64 @@ export async function createLead(formData: FormData): Promise<ActionResult> {
 
   revalidatePath("/leads");
   return { error: null };
+}
+
+export type ImportRow = {
+  name: string;
+  phone?: string | null;
+  email?: string | null;
+  source?: string | null;
+  value?: number | null;
+};
+
+export type ImportResult = { error: string | null; imported: number };
+
+const MAX_IMPORT_ROWS = 1000;
+const IMPORT_CHUNK_SIZE = 200;
+
+/**
+ * Bulk-creates leads from parsed CSV rows (see ImportModal). Same RLS rule
+ * as createLead — only a partner account (has partner_id) can insert.
+ */
+export async function importLeads(rows: ImportRow[]): Promise<ImportResult> {
+  const profile = await getCurrentProfile();
+  if (!profile) return { error: "Не авторизовано", imported: 0 };
+  if (!profile.partner_id) {
+    return {
+      error: "У аккаунта HQ нет своего клуба — импортировать лиды может только партнёр.",
+      imported: 0,
+    };
+  }
+
+  const clean = rows
+    .map((r) => ({
+      partner_id: profile.partner_id as string,
+      name: (r.name || "").trim(),
+      phone: r.phone?.trim() || null,
+      email: r.email?.trim() || null,
+      source: normalizeSource(r.source),
+      value: typeof r.value === "number" && Number.isFinite(r.value) ? r.value : 0,
+      stage: "new" as const,
+    }))
+    .filter((r) => r.name.length > 0)
+    .slice(0, MAX_IMPORT_ROWS);
+
+  if (clean.length === 0) return { error: "Не найдено ни одной строки с именем", imported: 0 };
+
+  const supabase = await createClient();
+  let imported = 0;
+  for (let i = 0; i < clean.length; i += IMPORT_CHUNK_SIZE) {
+    const chunk = clean.slice(i, i + IMPORT_CHUNK_SIZE);
+    const { error, count } = await supabase.from("leads").insert(chunk, { count: "exact" });
+    if (error) {
+      return {
+        error: `Импортировано ${imported} из ${clean.length}, затем ошибка: ${error.message}`,
+        imported,
+      };
+    }
+    imported += count ?? chunk.length;
+  }
+
+  revalidatePath("/leads");
+  return { error: null, imported };
 }
