@@ -2,38 +2,42 @@
 
 import { useEffect, useState, useTransition } from "react";
 import {
-  addComment,
-  addTask,
-  convertLeadToMember,
-  getLeadDetail,
-  setTaskDone,
-  updateLead,
-  type LeadDetail,
-} from "@/app/leads/actions";
-import {
-  COUNTRIES,
-  SOURCE_LABELS,
-  declineReasonLabel,
-  genericPlanLabel,
-  stageLabel,
-} from "@/lib/leads";
-import type { Lead } from "./types";
+  addMemberComment,
+  addMemberTask,
+  getMemberDetail,
+  setAttendance,
+  setMemberTaskDone,
+  updateMember,
+  type MemberDetail,
+} from "@/app/members/actions";
+import { STATUSES, statusLabel } from "@/lib/members";
+import type { Member } from "./types";
 
-export default function LeadDetailModal({
-  lead,
+function attendedArray(raw: unknown, length: number): (boolean | null)[] {
+  const arr = Array.isArray(raw) ? (raw as unknown[]) : [];
+  const out: (boolean | null)[] = [];
+  for (let i = 0; i < length; i++) {
+    const v = arr[i];
+    out.push(v === true ? true : v === false ? false : null);
+  }
+  return out;
+}
+
+export default function MemberDetailModal({
+  member,
   canEdit,
   onClose,
 }: {
-  lead: Lead;
+  member: Member;
   canEdit: boolean;
   onClose: () => void;
 }) {
-  const [detail, setDetail] = useState<LeadDetail | null>(null);
+  const [detail, setDetail] = useState<MemberDetail | null>(null);
   const [editing, setEditing] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
-    getLeadDetail(lead.id).then((d) => {
+    getMemberDetail(member.id).then((d) => {
       if (!cancelled) setDetail(d);
     });
     return () => {
@@ -42,8 +46,8 @@ export default function LeadDetailModal({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  function refreshDetail() {
-    getLeadDetail(lead.id).then(setDetail);
+  function refresh() {
+    getMemberDetail(member.id).then(setDetail);
   }
 
   return (
@@ -57,10 +61,10 @@ export default function LeadDetailModal({
       >
         <div className="flex items-start justify-between gap-3">
           <div>
-            <h3 className="text-base font-semibold text-foreground">{lead.name}</h3>
+            <h3 className="text-base font-semibold text-foreground">{member.name}</h3>
             <p className="mt-0.5 text-xs text-muted">
-              {lead.source ? SOURCE_LABELS[lead.source] ?? lead.source : "—"} ·{" "}
-              {stageLabel(lead.stage)}
+              {member.city ?? "—"}
+              {member.member_since ? ` · с ${member.member_since}` : ""}
             </p>
           </div>
           <button
@@ -74,118 +78,63 @@ export default function LeadDetailModal({
         </div>
 
         {editing ? (
-          <EditForm lead={lead} onCancel={() => setEditing(false)} onSaved={() => setEditing(false)} />
+          <EditForm member={member} onCancel={() => setEditing(false)} onSaved={() => setEditing(false)} />
         ) : (
-          <ReadView lead={lead} canEdit={canEdit} onEdit={() => setEditing(true)} />
+          <ReadView member={member} canEdit={canEdit} onEdit={() => setEditing(true)} />
         )}
 
-        <CommentsSection leadId={lead.id} detail={detail} canEdit={canEdit} onChanged={refreshDetail} />
-        <TasksSection leadId={lead.id} detail={detail} canEdit={canEdit} onChanged={refreshDetail} />
+        {member.product_sessions ? (
+          <AttendanceSection member={member} canEdit={canEdit} />
+        ) : null}
+
+        <CommentsSection memberId={member.id} detail={detail} canEdit={canEdit} onChanged={refresh} />
+        <TasksSection memberId={member.id} detail={detail} canEdit={canEdit} onChanged={refresh} />
       </div>
     </div>
   );
 }
 
 function ReadView({
-  lead,
+  member,
   canEdit,
   onEdit,
 }: {
-  lead: Lead;
+  member: Member;
   canEdit: boolean;
   onEdit: () => void;
 }) {
   return (
     <>
       <dl className="mt-4 grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
-        <Row label="Телефон" value={lead.phone} />
-        <Row label="Email" value={lead.email} />
-        <Row label="Страна" value={lead.country} />
-        <Row label="Город" value={lead.city} />
-        <Row label="Дата рождения" value={lead.birthday} />
-        <Row label="Добавлен" value={lead.added_date} />
-        <Row label="Сумма" value={lead.value ? `€${lead.value}` : null} />
-        {lead.plan && <Row label="Интересует" value={genericPlanLabel(lead.plan)} />}
-        {lead.cohort_start_date && <Row label="Начало потока" value={lead.cohort_start_date} />}
-        {lead.stage === "declined" && lead.decline_reason && (
-          <Row
-            label="Причина отказа"
-            value={`${declineReasonLabel(lead.decline_reason)}${
-              lead.decline_note ? " · " + lead.decline_note : ""
-            }`}
-          />
-        )}
+        <dt className="text-muted">Курс</dt>
+        <dd className="text-ink-2">{member.product_name ?? "—"}</dd>
+        <dt className="text-muted">Статус</dt>
+        <dd className="text-ink-2">{statusLabel(member.status)}</dd>
+        <dt className="text-muted">Начало</dt>
+        <dd className="text-ink-2">{member.start_date ?? "—"}</dd>
+        <dt className="text-muted">Сумма</dt>
+        <dd className="text-ink-2">{member.price_collected ? `€${member.price_collected}` : "—"}</dd>
       </dl>
 
-      {lead.note && (
-        <div className="mt-4">
-          <span className="text-xs font-medium text-ink-2">Заметка</span>
-          <p className="mt-1 text-sm text-ink-2">{lead.note}</p>
-        </div>
-      )}
-
       {canEdit && (
-        <div className="mt-4 flex flex-wrap gap-2">
-          <button
-            type="button"
-            onClick={onEdit}
-            className="self-start rounded-lg border border-border px-3 py-1.5 text-xs font-medium text-ink-2 hover:bg-surface-2"
-          >
-            Редактировать
-          </button>
-          {lead.stage === "paid" && <ConvertToMemberButton leadId={lead.id} />}
-        </div>
+        <button
+          type="button"
+          onClick={onEdit}
+          className="mt-4 self-start rounded-lg border border-border px-3 py-1.5 text-xs font-medium text-ink-2 hover:bg-surface-2"
+        >
+          Редактировать
+        </button>
       )}
-    </>
-  );
-}
-
-function ConvertToMemberButton({ leadId }: { leadId: string }) {
-  const [pending, startTransition] = useTransition();
-  const [done, setDone] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  if (done) {
-    return <p className="text-xs text-muted">Добавлена в «Участницы»</p>;
-  }
-
-  return (
-    <div className="flex flex-col gap-1">
-      <button
-        type="button"
-        disabled={pending}
-        onClick={() =>
-          startTransition(async () => {
-            const res = await convertLeadToMember(leadId);
-            if (res.error) setError(res.error);
-            else setDone(true);
-          })
-        }
-        className="rounded-lg bg-foreground px-3 py-1.5 text-xs font-medium text-background disabled:opacity-50"
-      >
-        {pending ? "..." : "Сделать участницей"}
-      </button>
-      {error && <p className="text-xs text-accent-strong">{error}</p>}
-    </div>
-  );
-}
-
-function Row({ label, value }: { label: string; value: string | number | null }) {
-  if (!value) return null;
-  return (
-    <>
-      <dt className="text-muted">{label}</dt>
-      <dd className="text-ink-2">{value}</dd>
     </>
   );
 }
 
 function EditForm({
-  lead,
+  member,
   onCancel,
   onSaved,
 }: {
-  lead: Lead;
+  member: Member;
   onCancel: () => void;
   onSaved: () => void;
 }) {
@@ -195,7 +144,7 @@ function EditForm({
   function handleSubmit(formData: FormData) {
     setError(null);
     startTransition(async () => {
-      const res = await updateLead(lead.id, formData);
+      const res = await updateMember(member.id, formData);
       if (res.error) setError(res.error);
       else onSaved();
     });
@@ -203,36 +152,65 @@ function EditForm({
 
   return (
     <form action={handleSubmit} className="mt-4 flex flex-col gap-3">
-      <Field label="Имя" name="name" defaultValue={lead.name} required />
-      <Field label="Email" name="email" type="email" defaultValue={lead.email ?? ""} />
-      <Field label="Телефон" name="phone" type="tel" defaultValue={lead.phone ?? ""} />
+      <label className="flex flex-col gap-1.5 text-sm">
+        <span className="font-medium text-ink-2">Имя</span>
+        <input
+          name="name"
+          defaultValue={member.name}
+          required
+          className="rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-accent focus:ring-1 focus:ring-accent"
+        />
+      </label>
 
       <label className="flex flex-col gap-1.5 text-sm">
-        <span className="font-medium text-ink-2">Страна</span>
+        <span className="font-medium text-ink-2">Статус</span>
         <select
-          name="country"
-          defaultValue={lead.country ?? ""}
+          name="status"
+          defaultValue={member.status}
           className="rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-accent focus:ring-1 focus:ring-accent"
         >
-          <option value="">— не указано —</option>
-          {COUNTRIES.map((c) => (
-            <option key={c.name} value={c.name}>
-              {c.name}
+          {STATUSES.map((s) => (
+            <option key={s.id} value={s.id}>
+              {s.label}
             </option>
           ))}
         </select>
       </label>
 
-      <Field label="Город" name="city" defaultValue={lead.city ?? ""} />
-      <Field label="Дата рождения" name="birthday" type="date" defaultValue={lead.birthday ?? ""} />
-      <Field label="Сумма (€)" name="value" type="number" defaultValue={String(lead.value ?? 0)} />
+      <label className="flex flex-col gap-1.5 text-sm">
+        <span className="font-medium text-ink-2">Город</span>
+        <input
+          name="city"
+          defaultValue={member.city ?? ""}
+          className="rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-accent focus:ring-1 focus:ring-accent"
+        />
+      </label>
 
       <label className="flex flex-col gap-1.5 text-sm">
-        <span className="font-medium text-ink-2">Заметка</span>
-        <textarea
-          name="note"
-          rows={3}
-          defaultValue={lead.note ?? ""}
+        <span className="font-medium text-ink-2">Дата начала</span>
+        <input
+          name="start_date"
+          type="date"
+          defaultValue={member.start_date ?? ""}
+          className="rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-accent focus:ring-1 focus:ring-accent"
+        />
+      </label>
+
+      <label className="flex flex-col gap-1.5 text-sm">
+        <span className="font-medium text-ink-2">Сумма (€)</span>
+        <input
+          name="price_collected"
+          type="number"
+          defaultValue={String(member.price_collected ?? 0)}
+          className="rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-accent focus:ring-1 focus:ring-accent"
+        />
+      </label>
+
+      <label className="flex flex-col gap-1.5 text-sm">
+        <span className="font-medium text-ink-2">Участница с</span>
+        <input
+          name="member_since"
+          defaultValue={member.member_since ?? ""}
           className="rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-accent focus:ring-1 focus:ring-accent"
         />
       </label>
@@ -261,41 +239,66 @@ function EditForm({
   );
 }
 
-function Field({
-  label,
-  name,
-  type = "text",
-  defaultValue,
-  required,
-}: {
-  label: string;
-  name: string;
-  type?: string;
-  defaultValue?: string;
-  required?: boolean;
-}) {
+function AttendanceSection({ member, canEdit }: { member: Member; canEdit: boolean }) {
+  const sessions = member.product_sessions ?? 0;
+  const [attended, setAttended] = useState(() => attendedArray(member.attended, sessions));
+  const [pending, startTransition] = useTransition();
+
+  function cycle(index: number) {
+    if (!canEdit) return;
+    const current = attended[index];
+    const next = current === null ? true : current === true ? false : null;
+    const optimistic = [...attended];
+    optimistic[index] = next;
+    setAttended(optimistic);
+    startTransition(async () => {
+      await setAttendance(member.id, index, next);
+    });
+  }
+
+  const present = attended.filter((v) => v === true).length;
+  const marked = attended.filter((v) => v !== null).length;
+  const pct = marked > 0 ? Math.round((present / marked) * 100) : null;
+
   return (
-    <label className="flex flex-col gap-1.5 text-sm">
-      <span className="font-medium text-ink-2">{label}</span>
-      <input
-        name={name}
-        type={type}
-        defaultValue={defaultValue}
-        required={required}
-        className="rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-accent focus:ring-1 focus:ring-accent"
-      />
-    </label>
+    <div className="mt-5">
+      <div className="flex items-center justify-between">
+        <span className="text-xs font-medium text-ink-2">Посещаемость</span>
+        <span className="text-xs text-muted">{pct === null ? "—" : `${pct}%`}</span>
+      </div>
+      <div className="mt-2 flex flex-wrap gap-1.5">
+        {attended.map((v, i) => (
+          <button
+            key={i}
+            type="button"
+            disabled={!canEdit || pending}
+            onClick={() => cycle(i)}
+            title={`Занятие ${i + 1}`}
+            className={`flex h-7 w-7 items-center justify-center rounded-md border text-xs font-medium ${
+              v === true
+                ? "border-accent bg-accent/10 text-accent-strong"
+                : v === false
+                  ? "border-border bg-surface-2 text-muted line-through"
+                  : "border-dashed border-border text-muted"
+            }`}
+          >
+            {i + 1}
+          </button>
+        ))}
+      </div>
+      <p className="mt-1 text-xs text-muted">Клик по занятию переключает: не отмечено → была → не была.</p>
+    </div>
   );
 }
 
 function CommentsSection({
-  leadId,
+  memberId,
   detail,
   canEdit,
   onChanged,
 }: {
-  leadId: string;
-  detail: LeadDetail | null;
+  memberId: string;
+  detail: MemberDetail | null;
   canEdit: boolean;
   onChanged: () => void;
 }) {
@@ -307,7 +310,7 @@ function CommentsSection({
     if (!text.trim()) return;
     setError(null);
     startTransition(async () => {
-      const res = await addComment(leadId, text);
+      const res = await addMemberComment(memberId, text);
       if (res.error) setError(res.error);
       else {
         setText("");
@@ -362,13 +365,13 @@ function CommentsSection({
 }
 
 function TasksSection({
-  leadId,
+  memberId,
   detail,
   canEdit,
   onChanged,
 }: {
-  leadId: string;
-  detail: LeadDetail | null;
+  memberId: string;
+  detail: MemberDetail | null;
   canEdit: boolean;
   onChanged: () => void;
 }) {
@@ -381,7 +384,7 @@ function TasksSection({
     if (!text.trim()) return;
     setError(null);
     startTransition(async () => {
-      const res = await addTask(leadId, text, due || null);
+      const res = await addMemberTask(memberId, text, due || null);
       if (res.error) setError(res.error);
       else {
         setText("");
@@ -393,7 +396,7 @@ function TasksSection({
 
   function handleToggle(taskId: string, done: boolean) {
     startTransition(async () => {
-      await setTaskDone(taskId, done);
+      await setMemberTaskDone(taskId, done);
       onChanged();
     });
   }

@@ -48,6 +48,15 @@ export default async function Home() {
           </div>
         </Link>
         <Link
+          href="/members"
+          className="w-full max-w-sm rounded-xl border border-border bg-background p-5 text-left shadow-sm transition-colors hover:border-accent"
+        >
+          <div className="text-sm font-medium text-foreground">Участницы</div>
+          <div className="mt-1 text-xs text-muted">
+            Список участниц, статус оплаты, посещаемость
+          </div>
+        </Link>
+        <Link
           href="/products"
           className="w-full max-w-sm rounded-xl border border-border bg-background p-5 text-left shadow-sm transition-colors hover:border-accent"
         >

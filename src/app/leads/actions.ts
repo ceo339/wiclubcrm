@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentProfile } from "@/lib/auth";
 import { SOURCES, type StageId } from "@/lib/leads";
+import { currentMonthYear } from "@/lib/members";
 import type { Tables } from "@/types/database";
 
 export type ActionResult = { error: string | null };
@@ -301,5 +302,45 @@ export async function setTaskDone(taskId: string, done: boolean): Promise<Action
   if (error) return { error: error.message };
 
   revalidatePath("/leads");
+  return { error: null };
+}
+
+/**
+ * Turns a won lead into a member record — a one-way copy (name, city,
+ * course, cohort date, amount), not a foreign-key link, matching how the
+ * prototype kept leads and members as separate lists.
+ */
+export async function convertLeadToMember(leadId: string): Promise<ActionResult> {
+  const profile = await getCurrentProfile();
+  if (!profile) return { error: "Не авторизовано" };
+  if (!profile.partner_id) return { error: "У аккаунта HQ нет своего клуба." };
+
+  const supabase = await createClient();
+  const { data: lead, error: fetchError } = await supabase
+    .from("leads")
+    .select("*")
+    .eq("id", leadId)
+    .maybeSingle();
+
+  if (fetchError) return { error: fetchError.message };
+  if (!lead) return { error: "Лид не найден" };
+
+  const { error } = await supabase.from("members").insert({
+    partner_id: profile.partner_id,
+    name: lead.name,
+    status: "sPaid",
+    product_id: lead.product_id,
+    start_date: lead.cohort_start_date,
+    city: lead.city,
+    member_since: currentMonthYear(),
+    price_collected: lead.value ?? 0,
+    paid: true,
+    attended: [],
+  });
+
+  if (error) return { error: error.message };
+
+  revalidatePath("/leads");
+  revalidatePath("/members");
   return { error: null };
 }
