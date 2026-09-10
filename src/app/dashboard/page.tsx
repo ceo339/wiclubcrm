@@ -4,19 +4,33 @@ import { getCurrentProfile } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { STAGES } from "@/lib/leads";
 import { ROYALTY_PERCENT } from "@/lib/royalty";
-import { currentMonthKey, monthKeyOf, pctChange, previousMonthKey } from "@/lib/dashboard";
+import {
+  currentMonthKey,
+  isValidDateStr,
+  isValidMonthKey,
+  monthKeyOf,
+  pctChange,
+  shiftMonthKey,
+} from "@/lib/dashboard";
 import DashboardBoard from "@/components/dashboard/DashboardBoard";
-import type { ClubRow } from "@/components/dashboard/DashboardBoard";
+import type { ClubRow, Period } from "@/components/dashboard/DashboardBoard";
 
-export default async function DashboardPage() {
+export default async function DashboardPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ month?: string; from?: string; to?: string }>;
+}) {
   const profile = await getCurrentProfile();
   if (!profile) redirect("/login");
   if (profile.role !== "hq") redirect("/");
 
+  const params = await searchParams;
+
   const supabase = await createClient();
   // RLS: is_hq() sees every partner's rows here — that's the point of this
-  // page. Fetching the raw rows (not pre-aggregated) so the totals below are
-  // computed from real data, not a view that could hide something.
+  // page. Fetching the raw rows (not pre-aggregated) so both the all-time
+  // totals and the period-filtered figures below are computed from real
+  // data, not a view that could hide something.
   const [{ data: partners }, { data: leads }, { data: members }, { data: payments }] =
     await Promise.all([
       supabase.from("partners").select("id, name").order("name"),
@@ -30,33 +44,69 @@ export default async function DashboardPage() {
   const allPayments = payments ?? [];
   const paidPayments = allPayments.filter((p) => p.status === "paid");
 
-  const thisMonth = currentMonthKey();
-  const lastMonth = previousMonthKey();
+  // Quick-select months: every month with real activity, plus the current
+  // one even if it's still empty. Never a fabricated "last 12 months" list —
+  // only months that actually have (or could have) something to show.
+  const monthsWithData = new Set<string>([currentMonthKey()]);
+  allLeads.forEach((l) => monthsWithData.add(monthKeyOf(l.added_date)));
+  allMembers.forEach((m) => monthsWithData.add(monthKeyOf(m.created_at)));
+  allPayments.forEach((p) => monthsWithData.add(monthKeyOf(p.paid_date)));
+  const monthOptions = [...monthsWithData].sort().reverse().slice(0, 6);
 
-  const revenueThisMonth = paidPayments
-    .filter((p) => monthKeyOf(p.paid_date) === thisMonth)
+  // A custom "from/to" range wins over a month pick when both dates are
+  // present and valid; otherwise we're in month mode (selected or current).
+  const rangeFrom = params.from && isValidDateStr(params.from) ? params.from : null;
+  const rangeTo = params.to && isValidDateStr(params.to) ? params.to : null;
+  const isRange = !!(rangeFrom && rangeTo && rangeFrom <= rangeTo);
+
+  const selectedMonth =
+    !isRange && params.month && isValidMonthKey(params.month) ? params.month : currentMonthKey();
+
+  const period: Period = isRange
+    ? { mode: "range", from: rangeFrom!, to: rangeTo! }
+    : { mode: "month", month: selectedMonth };
+
+  const inPeriod = (dateStr: string): boolean =>
+    period.mode === "range"
+      ? dateStr.slice(0, 10) >= period.from && dateStr.slice(0, 10) <= period.to
+      : monthKeyOf(dateStr) === period.month;
+
+  // A "previous period" for comparison only makes sense in month mode — for
+  // an arbitrary custom range there's no unambiguous "period before it", so
+  // we don't invent one.
+  const previousMonth = period.mode === "month" ? shiftMonthKey(period.month, -1) : null;
+  const inPreviousMonth = (dateStr: string): boolean =>
+    previousMonth !== null && monthKeyOf(dateStr) === previousMonth;
+
+  const revenueInPeriod = paidPayments
+    .filter((p) => inPeriod(p.paid_date))
     .reduce((sum, p) => sum + Number(p.amount), 0);
-  const revenueLastMonth = paidPayments
-    .filter((p) => monthKeyOf(p.paid_date) === lastMonth)
+  const revenuePrevious = paidPayments
+    .filter((p) => inPreviousMonth(p.paid_date))
     .reduce((sum, p) => sum + Number(p.amount), 0);
 
-  const membersAddedThisMonth = allMembers.filter(
-    (m) => monthKeyOf(m.created_at) === thisMonth
-  ).length;
+  const membersAddedInPeriod = allMembers.filter((m) => inPeriod(m.created_at)).length;
 
-  const leadsThisMonth = allLeads.filter((l) => monthKeyOf(l.added_date) === thisMonth);
-  const leadsLastMonth = allLeads.filter((l) => monthKeyOf(l.added_date) === lastMonth);
+  const leadsInPeriod = allLeads.filter((l) => inPeriod(l.added_date));
+  const leadsPrevious = allLeads.filter((l) => inPreviousMonth(l.added_date));
   const conversionRate = (rows: typeof allLeads): number | null =>
-    rows.length === 0 ? null : Math.round((100 * rows.filter((l) => l.stage === "paid").length) / rows.length);
-  const conversionThisMonth = conversionRate(leadsThisMonth);
-  const conversionLastMonth = conversionRate(leadsLastMonth);
+    rows.length === 0
+      ? null
+      : Math.round((100 * rows.filter((l) => l.stage === "paid").length) / rows.length);
+  const conversionInPeriod = conversionRate(leadsInPeriod);
+  const conversionPrevious = period.mode === "month" ? conversionRate(leadsPrevious) : null;
 
-  const royaltyThisMonth = Math.round((revenueThisMonth * ROYALTY_PERCENT) / 100);
+  const royaltyInPeriod = Math.round((revenueInPeriod * ROYALTY_PERCENT) / 100);
 
+  // Per-club breakdown and the lead funnel reflect the selected period —
+  // that's the whole point of picking one. The all-time totals row below
+  // stays all-time regardless, as a fixed anchor.
   const clubs: ClubRow[] = (partners ?? []).map((p) => {
-    const clubLeads = allLeads.filter((l) => l.partner_id === p.id);
-    const clubMembers = allMembers.filter((m) => m.partner_id === p.id);
-    const clubPayments = allPayments.filter((pay) => pay.partner_id === p.id);
+    const clubLeads = allLeads.filter((l) => l.partner_id === p.id && inPeriod(l.added_date));
+    const clubMembers = allMembers.filter((m) => m.partner_id === p.id && inPeriod(m.created_at));
+    const clubPayments = allPayments.filter(
+      (pay) => pay.partner_id === p.id && inPeriod(pay.paid_date)
+    );
     return {
       id: p.id,
       name: p.name,
@@ -74,7 +124,7 @@ export default async function DashboardPage() {
   const stageCounts = STAGES.map((s) => ({
     id: s.id,
     label: s.label,
-    count: allLeads.filter((l) => l.stage === s.id).length,
+    count: leadsInPeriod.filter((l) => l.stage === s.id).length,
   }));
 
   const totals = {
@@ -104,10 +154,15 @@ export default async function DashboardPage() {
           totals={totals}
           stageCounts={stageCounts}
           clubs={clubs}
-          revenue={{ thisMonth: revenueThisMonth, delta: pctChange(revenueThisMonth, revenueLastMonth) }}
-          membersAddedThisMonth={membersAddedThisMonth}
-          conversion={{ thisMonth: conversionThisMonth, lastMonth: conversionLastMonth }}
-          royalty={{ amount: royaltyThisMonth, percent: ROYALTY_PERCENT }}
+          period={period}
+          monthOptions={monthOptions}
+          revenue={{
+            amount: revenueInPeriod,
+            delta: period.mode === "month" ? pctChange(revenueInPeriod, revenuePrevious) : null,
+          }}
+          membersAdded={membersAddedInPeriod}
+          conversion={{ value: conversionInPeriod, previous: conversionPrevious }}
+          royalty={{ amount: royaltyInPeriod, percent: ROYALTY_PERCENT }}
         />
       </main>
     </div>

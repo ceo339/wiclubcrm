@@ -1,4 +1,5 @@
-import { formatPctDelta, formatPointsDelta } from "@/lib/dashboard";
+import Link from "next/link";
+import { formatDateRu, formatPctDelta, formatPointsDelta, monthLabel } from "@/lib/dashboard";
 
 export type ClubRow = {
   id: string;
@@ -8,6 +9,8 @@ export type ClubRow = {
   collected: number;
   pending: number;
 };
+
+export type Period = { mode: "month"; month: string } | { mode: "range"; from: string; to: string };
 
 type StageCount = { id: string; label: string; count: number };
 
@@ -28,51 +31,126 @@ function StatTile({ label, value, delta }: { label: string; value: string; delta
   );
 }
 
+function periodLabel(period: Period): string {
+  return period.mode === "month"
+    ? monthLabel(period.month)
+    : `${formatDateRu(period.from)} – ${formatDateRu(period.to)}`;
+}
+
+function PeriodFilter({ period, monthOptions }: { period: Period; monthOptions: string[] }) {
+  return (
+    <div className="rounded-xl border border-border bg-background p-4">
+      <div className="flex flex-wrap items-center gap-2">
+        {monthOptions.map((m) => {
+          const isActive = period.mode === "month" && period.month === m;
+          return (
+            <Link
+              key={m}
+              href={`/dashboard?month=${m}`}
+              className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
+                isActive
+                  ? "border-foreground bg-foreground text-background"
+                  : "border-border text-ink-2 hover:bg-surface-2"
+              }`}
+            >
+              {monthLabel(m)}
+            </Link>
+          );
+        })}
+      </div>
+      <form action="/dashboard" method="get" className="mt-3 flex flex-wrap items-end gap-2">
+        <label className="flex flex-col text-xs text-muted">
+          С
+          <input
+            type="date"
+            name="from"
+            defaultValue={period.mode === "range" ? period.from : ""}
+            className="mt-1 rounded-lg border border-border bg-background px-2 py-1 text-sm text-foreground"
+          />
+        </label>
+        <label className="flex flex-col text-xs text-muted">
+          По
+          <input
+            type="date"
+            name="to"
+            defaultValue={period.mode === "range" ? period.to : ""}
+            className="mt-1 rounded-lg border border-border bg-background px-2 py-1 text-sm text-foreground"
+          />
+        </label>
+        <button
+          type="submit"
+          className="rounded-lg border border-border px-3 py-1.5 text-sm font-medium text-ink-2 hover:bg-surface-2"
+        >
+          Показать период
+        </button>
+        {period.mode === "range" && (
+          <Link href="/dashboard" className="px-1 py-1.5 text-sm text-muted hover:text-ink-2">
+            Сбросить к месяцам
+          </Link>
+        )}
+      </form>
+    </div>
+  );
+}
+
 export default function DashboardBoard({
   totals,
   stageCounts,
   clubs,
+  period,
+  monthOptions,
   revenue,
-  membersAddedThisMonth,
+  membersAdded,
   conversion,
   royalty,
 }: {
   totals: Totals;
   stageCounts: StageCount[];
   clubs: ClubRow[];
-  revenue: { thisMonth: number; delta: number | null };
-  membersAddedThisMonth: number;
-  conversion: { thisMonth: number | null; lastMonth: number | null };
+  period: Period;
+  monthOptions: string[];
+  revenue: { amount: number; delta: number | null };
+  membersAdded: number;
+  conversion: { value: number | null; previous: number | null };
   royalty: { amount: number; percent: number };
 }) {
   const maxStage = Math.max(1, ...stageCounts.map((s) => s.count));
+  const isRange = period.mode === "range";
 
   return (
     <div className="flex flex-1 flex-col gap-6">
+      <PeriodFilter period={period} monthOptions={monthOptions} />
+
+      <p className="text-sm text-muted">
+        Показатели за: <span className="font-medium text-foreground">{periodLabel(period)}</span>
+      </p>
+
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <StatTile
-          label="Выручка сети (этот месяц)"
-          value={`€${revenue.thisMonth}`}
-          delta={formatPctDelta(revenue.delta)}
+          label="Выручка сети"
+          value={`€${revenue.amount}`}
+          delta={isRange ? "за выбранный период" : formatPctDelta(revenue.delta)}
         />
         <StatTile
-          label="Участниц по сети"
-          value={String(totals.members)}
-          delta={
-            membersAddedThisMonth > 0
-              ? `+${membersAddedThisMonth} в этом месяце`
-              : "никого не добавлено в этом месяце"
-          }
+          label="Новых участниц"
+          value={String(membersAdded)}
+          delta={membersAdded > 0 ? `+${membersAdded} за период` : "не добавлено за период"}
         />
         <StatTile
           label="Роялти к оплате"
           value={`€${royalty.amount}`}
-          delta={`${royalty.percent}% от выручки этого месяца`}
+          delta={`${royalty.percent}% от выручки за период`}
         />
         <StatTile
           label="Лид → участница"
-          value={conversion.thisMonth === null ? "—" : `${conversion.thisMonth}%`}
-          delta={formatPointsDelta(conversion.thisMonth, conversion.lastMonth)}
+          value={conversion.value === null ? "—" : `${conversion.value}%`}
+          delta={
+            isRange
+              ? conversion.value === null
+                ? "нет лидов за период"
+                : "без сравнения для периода"
+              : formatPointsDelta(conversion.value, conversion.previous)
+          }
         />
       </div>
 
@@ -84,7 +162,7 @@ export default function DashboardBoard({
       </div>
 
       <div className="rounded-xl border border-border bg-background p-5">
-        <h2 className="text-sm font-semibold text-foreground">Воронка лидов по сети</h2>
+        <h2 className="text-sm font-semibold text-foreground">Воронка лидов за период</h2>
         <div className="mt-4 flex flex-col gap-3">
           {stageCounts.map((s) => (
             <div key={s.id} className="flex items-center gap-3">
@@ -105,7 +183,7 @@ export default function DashboardBoard({
 
       <div className="rounded-xl border border-border bg-background">
         <div className="border-b border-border px-5 py-4">
-          <h2 className="text-sm font-semibold text-foreground">По клубам</h2>
+          <h2 className="text-sm font-semibold text-foreground">По клубам за период</h2>
         </div>
         {clubs.length === 0 ? (
           <p className="p-5 text-sm text-muted">В сети пока нет ни одного клуба.</p>
