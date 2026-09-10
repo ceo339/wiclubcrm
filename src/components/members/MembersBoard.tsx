@@ -22,17 +22,49 @@ export default function MembersBoard({
 }) {
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState<string>("all");
+  const [productId, setProductId] = useState<string>("all");
+  const [startDate, setStartDate] = useState<string>("all");
   const [showNew, setShowNew] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+
+  const productOptions = useMemo(() => {
+    const seen = new Map<string, string>();
+    initialMembers.forEach((m) => {
+      if (m.product_id && m.product_name) seen.set(m.product_id, m.product_name);
+    });
+    return Array.from(seen.entries())
+      .map(([id, name]) => ({ id, name }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }, [initialMembers]);
+
+  const dateOptions = useMemo(() => {
+    const seen = new Set<string>();
+    initialMembers.forEach((m) => {
+      if (m.start_date) seen.add(m.start_date);
+    });
+    return Array.from(seen).sort();
+  }, [initialMembers]);
+
+  const hasActiveFilters =
+    search.trim() !== "" || status !== "all" || productId !== "all" || startDate !== "all";
+
+  function resetFilters() {
+    setSearch("");
+    setStatus("all");
+    setProductId("all");
+    setStartDate("all");
+  }
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     return initialMembers.filter((m) => {
       if (status !== "all" && m.status !== status) return false;
+      if (productId !== "all" && m.product_id !== productId) return false;
+      if (startDate !== "all" && m.start_date !== startDate) return false;
       if (!q) return true;
       return m.name.toLowerCase().includes(q) || (m.city ?? "").toLowerCase().includes(q);
     });
-  }, [initialMembers, search, status]);
+  }, [initialMembers, search, status, productId, startDate]);
 
   const selected = initialMembers.find((m) => m.id === selectedId) ?? null;
 
@@ -57,6 +89,46 @@ export default function MembersBoard({
             </option>
           ))}
         </select>
+
+        {productOptions.length > 0 && (
+          <select
+            value={productId}
+            onChange={(e) => setProductId(e.target.value)}
+            className="rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-accent focus:ring-1 focus:ring-accent"
+          >
+            <option value="all">Все курсы</option>
+            {productOptions.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.name}
+              </option>
+            ))}
+          </select>
+        )}
+
+        {dateOptions.length > 0 && (
+          <select
+            value={startDate}
+            onChange={(e) => setStartDate(e.target.value)}
+            className="rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-accent focus:ring-1 focus:ring-accent"
+          >
+            <option value="all">Все даты старта</option>
+            {dateOptions.map((d) => (
+              <option key={d} value={d}>
+                {d}
+              </option>
+            ))}
+          </select>
+        )}
+
+        {hasActiveFilters && (
+          <button
+            type="button"
+            onClick={resetFilters}
+            className="text-sm text-muted hover:text-ink-2"
+          >
+            Сбросить фильтр
+          </button>
+        )}
 
         {canEdit && (
           <button
