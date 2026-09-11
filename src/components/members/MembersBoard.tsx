@@ -47,15 +47,29 @@ export default function MembersBoard({
       .sort((a, b) => a.name.localeCompare(b.name));
   }, [initialMembers]);
 
+  // "в участницах, если выбрать мк чувственность, то появился поток с курса
+  // сф0 25.08. А в карточке курса в МК чувственность нет этого старта"
+  // (Anastasiia, 11 сен 2026) — this used to list every start date across
+  // every course regardless of which course was selected above. Now it
+  // only offers dates that actually belong to the selected course.
   const dateOptions = useMemo(() => {
     const seen = new Set<string>();
     initialMembers.forEach((m) => {
       m.enrollments.forEach((e) => {
-        if (e.start_date) seen.add(e.start_date);
+        if (!e.start_date) return;
+        if (productId !== "all" && e.product_id !== productId) return;
+        seen.add(e.start_date);
       });
     });
     return Array.from(seen).sort();
-  }, [initialMembers]);
+  }, [initialMembers, productId]);
+
+  function handleProductChange(id: string) {
+    setProductId(id);
+    // A stream date picked for the previous course rarely belongs to the
+    // new one — reset it rather than silently filtering to zero rows.
+    setStartDate("all");
+  }
 
   const hasActiveFilters =
     search.trim() !== "" || status !== "all" || productId !== "all" || startDate !== "all";
@@ -120,7 +134,7 @@ export default function MembersBoard({
         {productOptions.length > 0 && (
           <select
             value={productId}
-            onChange={(e) => setProductId(e.target.value)}
+            onChange={(e) => handleProductChange(e.target.value)}
             className="rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-accent focus:ring-1 focus:ring-accent"
           >
             <option value="all">{t("allCourses")}</option>

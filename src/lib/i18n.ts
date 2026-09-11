@@ -503,6 +503,10 @@ export const DICT: Record<string, Entry> = {
   },
   errEnterName: { ru: "Укажите имя", bg: "Въведете име" },
   errCommentEmpty: { ru: "Комментарий пустой", bg: "Коментарът е празен" },
+  errContactNoCardForComment: {
+    ru: "У этого контакта пока нет ни заявки, ни карточки участницы для комментария",
+    bg: "Този контакт все още няма запитване или карта на участничка за коментар",
+  },
   errEnterTaskText: { ru: "Укажите текст задачи", bg: "Въведете текст на задачата" },
   errLeadNotFound: { ru: "Лид не найден", bg: "Запитването не е намерено" },
   errNoRowsWithName: { ru: "Не найдено ни одной строки с именем", bg: "Не е намерен нито един ред с име" },
@@ -517,6 +521,7 @@ export const DICT: Record<string, Entry> = {
   allCourses: { ru: "Все курсы", bg: "Всички курсове" },
   allStartDates: { ru: "Все даты старта", bg: "Всички начални дати" },
   countTotalMembers: { ru: "Всего участниц: {count}", bg: "Общо участнички: {count}" },
+  countTotalContacts: { ru: "Всего контактов: {count}", bg: "Общо контакти: {count}" },
   countInCourse: { ru: "На курсе «{course}»: {count}", bg: "В курс „{course}“: {count}" },
   countInStream: { ru: "На курсе «{course}», поток {date}: {count}", bg: "В курс „{course}“, поток {date}: {count}" },
   btnResetFilter: { ru: "Сбросить фильтр", bg: "Изчисти филтъра" },

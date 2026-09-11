@@ -12,9 +12,10 @@ import AppShell from "@/components/shell/AppShell";
  * "Контакты" — a standalone list of every person on file (from both Leads
  * and Members), separate from those two pages: Anastasiia's third approved
  * decision on the Contacts round (11 сен 2026, "Да, нужен отдельный раздел
- * «Контакты»"). Read-only for now — editing a person's shared fields still
- * happens from her Lead/Member card, which mirrors onto this same
- * contacts row (see updateLead/updateMember).
+ * «Контакты»"). A partner account can now edit a contact's shared fields
+ * right from this card too (see updateContact in ./actions) — they still
+ * mirror onto her Lead/Member rows exactly as editing from those cards
+ * already does, so all three stay one person however she's approached.
  */
 export default async function ContactsPage() {
   const profile = await getCurrentProfile();
@@ -26,11 +27,12 @@ export default async function ContactsPage() {
   const { data: contacts, error } = await supabase
     .from("contacts")
     .select(
-      "*, partners(name), leads(id, name, stage, added_date, products(name)), members(id, member_since, member_enrollments(id, status, start_date, products(name)))"
+      "*, partners(name), leads(id, name, stage, added_date, product_id, cohort_start_date, products(name)), members(id, member_since, member_enrollments(id, status, start_date, product_id, products(name)))"
     )
     .order("created_at", { ascending: false });
 
   const localeScope = localeScopeForProfile(profile);
+  const canEdit = !!profile.partner_id;
 
   return (
     <AppShell
@@ -57,6 +59,8 @@ export default async function ContactsPage() {
                 name: string;
                 stage: string;
                 added_date: string;
+                product_id: string | null;
+                cohort_start_date: string | null;
                 products?: { name: string } | null;
               }[];
               members?: {
@@ -66,6 +70,7 @@ export default async function ContactsPage() {
                   id: string;
                   status: string;
                   start_date: string | null;
+                  product_id: string | null;
                   products?: { name: string } | null;
                 }[];
               }[];
@@ -74,6 +79,7 @@ export default async function ContactsPage() {
             const enrollments = (raw.members ?? []).flatMap((m) =>
               (m.member_enrollments ?? []).map((e) => ({
                 id: e.id,
+                product_id: e.product_id,
                 product_name: e.products?.name ?? null,
                 status: e.status,
                 start_date: e.start_date,
@@ -89,12 +95,15 @@ export default async function ContactsPage() {
                 name: l.name,
                 stage: l.stage,
                 added_date: l.added_date,
+                product_id: l.product_id,
                 product_name: l.products?.name ?? null,
+                cohort_start_date: l.cohort_start_date,
               })),
               enrollments,
             };
           })}
           isHq={profile.role === "hq"}
+          canEdit={canEdit}
         />
       )}
     </AppShell>

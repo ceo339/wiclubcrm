@@ -5,11 +5,16 @@ export type ContactLead = {
   name: string;
   stage: string;
   added_date: string;
+  product_id: string | null;
   product_name: string | null;
+  /** The course/stream this заявка was offered, if one was chosen — used
+   * for the "поток" filter (same field as leads.cohort_start_date). */
+  cohort_start_date: string | null;
 };
 
 export type ContactEnrollment = {
   id: string;
+  product_id: string | null;
   product_name: string | null;
   status: string;
   start_date: string | null;

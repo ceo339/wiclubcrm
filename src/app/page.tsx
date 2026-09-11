@@ -304,6 +304,16 @@ export default async function Home({
 
   const enrollmentsInPeriod = clubEnrollments.filter((e) => inPeriod(period, enrollmentAttributionDate(e)));
 
+  // "В июле был 1 активный курс, почему на главной пишется, что 2?"
+  // (Anastasiia, 11 сен 2026) — this tile used to just count every course
+  // the club has ever added (products.length), regardless of the selected
+  // period. Now it counts distinct courses that actually had activity
+  // (an enrollment starting) in the selected period, same rows as
+  // "Участницы по продуктам" above.
+  const activeCoursesCount = new Set(
+    enrollmentsInPeriod.map((e) => e.product_id).filter((id): id is string => !!id)
+  ).size;
+
   // See the HQ branch above — period-scoped like everything else on the page.
   const totals = {
     leads: clubLeads.filter((l) => inPeriod(period, l.added_date)).length,
@@ -336,7 +346,7 @@ export default async function Home({
     >
       <DashboardBoard
         totals={totals}
-        fourthTile={{ labelKey: "statCourses", value: String((products ?? []).length), deltaKey: "deltaActiveCourses" }}
+        fourthTile={{ labelKey: "statCourses", value: String(activeCoursesCount), deltaKey: "deltaActiveCourses" }}
         funnel={metrics.funnel}
         declinedCount={metrics.declinedCount}
         sourceConversion={metrics.sourceConversion}

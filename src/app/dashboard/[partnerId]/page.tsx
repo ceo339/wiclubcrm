@@ -89,6 +89,13 @@ export default async function ClubDashboardPage({
 
   const enrollmentsInPeriod = clubEnrollments.filter((e) => inPeriod(period, enrollmentAttributionDate(e)));
 
+  // See src/app/page.tsx — same fix, "В июле был 1 активный курс, почему на
+  // главной пишется, что 2?" (Anastasiia, 11 сен 2026): count distinct
+  // courses with real activity in the period, not every course ever added.
+  const activeCoursesCount = new Set(
+    enrollmentsInPeriod.map((e) => e.product_id).filter((id): id is string => !!id)
+  ).size;
+
   // See src/app/page.tsx — period-scoped like everything else on the page.
   const totals = {
     leads: clubLeads.filter((l) => inPeriod(period, l.added_date)).length,
@@ -118,7 +125,7 @@ export default async function ClubDashboardPage({
     >
       <DashboardBoard
         totals={totals}
-        fourthTile={{ labelKey: "statCourses", value: String((products ?? []).length), deltaKey: "deltaActiveCourses" }}
+        fourthTile={{ labelKey: "statCourses", value: String(activeCoursesCount), deltaKey: "deltaActiveCourses" }}
         funnel={metrics.funnel}
         declinedCount={metrics.declinedCount}
         sourceConversion={metrics.sourceConversion}

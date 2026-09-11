@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentProfile } from "@/lib/auth";
 import { currentMonthYear, enrollmentIsDueForCompletion, STATUSES } from "@/lib/members";
+import { todayIso } from "@/lib/payments";
 import { findOrCreateContact, loadContactHistory, type ContactHistory } from "@/lib/server/contacts";
 import type { Tables } from "@/types/database";
 
@@ -17,6 +18,52 @@ function normalizeStatus(raw: string | undefined | null): string {
 function parsePrice(raw: FormDataEntryValue | null): number {
   const value = Number(String(raw ?? "0").replace(",", "."));
   return Number.isFinite(value) ? value : 0;
+}
+
+type SupabaseServerClient = Awaited<ReturnType<typeof createClient>>;
+
+/**
+ * "у екатерины есть оплата. но она не отображается во вкладке оплаты"
+ * (Anastasiia, 11 сен 2026) — marking a course "Оплачено"/"Завершён" right
+ * on a member's own card has always recorded the price on the enrollment
+ * itself (member_enrollments.price/status), but that never created the
+ * matching row in `payments` — the table the Оплаты tab and every revenue/
+ * royalty figure on the dashboard actually reads from. This mirrors the
+ * same idempotent insert updateLeadStage already does when a lead reaches
+ * "Оплата": skip when there's nothing to record (no price) or a payment for
+ * this exact enrollment already exists, otherwise insert one dated today.
+ */
+async function syncEnrollmentPayment(
+  supabase: SupabaseServerClient,
+  params: {
+    partnerId: string;
+    memberId: string;
+    enrollmentId: string;
+    productId: string | null;
+    price: number;
+    status: string;
+  }
+): Promise<void> {
+  const { partnerId, memberId, enrollmentId, productId, price, status } = params;
+  if (status !== "sPaid" && status !== "sCompleted") return;
+  if (price <= 0) return;
+
+  const { data: existingPayment } = await supabase
+    .from("payments")
+    .select("id")
+    .eq("enrollment_id", enrollmentId)
+    .maybeSingle();
+  if (existingPayment) return;
+
+  await supabase.from("payments").insert({
+    partner_id: partnerId,
+    member_id: memberId,
+    enrollment_id: enrollmentId,
+    product_id: productId,
+    amount: price,
+    status: "paid",
+    paid_date: todayIso(),
+  });
 }
 
 /**
@@ -88,27 +135,42 @@ export async function createMember(formData: FormData): Promise<ActionResult> {
     const price = parsePrice(formData.get("price"));
     const paid = status === "sPaid" || status === "sCompleted";
 
-    const { error: enrollError } = await supabase.from("member_enrollments").insert({
-      partner_id: profile.partner_id,
-      member_id: member.id,
-      product_id: verifiedProductId,
-      start_date: startDate,
-      price,
-      status,
-      paid,
-      attended: [],
-    });
+    const { data: enrollment, error: enrollError } = await supabase
+      .from("member_enrollments")
+      .insert({
+        partner_id: profile.partner_id,
+        member_id: member.id,
+        product_id: verifiedProductId,
+        start_date: startDate,
+        price,
+        status,
+        paid,
+        attended: [],
+      })
+      .select("id")
+      .single();
     // The member itself was created successfully either way — an enrollment
     // failure here isn't fatal, just means she'd need to add the course
     // from the card afterward. Surface it rather than swallowing it though.
-    if (enrollError) {
+    if (enrollError || !enrollment) {
       revalidatePath("/members");
-      return { error: enrollError.message };
+      return { error: enrollError?.message ?? "errGeneric" };
     }
+
+    await syncEnrollmentPayment(supabase, {
+      partnerId: profile.partner_id,
+      memberId: member.id,
+      enrollmentId: enrollment.id,
+      productId: verifiedProductId,
+      price,
+      status,
+    });
   }
 
   revalidatePath("/members");
   revalidatePath("/contacts");
+  revalidatePath("/payments");
+  revalidatePath("/");
   return { error: null };
 }
 
@@ -238,21 +300,36 @@ export async function addEnrollment(memberId: string, formData: FormData): Promi
   const price = parsePrice(formData.get("price"));
   const paid = status === "sPaid" || status === "sCompleted";
 
-  const { error } = await supabase.from("member_enrollments").insert({
-    partner_id: profile.partner_id,
-    member_id: memberId,
-    product_id: verifiedProductId,
-    start_date: startDate,
+  const { data: enrollment, error } = await supabase
+    .from("member_enrollments")
+    .insert({
+      partner_id: profile.partner_id,
+      member_id: memberId,
+      product_id: verifiedProductId,
+      start_date: startDate,
+      price,
+      status,
+      paid,
+      attended: [],
+    })
+    .select("id")
+    .single();
+
+  if (error || !enrollment) return { error: error?.message ?? "errGeneric" };
+
+  await syncEnrollmentPayment(supabase, {
+    partnerId: profile.partner_id,
+    memberId,
+    enrollmentId: enrollment.id,
+    productId: verifiedProductId,
     price,
     status,
-    paid,
-    attended: [],
   });
-
-  if (error) return { error: error.message };
 
   revalidatePath("/members");
   revalidatePath("/attendance", "layout");
+  revalidatePath("/payments");
+  revalidatePath("/");
   return { error: null };
 }
 
@@ -267,6 +344,12 @@ export async function updateEnrollment(enrollmentId: string, formData: FormData)
   const paid = status === "sPaid" || status === "sCompleted";
 
   const supabase = await createClient();
+  const { data: existing } = await supabase
+    .from("member_enrollments")
+    .select("member_id, product_id")
+    .eq("id", enrollmentId)
+    .maybeSingle();
+
   const { error } = await supabase
     .from("member_enrollments")
     .update({ status, start_date: startDate, price, paid })
@@ -274,8 +357,21 @@ export async function updateEnrollment(enrollmentId: string, formData: FormData)
 
   if (error) return { error: error.message };
 
+  if (existing) {
+    await syncEnrollmentPayment(supabase, {
+      partnerId: profile.partner_id,
+      memberId: existing.member_id,
+      enrollmentId,
+      productId: existing.product_id,
+      price,
+      status,
+    });
+  }
+
   revalidatePath("/members");
   revalidatePath("/attendance", "layout");
+  revalidatePath("/payments");
+  revalidatePath("/");
   return { error: null };
 }
 
