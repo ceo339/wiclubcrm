@@ -1,13 +1,13 @@
 "use client";
 
-import { useActionState, useMemo, useState } from "react";
-import { createLead, type ActionResult } from "@/app/leads/actions";
-import { COUNTRIES, GENERIC_PLANS, SOURCES, sourceLabel } from "@/lib/leads";
+import { useMemo, useRef, useState, useTransition } from "react";
+import { createLead, type CreateLeadResult } from "@/app/leads/actions";
+import { COUNTRIES, GENERIC_PLANS, SOURCES, sourceLabel, stageLabel } from "@/lib/leads";
 import Money from "@/components/currency/Money";
 import { useLocale } from "@/components/i18n/LocaleProvider";
 import type { Tables } from "@/types/database";
 
-const initialState: ActionResult = { error: null };
+const initialState: CreateLeadResult = { error: null };
 
 type Product = Tables<"products">;
 type Cohort = Tables<"product_cohorts">;
@@ -27,14 +27,27 @@ export default function NewLeadModal({
   onClose: () => void;
 }) {
   const { locale, t } = useLocale();
-  const [state, formAction, pending] = useActionState(
-    async (_prev: ActionResult, formData: FormData) => {
+  const formRef = useRef<HTMLFormElement>(null);
+  const [state, setState] = useState<CreateLeadResult>(initialState);
+  const [pending, startTransition] = useTransition();
+
+  // Anastasiia's rule: block a new lead that duplicates an existing one
+  // (email first, then phone — see createLead/lib/leads.ts), but let her
+  // add it anyway once she's seen the match, by resubmitting the same form
+  // with a hidden force=true field.
+  function submit(force: boolean) {
+    if (!formRef.current) return;
+    const formData = new FormData(formRef.current);
+    formData.set("force", force ? "true" : "false");
+    startTransition(async () => {
       const result = await createLead(formData);
-      if (!result.error) onClose();
-      return result;
-    },
-    initialState
-  );
+      if (!result.error) {
+        onClose();
+        return;
+      }
+      setState(result);
+    });
+  }
 
   const [country, setCountry] = useState("");
   const [city, setCity] = useState("");
@@ -95,7 +108,11 @@ export default function NewLeadModal({
       onClick={onClose}
     >
       <form
-        action={formAction}
+        ref={formRef}
+        onSubmit={(e) => {
+          e.preventDefault();
+          submit(false);
+        }}
         onClick={(e) => e.stopPropagation()}
         className="max-h-[90vh] w-full max-w-sm overflow-y-auto rounded-2xl border border-border bg-background p-6 shadow-lg"
       >
@@ -238,9 +255,25 @@ export default function NewLeadModal({
         </div>
 
         {state.error && (
-          <p className="mt-3 rounded-md bg-accent/10 px-3 py-2 text-sm text-accent-strong">
-            {t(state.error)}
-          </p>
+          <div className="mt-3 rounded-md bg-accent/10 px-3 py-2 text-sm text-accent-strong">
+            <p>{t(state.error)}</p>
+            {state.duplicate && (
+              <>
+                <p className="mt-1 text-ink-2">
+                  {t("duplicateExistingLead", { name: state.duplicate.name })} ·{" "}
+                  {stageLabel(state.duplicate.stage, locale)}
+                </p>
+                <button
+                  type="button"
+                  disabled={pending}
+                  onClick={() => submit(true)}
+                  className="mt-2 rounded-lg border border-accent-strong px-3 py-1.5 text-xs font-medium text-accent-strong hover:bg-accent/10 disabled:opacity-50"
+                >
+                  {t("btnAddAnyway")}
+                </button>
+              </>
+            )}
+          </div>
         )}
 
         <div className="mt-5 flex justify-end gap-2">

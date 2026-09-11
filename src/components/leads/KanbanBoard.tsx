@@ -83,16 +83,19 @@ export default function KanbanBoard({
               key={stage.id}
               onDragOver={(e) => canEdit && e.preventDefault()}
               onDrop={() => handleDrop(stage.id)}
-              className="flex w-72 shrink-0 flex-col rounded-xl bg-surface-2 p-3"
+              className="flex w-72 shrink-0 flex-col overflow-hidden rounded-xl border border-border-strong bg-surface-2 shadow-card"
             >
-              <div className="flex flex-wrap items-center gap-x-2 gap-y-1 px-0.5 pb-2.5">
+              {/* Header sits outside the scrolling body below, so it's
+                  always visible — a long column scrolls its own cards
+                  instead of pushing the header off the top of the page. */}
+              <div className="flex flex-wrap items-center gap-x-2 gap-y-1 border-b border-border-strong bg-surface-3 px-3 py-2.5">
                 <span className="text-sm font-medium text-ink-2">{t(stage.labelKey)}</span>
                 {pctReached !== null && (
                   <span className="rounded-full bg-accent-soft px-1.5 py-0.5 text-[11px] font-bold text-accent-strong">
                     {pctReached}%
                   </span>
                 )}
-                <span className="rounded-full bg-surface-3 px-2 py-0.5 text-xs text-muted">
+                <span className="rounded-full bg-background px-2 py-0.5 text-xs text-muted">
                   {stageLeads.length}
                 </span>
                 {stageValue > 0 && (
@@ -101,7 +104,7 @@ export default function KanbanBoard({
                   </span>
                 )}
               </div>
-              <div className="flex min-h-[120px] flex-col gap-2">
+              <div className="flex min-h-[120px] max-h-[65vh] flex-col gap-2 overflow-y-auto p-3">
                 {stageLeads.map((lead) => {
                   const isStale = daysSince(lead.updated_at, now) > STALE_LEAD_DAYS;
                   return (

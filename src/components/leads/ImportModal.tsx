@@ -200,6 +200,8 @@ export default function ImportModal({ onClose }: { onClose: () => void }) {
                 })
               : result.error
               ? t(result.error)
+              : result.duplicatesSkipped
+              ? t("importedCountWithDuplicates", { n: result.imported, d: result.duplicatesSkipped })
               : t("importedCount", { n: result.imported })}
           </p>
         )}

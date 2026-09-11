@@ -5,36 +5,46 @@ import {
   addComment,
   addTask,
   convertLeadToMember,
+  deleteLead,
   getLeadDetail,
   setTaskDone,
   updateLead,
+  updateLeadStage,
   type LeadDetail,
 } from "@/app/leads/actions";
 import {
   COUNTRIES,
   GENERIC_PLANS,
+  STAGES,
   declineReasonLabel,
   sourceLabel,
   stageLabel,
+  type StageId,
 } from "@/lib/leads";
 import Money from "@/components/currency/Money";
 import { useLocale, useT } from "@/components/i18n/LocaleProvider";
 import T from "@/components/i18n/T";
 import SendEmailButton from "@/components/email/SendEmailButton";
+import DeclineModal from "./DeclineModal";
 import type { Lead } from "./types";
 
 export default function LeadDetailModal({
   lead,
   canEdit,
+  isHq,
   onClose,
 }: {
   lead: Lead;
   canEdit: boolean;
+  isHq: boolean;
   onClose: () => void;
 }) {
   const { locale, t } = useLocale();
   const [detail, setDetail] = useState<LeadDetail | null>(null);
   const [editing, setEditing] = useState(false);
+  const [showDeclineModal, setShowDeclineModal] = useState(false);
+  const [stageError, setStageError] = useState<string | null>(null);
+  const [, startStageTransition] = useTransition();
 
   useEffect(() => {
     let cancelled = false;
@@ -51,6 +61,27 @@ export default function LeadDetailModal({
     getLeadDetail(lead.id).then(setDetail);
   }
 
+  function handleStageChange(next: StageId) {
+    if (next === lead.stage) return;
+    setStageError(null);
+    if (next === "declined") {
+      setShowDeclineModal(true);
+      return;
+    }
+    startStageTransition(async () => {
+      const res = await updateLeadStage(lead.id, next);
+      if (res.error) setStageError(res.error);
+    });
+  }
+
+  function handleDeclineConfirm(reason: string, note: string | null) {
+    setShowDeclineModal(false);
+    startStageTransition(async () => {
+      const res = await updateLeadStage(lead.id, "declined", { reason, note });
+      if (res.error) setStageError(res.error);
+    });
+  }
+
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4"
@@ -61,12 +92,27 @@ export default function LeadDetailModal({
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-start justify-between gap-3">
-          <div>
+          <div className="min-w-0 flex-1">
             <h3 className="text-base font-semibold text-foreground">{lead.name}</h3>
-            <p className="mt-0.5 text-xs text-muted">
-              {lead.source ? sourceLabel(lead.source, locale) : "—"} ·{" "}
-              {stageLabel(lead.stage, locale)}
-            </p>
+            <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted">
+              <span>{lead.source ? sourceLabel(lead.source, locale) : "—"}</span>
+              <span>·</span>
+              {canEdit ? (
+                <select
+                  value={lead.stage}
+                  onChange={(e) => handleStageChange(e.target.value as StageId)}
+                  className="rounded-md border border-border bg-background px-1.5 py-1 text-xs font-medium text-ink-2 outline-none focus:border-accent focus:ring-1 focus:ring-accent"
+                >
+                  {STAGES.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {t(s.labelKey)}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <span>{stageLabel(lead.stage, locale)}</span>
+              )}
+            </div>
           </div>
           <button
             type="button"
@@ -77,16 +123,29 @@ export default function LeadDetailModal({
             ×
           </button>
         </div>
+        {stageError && (
+          <p className="mt-2 rounded-md bg-accent/10 px-3 py-2 text-xs text-accent-strong">
+            {t(stageError)}
+          </p>
+        )}
 
         {editing ? (
           <EditForm lead={lead} onCancel={() => setEditing(false)} onSaved={() => setEditing(false)} />
         ) : (
-          <ReadView lead={lead} canEdit={canEdit} onEdit={() => setEditing(true)} />
+          <ReadView lead={lead} canEdit={canEdit} isHq={isHq} onEdit={() => setEditing(true)} onDeleted={onClose} />
         )}
 
         <CommentsSection leadId={lead.id} detail={detail} canEdit={canEdit} onChanged={refreshDetail} />
         <TasksSection leadId={lead.id} detail={detail} canEdit={canEdit} onChanged={refreshDetail} />
       </div>
+
+      {showDeclineModal && (
+        <DeclineModal
+          leadName={lead.name}
+          onCancel={() => setShowDeclineModal(false)}
+          onConfirm={handleDeclineConfirm}
+        />
+      )}
     </div>
   );
 }
@@ -94,11 +153,15 @@ export default function LeadDetailModal({
 function ReadView({
   lead,
   canEdit,
+  isHq,
   onEdit,
+  onDeleted,
 }: {
   lead: Lead;
   canEdit: boolean;
+  isHq: boolean;
   onEdit: () => void;
+  onDeleted: () => void;
 }) {
   const { locale, t } = useLocale();
   const plan = lead.plan ? GENERIC_PLANS.find((p) => p.id === lead.plan) : null;
@@ -165,7 +228,68 @@ function ReadView({
           <SendEmailButton entityType="lead" entityId={lead.id} email={lead.email} />
         </div>
       )}
+      {isHq && (
+        <div className="mt-4">
+          <DeleteLeadButton leadId={lead.id} onDeleted={onDeleted} />
+        </div>
+      )}
     </>
+  );
+}
+
+/**
+ * Only ever rendered for hq accounts (see the `isHq` check in ReadView) —
+ * per Anastasiia's decision, deleting a lead is deliberately not something
+ * a club's own partner login can do, only "Управляющая компания". Backed
+ * by the errOnlyHqCanDelete check in deleteLead() and the leads_delete_hq
+ * RLS policy, not just this UI condition.
+ */
+function DeleteLeadButton({ leadId, onDeleted }: { leadId: string; onDeleted: () => void }) {
+  const t = useT();
+  const [confirming, setConfirming] = useState(false);
+  const [pending, startTransition] = useTransition();
+  const [error, setError] = useState<string | null>(null);
+
+  if (!confirming) {
+    return (
+      <button
+        type="button"
+        onClick={() => setConfirming(true)}
+        className="rounded-lg border border-accent-strong px-3 py-1.5 text-xs font-medium text-accent-strong hover:bg-accent/10"
+      >
+        {t("btnDeleteLead")}
+      </button>
+    );
+  }
+
+  return (
+    <div className="flex flex-col gap-1.5">
+      <p className="text-xs font-medium text-accent-strong">{t("confirmDeleteLead")}</p>
+      <div className="flex gap-2">
+        <button
+          type="button"
+          disabled={pending}
+          onClick={() =>
+            startTransition(async () => {
+              const res = await deleteLead(leadId);
+              if (res.error) setError(res.error);
+              else onDeleted();
+            })
+          }
+          className="rounded-lg bg-accent-strong px-3 py-1.5 text-xs font-medium text-white disabled:opacity-50"
+        >
+          {pending ? "..." : t("yes")}
+        </button>
+        <button
+          type="button"
+          onClick={() => setConfirming(false)}
+          className="rounded-lg border border-border px-3 py-1.5 text-xs font-medium text-ink-2 hover:bg-surface-2"
+        >
+          {t("cancel")}
+        </button>
+      </div>
+      {error && <p className="text-xs text-accent-strong">{t(error)}</p>}
+    </div>
   );
 }
 
