@@ -96,14 +96,25 @@ export function formatPointsDelta(
 
 // ---------------------------------------------------------------------------
 // Period selection — shared by the network dashboard and each club's own
-// dashboard. A period is either one calendar month, or an arbitrary custom
-// "from/to" date range. Only month mode has a well-defined "previous period"
-// to compare against.
+// dashboard. A period is one calendar month, one calendar year ("Год" —
+// Anastasiia, 11 сен 2026: "нужно добавить еще переключение «год» и там все
+// данные за 12 мес"), or an arbitrary custom "from/to" date range. Only
+// month mode has a well-defined "previous period" to compare against — a
+// year or a custom range has no single obvious predecessor, same reasoning
+// as range mode already had.
 
-export type Period = { mode: "month"; month: string } | { mode: "range"; from: string; to: string };
+export type Period =
+  | { mode: "month"; month: string }
+  | { mode: "year"; year: string }
+  | { mode: "range"; from: string; to: string };
+
+export function isValidYearKey(value: string): boolean {
+  return /^\d{4}$/.test(value);
+}
 
 export function parsePeriodParams(params: {
   month?: string;
+  year?: string;
   from?: string;
   to?: string;
 }): Period {
@@ -112,23 +123,32 @@ export function parsePeriodParams(params: {
   if (rangeFrom && rangeTo && rangeFrom <= rangeTo) {
     return { mode: "range", from: rangeFrom, to: rangeTo };
   }
+  if (params.year && isValidYearKey(params.year)) {
+    return { mode: "year", year: params.year };
+  }
   const month = params.month && isValidMonthKey(params.month) ? params.month : currentMonthKey();
   return { mode: "month", month };
 }
 
 export function inPeriod(period: Period, dateStr: string): boolean {
-  return period.mode === "range"
-    ? dateStr.slice(0, 10) >= period.from && dateStr.slice(0, 10) <= period.to
-    : monthKeyOf(dateStr) === period.month;
+  if (period.mode === "range") {
+    return dateStr.slice(0, 10) >= period.from && dateStr.slice(0, 10) <= period.to;
+  }
+  if (period.mode === "year") {
+    return dateStr.slice(0, 4) === period.year;
+  }
+  return monthKeyOf(dateStr) === period.month;
 }
 
-/** False for every row in range mode — a custom range has no "previous period". */
+/** False for every row in range/year mode — only a calendar month has a
+ * well-defined single "previous period" to compare against. */
 export function inPreviousMonth(period: Period, dateStr: string): boolean {
   if (period.mode !== "month") return false;
   return monthKeyOf(dateStr) === shiftMonthKey(period.month, -1);
 }
 
 export function periodLabel(period: Period, locale: Locale): string {
+  if (period.mode === "year") return period.year;
   return period.mode === "month"
     ? monthLabel(period.month, locale)
     : `${formatDateRu(period.from)} – ${formatDateRu(period.to)}`;
@@ -189,6 +209,20 @@ export function monthsWithActivity(
   enrollments.forEach((e) => set.add(monthKeyOf(enrollmentAttributionDate(e))));
   payments.forEach((p) => set.add(monthKeyOf(paymentAttributionDate(p))));
   return [...set].sort().reverse().slice(0, limit);
+}
+
+/** Same idea as monthsWithActivity, one calendar year at a time — the
+ * button list behind the dashboard's "Год" tab. */
+export function yearsWithActivity(
+  leads: { added_date: string }[],
+  enrollments: { start_date: string | null; created_at: string }[],
+  payments: PaymentContext[]
+): string[] {
+  const set = new Set<string>([currentMonthKey().slice(0, 4)]);
+  leads.forEach((l) => set.add(l.added_date.slice(0, 4)));
+  enrollments.forEach((e) => set.add(enrollmentAttributionDate(e).slice(0, 4)));
+  payments.forEach((p) => set.add(paymentAttributionDate(p).slice(0, 4)));
+  return [...set].sort().reverse();
 }
 
 export type MonthlyRevenue = { monthKey: string; amount: number };

@@ -7,6 +7,11 @@ export type Payment = Tables<"payments"> & {
   /** Set only when this payment has no member yet (a lead that reached
    * "Оплата" before being converted) — display falls back to this name. */
   lead_name: string | null;
+  /** Same course-start attribution used everywhere else on the dashboard —
+   * see paymentAttributionDate in lib/dashboard — so the Оплаты tab can be
+   * filtered "по периодам" too (Anastasiia, 11 сен 2026). */
+  enrollment: { start_date: string | null; created_at: string } | null;
+  lead: { cohort_start_date: string | null; added_date: string } | null;
 };
 
 /**

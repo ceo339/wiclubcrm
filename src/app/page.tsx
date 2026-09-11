@@ -17,6 +17,7 @@ import {
   monthlyRevenue,
   monthsWithActivity,
   parsePeriodParams,
+  yearsWithActivity,
 } from "@/lib/dashboard";
 import CurrencySwitcher from "@/components/currency/CurrencySwitcher";
 import CurrencyScope from "@/components/currency/CurrencyScope";
@@ -48,7 +49,7 @@ const ROLE_LABEL_KEYS: Record<string, string> = {
 export default async function Home({
   searchParams,
 }: {
-  searchParams: Promise<{ month?: string; from?: string; to?: string }>;
+  searchParams: Promise<{ month?: string; year?: string; from?: string; to?: string }>;
 }) {
   const profile = await getCurrentProfile();
   if (!profile) redirect("/login");
@@ -145,6 +146,7 @@ export default async function Home({
 
     const period = parsePeriodParams(params);
     const monthOptions = monthsWithActivity(allLeads, allEnrollments, allPayments);
+    const yearOptions = yearsWithActivity(allLeads, allEnrollments, allPayments);
     const metrics = computeCoreMetrics({ leads: allLeads, enrollments: allEnrollments, payments: allPayments, period });
 
     // "Участницы по продуктам" — same start-date attribution as everywhere
@@ -176,11 +178,20 @@ export default async function Home({
       };
     });
 
+    // "Если на главной я выбрала август, то данные все за этот период"
+    // (Anastasiia, 11 сен 2026) — these three now follow the selected
+    // period like everything else on the page, not the account's all-time
+    // history (totals.members is kept for the Totals type but no longer
+    // displayed — see DashboardBoard, "Участницы" now shows membersAdded).
     const totals = {
-      leads: allLeads.length,
+      leads: allLeads.filter((l) => inPeriod(period, l.added_date)).length,
       members: allMembers.length,
-      collected: allPayments.filter((p) => p.status === "paid").reduce((sum, p) => sum + Number(p.amount), 0),
-      pending: allPayments.filter((p) => p.status === "pending").reduce((sum, p) => sum + Number(p.amount), 0),
+      collected: allPayments
+        .filter((p) => p.status === "paid" && inPeriod(period, paymentAttributionDate(p)))
+        .reduce((sum, p) => sum + Number(p.amount), 0),
+      pending: allPayments
+        .filter((p) => p.status === "pending" && inPeriod(period, paymentAttributionDate(p)))
+        .reduce((sum, p) => sum + Number(p.amount), 0),
     };
 
     return (
@@ -213,6 +224,7 @@ export default async function Home({
           tasksPanel={tasksPanel}
           period={period}
           monthOptions={monthOptions}
+          yearOptions={yearOptions}
           basePath="/"
           revenue={metrics.revenue}
           revenueTrend={monthlyRevenue(allPayments)}
@@ -287,15 +299,21 @@ export default async function Home({
 
   const period = parsePeriodParams(params);
   const monthOptions = monthsWithActivity(clubLeads, clubEnrollments, clubPayments);
+  const yearOptions = yearsWithActivity(clubLeads, clubEnrollments, clubPayments);
   const metrics = computeCoreMetrics({ leads: clubLeads, enrollments: clubEnrollments, payments: clubPayments, period });
 
   const enrollmentsInPeriod = clubEnrollments.filter((e) => inPeriod(period, enrollmentAttributionDate(e)));
 
+  // See the HQ branch above — period-scoped like everything else on the page.
   const totals = {
-    leads: clubLeads.length,
+    leads: clubLeads.filter((l) => inPeriod(period, l.added_date)).length,
     members: clubMembers.length,
-    collected: clubPayments.filter((p) => p.status === "paid").reduce((sum, p) => sum + Number(p.amount), 0),
-    pending: clubPayments.filter((p) => p.status === "pending").reduce((sum, p) => sum + Number(p.amount), 0),
+    collected: clubPayments
+      .filter((p) => p.status === "paid" && inPeriod(period, paymentAttributionDate(p)))
+      .reduce((sum, p) => sum + Number(p.amount), 0),
+    pending: clubPayments
+      .filter((p) => p.status === "pending" && inPeriod(period, paymentAttributionDate(p)))
+      .reduce((sum, p) => sum + Number(p.amount), 0),
   };
 
   return (
@@ -325,6 +343,7 @@ export default async function Home({
         tasksPanel={tasksPanel}
         period={period}
         monthOptions={monthOptions}
+        yearOptions={yearOptions}
         basePath="/"
         revenue={metrics.revenue}
         revenueTrend={monthlyRevenue(clubPayments)}

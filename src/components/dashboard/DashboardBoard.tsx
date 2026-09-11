@@ -76,39 +76,65 @@ function StatTile({
   );
 }
 
-/** Builds the "?month=..." / "?from=...&to=..." query string for the given
- * period, so links to a club's own dashboard keep the currently selected
- * period instead of resetting it. */
+/** Builds the "?month=..." / "?year=..." / "?from=...&to=..." query string
+ * for the given period, so links to a club's own dashboard keep the
+ * currently selected period instead of resetting it. */
 function periodQuery(period: Period): string {
-  return period.mode === "month" ? `?month=${period.month}` : `?from=${period.from}&to=${period.to}`;
+  if (period.mode === "month") return `?month=${period.month}`;
+  if (period.mode === "year") return `?year=${period.year}`;
+  return `?from=${period.from}&to=${period.to}`;
 }
 
 function PeriodFilter({
   period,
   monthOptions,
+  yearOptions,
   basePath,
 }: {
   period: Period;
   monthOptions: string[];
+  /** "нужно добавить еще переключение «год» и там все данные за 12 мес"
+   * (Anastasiia, 11 сен 2026) — the button list behind the "Год" tab. */
+  yearOptions: string[];
   basePath: string;
 }) {
   const { locale, t } = useLocale();
+  // Which tab is showing is pure local UI state (not part of the URL) — it
+  // only decides which button row is visible; clicking an actual month or
+  // year button is what navigates and changes real data.
+  const [tab, setTab] = useState<"month" | "year">(period.mode === "year" ? "year" : "month");
+  const tabOptions = tab === "month" ? monthOptions : yearOptions;
   return (
     <div className="rounded-xl border border-border bg-background shadow-card p-4">
+      <div className="mb-2 inline-flex items-center gap-0.5 rounded-lg border border-border p-0.5">
+        {(["month", "year"] as const).map((tb) => (
+          <button
+            key={tb}
+            type="button"
+            onClick={() => setTab(tb)}
+            className={`rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
+              tab === tb ? "bg-surface-2 text-foreground" : "text-muted hover:text-ink-2"
+            }`}
+          >
+            {t(tb === "month" ? "periodTabMonths" : "periodTabYear")}
+          </button>
+        ))}
+      </div>
       <div className="flex flex-wrap items-center gap-2">
-        {monthOptions.map((m) => {
-          const isActive = period.mode === "month" && period.month === m;
+        {tabOptions.map((key) => {
+          const isActive =
+            tab === "month" ? period.mode === "month" && period.month === key : period.mode === "year" && period.year === key;
           return (
             <Link
-              key={m}
-              href={`${basePath}?month=${m}`}
+              key={key}
+              href={tab === "month" ? `${basePath}?month=${key}` : `${basePath}?year=${key}`}
               className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
                 isActive
                   ? "border-foreground bg-foreground text-background"
                   : "border-border text-ink-2 hover:bg-surface-2"
               }`}
             >
-              {monthLabel(m, locale)}
+              {tab === "month" ? monthLabel(key, locale) : key}
             </Link>
           );
         })}
@@ -495,6 +521,7 @@ export default function DashboardBoard({
   tasksPanel,
   period,
   monthOptions,
+  yearOptions,
   basePath,
   revenue,
   revenueTrend,
@@ -529,6 +556,8 @@ export default function DashboardBoard({
   tasksPanel?: ReactNode;
   period: Period;
   monthOptions: string[];
+  /** Button list behind the dashboard's "Год" tab — see PeriodFilter. */
+  yearOptions: string[];
   /** "/dashboard" for the network view, "/dashboard/<id>" for a club's own. */
   basePath: string;
   revenue: { amount: number; delta: number | null };
@@ -547,12 +576,15 @@ export default function DashboardBoard({
 }) {
   const { locale, t } = useLocale();
   const maxFunnel = Math.max(1, ...funnel.map((s) => s.count));
-  const isRange = period.mode === "range";
+  // Only a calendar month has a well-defined single "previous period" to
+  // compare against — a custom range or a whole year doesn't, same as
+  // range mode already handled before "Год" existed.
+  const noPrevComparison = period.mode !== "month";
   const qs = periodQuery(period);
 
   return (
     <div className="flex flex-1 flex-col gap-6">
-      <PeriodFilter period={period} monthOptions={monthOptions} basePath={basePath} />
+      <PeriodFilter period={period} monthOptions={monthOptions} yearOptions={yearOptions} basePath={basePath} />
 
       {(tasksPanel || staleLeads || decliningClubs) && (
         <AttentionGrid>
@@ -570,17 +602,13 @@ export default function DashboardBoard({
         <StatTile
           label={t("statRevenue")}
           value={<Money amountEur={revenue.amount} />}
-          delta={isRange ? t("deltaForPeriod") : formatPctDelta(revenue.delta, locale)}
+          delta={noPrevComparison ? t("deltaForPeriod") : formatPctDelta(revenue.delta, locale)}
           spark={{ values: revenueTrend.map((m) => m.amount), color: "var(--accent)" }}
         />
         <StatTile
           label={t("statMembers")}
-          value={String(totals.members)}
-          delta={
-            membersAdded > 0
-              ? t("deltaMembersAdded", { n: membersAdded })
-              : t("deltaMembersNone")
-          }
+          value={String(membersAdded)}
+          delta={t("deltaForPeriod")}
           spark={{ values: memberTrend.map((m) => m.value), color: "var(--ink-2)" }}
         />
         <StatTile
@@ -592,7 +620,7 @@ export default function DashboardBoard({
           label={t("statConversion")}
           value={conversion.value === null ? "—" : `${conversion.value}%`}
           delta={
-            isRange
+            noPrevComparison
               ? conversion.value === null
                 ? t("deltaNoLeadsInPeriod")
                 : t("deltaNoRangeComparison")
@@ -602,17 +630,23 @@ export default function DashboardBoard({
         />
       </div>
 
+      {/* "Если на главной я выбрала август, то данные все за этот период"
+         (Anastasiia, 11 сен 2026) — these four used to be genuine all-time
+         totals, unaffected by the period filter above; that read as "the
+         month switcher does nothing" since nothing here ever changed. Now
+         period-scoped like everything else on the page (fourthTile stays
+         all-time on purpose — a club/course count isn't dated). */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <StatTile label={t("statLeadsTotal")} value={String(totals.leads)} delta={t("deltaAllTime")} />
+        <StatTile label={t("statLeadsTotal")} value={String(totals.leads)} delta={t("deltaForPeriod")} />
         <StatTile
           label={t("statCollectedTotal")}
           value={<Money amountEur={totals.collected} />}
-          delta={t("deltaAllTime")}
+          delta={t("deltaForPeriod")}
         />
         <StatTile
           label={t("statPending")}
           value={<Money amountEur={totals.pending} />}
-          delta={t("deltaNotPaidYet")}
+          delta={t("deltaForPeriod")}
         />
         <StatTile label={t(fourthTile.labelKey)} value={fourthTile.value} delta={t(fourthTile.deltaKey)} />
       </div>

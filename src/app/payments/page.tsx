@@ -20,7 +20,9 @@ export default async function PaymentsPage() {
   // RLS scopes this to the caller's partner_id (or every partner for hq).
   const { data: payments, error } = await supabase
     .from("payments")
-    .select("*, partners(name), members(name), products(name), leads(name)")
+    .select(
+      "*, partners(name), members(name), products(name), leads(name, cohort_start_date, added_date), member_enrollments(start_date, created_at)"
+    )
     .order("paid_date", { ascending: false });
 
   const canEdit = !!profile.partner_id;
@@ -85,6 +87,11 @@ export default async function PaymentsPage() {
             // before she's been converted to a member yet — see
             // updateLeadStage in app/leads/actions.
             lead_name: (p as { leads?: { name: string } | null }).leads?.name ?? null,
+            // Course-start attribution — see paymentAttributionDate in
+            // lib/dashboard (same pattern as src/app/page.tsx).
+            enrollment: (p as { member_enrollments?: { start_date: string | null; created_at: string } | null })
+              .member_enrollments ?? null,
+            lead: (p as { leads?: { cohort_start_date: string | null; added_date: string } | null }).leads ?? null,
           }))}
           memberOptions={memberOptions}
           canEdit={canEdit}

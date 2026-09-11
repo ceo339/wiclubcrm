@@ -161,14 +161,20 @@ export const DICT: Record<string, Entry> = {
   fieldFrom: { ru: "С", bg: "От" },
   fieldTo: { ru: "По", bg: "До" },
   metricsForPrefix: { ru: "Показатели за:", bg: "Показатели за:" },
+  periodTabMonths: { ru: "Месяцы", bg: "Месеци" },
+  periodTabYear: { ru: "Год", bg: "Година" },
 
   // ---- dashboard: stat tiles ----
   statRevenue: { ru: "Выручка", bg: "Приходи" },
   statMembers: { ru: "Участниц", bg: "Участнички" },
   statRoyaltyDue: { ru: "Роялти к оплате", bg: "Роялти за плащане" },
   statConversion: { ru: "Лид → участница", bg: "Запитване → участничка" },
-  statLeadsTotal: { ru: "Лидов (всего)", bg: "Запитвания (общо)" },
-  statCollectedTotal: { ru: "Собрано (всего)", bg: "Събрано (общо)" },
+  // "Если на главной я выбрала август, то данные все за этот период"
+  // (Anastasiia, 11 сен 2026) — these two used to be genuine all-time
+  // totals ("Лидов (всего)"/"Собрано (всего)"), unaffected by the period
+  // filter; relabelled since they now follow the selected period too.
+  statLeadsTotal: { ru: "Лидов за период", bg: "Запитвания за периода" },
+  statCollectedTotal: { ru: "Собрано за период", bg: "Събрано за периода" },
   statPending: { ru: "Ожидается", bg: "Очаква се" },
   deltaForPeriod: { ru: "за выбранный период", bg: "за избрания период" },
   deltaMembersAdded: { ru: "+{n} за период", bg: "+{n} за периода" },
@@ -758,8 +764,12 @@ export const DICT: Record<string, Entry> = {
   thProgress: { ru: "Прогресс", bg: "Прогрес" },
   prodSeats: { ru: "{n} записались", bg: "{n} записани" },
 
-  // ---- payments board: month KPI tiles ----
-  tileCollectedMonth: { ru: "Собрано в {month}", bg: "Събрано през {month}" },
+  // ---- payments board: period KPI tiles ----
+  // "оплаты должны быть тоже по периодам" (Anastasiia, 11 сен 2026) — the
+  // first tile now follows whichever month/year is picked, not always the
+  // current month, so its label names the actual period shown.
+  tileCollectedPeriod: { ru: "Собрано за {period}", bg: "Събрано за {period}" },
+  tileCollectedAllTime: { ru: "Собрано (всего)", bg: "Събрано (общо)" },
   kExpected: { ru: "Ожидается от записавшихся", bg: "Очаква се от записалите се" },
   awaitingCount: { ru: "{n} записались, ещё не оплатили", bg: "{n} записани, все още не са платили" },
 

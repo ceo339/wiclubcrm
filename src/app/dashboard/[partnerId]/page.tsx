@@ -11,6 +11,8 @@ import {
   monthlyRevenue,
   monthsWithActivity,
   parsePeriodParams,
+  paymentAttributionDate,
+  yearsWithActivity,
 } from "@/lib/dashboard";
 import { currencyForCountry } from "@/lib/currency";
 import { localeForCountry } from "@/lib/i18n";
@@ -27,7 +29,7 @@ export default async function ClubDashboardPage({
   searchParams,
 }: {
   params: Promise<{ partnerId: string }>;
-  searchParams: Promise<{ month?: string; from?: string; to?: string }>;
+  searchParams: Promise<{ month?: string; year?: string; from?: string; to?: string }>;
 }) {
   const profile = await getCurrentProfile();
   if (!profile) redirect("/login");
@@ -77,6 +79,7 @@ export default async function ClubDashboardPage({
 
   const period = parsePeriodParams(searchParamsResolved);
   const monthOptions = monthsWithActivity(clubLeads, clubEnrollments, clubPayments);
+  const yearOptions = yearsWithActivity(clubLeads, clubEnrollments, clubPayments);
   const metrics = computeCoreMetrics({
     leads: clubLeads,
     enrollments: clubEnrollments,
@@ -86,11 +89,16 @@ export default async function ClubDashboardPage({
 
   const enrollmentsInPeriod = clubEnrollments.filter((e) => inPeriod(period, enrollmentAttributionDate(e)));
 
+  // See src/app/page.tsx — period-scoped like everything else on the page.
   const totals = {
-    leads: clubLeads.length,
+    leads: clubLeads.filter((l) => inPeriod(period, l.added_date)).length,
     members: clubMembers.length,
-    collected: clubPayments.filter((p) => p.status === "paid").reduce((sum, p) => sum + Number(p.amount), 0),
-    pending: clubPayments.filter((p) => p.status === "pending").reduce((sum, p) => sum + Number(p.amount), 0),
+    collected: clubPayments
+      .filter((p) => p.status === "paid" && inPeriod(period, paymentAttributionDate(p)))
+      .reduce((sum, p) => sum + Number(p.amount), 0),
+    pending: clubPayments
+      .filter((p) => p.status === "pending" && inPeriod(period, paymentAttributionDate(p)))
+      .reduce((sum, p) => sum + Number(p.amount), 0),
   };
 
   return (
@@ -116,6 +124,7 @@ export default async function ClubDashboardPage({
         sourceConversion={metrics.sourceConversion}
         period={period}
         monthOptions={monthOptions}
+        yearOptions={yearOptions}
         basePath={`/dashboard/${partnerId}`}
         revenue={metrics.revenue}
         revenueTrend={monthlyRevenue(clubPayments)}
