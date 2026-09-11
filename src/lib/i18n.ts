@@ -385,8 +385,10 @@ export const DICT: Record<string, Entry> = {
   placeholderNewTask: { ru: "Новая задача…", bg: "Нова задача…" },
   headingComments: { ru: "Комментарии", bg: "Коментари" },
   headingTasks: { ru: "Задачи", bg: "Задачи" },
+  headingCourses: { ru: "Курсы", bg: "Курсове" },
   emptyNoComments: { ru: "Пока нет комментариев", bg: "Все още няма коментари" },
   emptyNoTasks: { ru: "Пока нет задач", bg: "Все още няма задачи" },
+  emptyNoCoursesForMember: { ru: "Пока не записана ни на один курс", bg: "Все още не е записана в курс" },
   optionNotSpecified: { ru: "— не указано —", bg: "— не е посочено —" },
   btnAddTaskShort: { ru: "+ Задача", bg: "+ Задача" },
 

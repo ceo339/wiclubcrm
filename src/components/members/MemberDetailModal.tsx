@@ -1,27 +1,36 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import {
+  addEnrollment,
   addMemberComment,
   addMemberTask,
+  deleteEnrollment,
   getMemberDetail,
   setAttendance,
   setMemberTaskDone,
+  updateEnrollment,
   updateMember,
+  type EnrollmentDetail,
   type MemberDetail,
 } from "@/app/members/actions";
 import { attendedArray, STATUSES, statusLabel, statusPillClasses } from "@/lib/members";
 import Money from "@/components/currency/Money";
 import { useLocale, useT } from "@/components/i18n/LocaleProvider";
 import SendEmailButton from "@/components/email/SendEmailButton";
+import type { Tables } from "@/types/database";
 import type { Member } from "./types";
 
 export default function MemberDetailModal({
   member,
+  products,
+  cohorts,
   canEdit,
   onClose,
 }: {
   member: Member;
+  products: Tables<"products">[];
+  cohorts: Tables<"product_cohorts">[];
   canEdit: boolean;
   onClose: () => void;
 }) {
@@ -77,9 +86,14 @@ export default function MemberDetailModal({
           <ReadView member={member} canEdit={canEdit} onEdit={() => setEditing(true)} />
         )}
 
-        {member.product_sessions ? (
-          <AttendanceSection member={member} canEdit={canEdit} />
-        ) : null}
+        <EnrollmentsSection
+          memberId={member.id}
+          detail={detail}
+          products={products}
+          cohorts={cohorts}
+          canEdit={canEdit}
+          onChanged={refresh}
+        />
 
         <CommentsSection memberId={member.id} detail={detail} canEdit={canEdit} onChanged={refresh} />
         <TasksSection memberId={member.id} detail={detail} canEdit={canEdit} onChanged={refresh} />
@@ -97,24 +111,10 @@ function ReadView({
   canEdit: boolean;
   onEdit: () => void;
 }) {
-  const { locale, t } = useLocale();
+  const t = useT();
   return (
     <>
       <dl className="mt-4 grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
-        <dt className="text-muted">{t("colCourse")}</dt>
-        <dd className="text-ink-2">{member.product_name ?? "—"}</dd>
-        <dt className="text-muted">{t("colStatus")}</dt>
-        <dd>
-          <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${statusPillClasses(member.status)}`}>
-            {statusLabel(member.status, locale)}
-          </span>
-        </dd>
-        <dt className="text-muted">{t("colStart")}</dt>
-        <dd className="text-ink-2">{member.start_date ?? "—"}</dd>
-        <dt className="text-muted">{t("colAmount")}</dt>
-        <dd className="text-ink-2">
-          {member.price_collected ? <Money amountEur={member.price_collected} /> : "—"}
-        </dd>
         <dt className="text-muted">{t("fieldEmail")}</dt>
         <dd className="text-ink-2">{member.email ?? "—"}</dd>
       </dl>
@@ -144,7 +144,7 @@ function EditForm({
   onCancel: () => void;
   onSaved: () => void;
 }) {
-  const { locale, t } = useLocale();
+  const t = useT();
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
@@ -170,21 +170,6 @@ function EditForm({
       </label>
 
       <label className="flex flex-col gap-1.5 text-sm">
-        <span className="font-medium text-ink-2">{t("colStatus")}</span>
-        <select
-          name="status"
-          defaultValue={member.status}
-          className="rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-accent focus:ring-1 focus:ring-accent"
-        >
-          {STATUSES.map((s) => (
-            <option key={s.id} value={s.id}>
-              {statusLabel(s.id, locale)}
-            </option>
-          ))}
-        </select>
-      </label>
-
-      <label className="flex flex-col gap-1.5 text-sm">
         <span className="font-medium text-ink-2">{t("fieldCity")}</span>
         <input
           name="city"
@@ -199,26 +184,6 @@ function EditForm({
           name="email"
           type="email"
           defaultValue={member.email ?? ""}
-          className="rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-accent focus:ring-1 focus:ring-accent"
-        />
-      </label>
-
-      <label className="flex flex-col gap-1.5 text-sm">
-        <span className="font-medium text-ink-2">{t("colStartDate")}</span>
-        <input
-          name="start_date"
-          type="date"
-          defaultValue={member.start_date ?? ""}
-          className="rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-accent focus:ring-1 focus:ring-accent"
-        />
-      </label>
-
-      <label className="flex flex-col gap-1.5 text-sm">
-        <span className="font-medium text-ink-2">{t("fieldValueEur")}</span>
-        <input
-          name="price_collected"
-          type="number"
-          defaultValue={String(member.price_collected ?? 0)}
           className="rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-accent focus:ring-1 focus:ring-accent"
         />
       </label>
@@ -256,10 +221,167 @@ function EditForm({
   );
 }
 
-function AttendanceSection({ member, canEdit }: { member: Member; canEdit: boolean }) {
+/**
+ * The actual fix for "лид должен переходить в статус участниц на конкретные
+ * курсы (может быть 2 и более)" — a member's card now holds as many of
+ * these as she's enrolled in, each with its own status/price/dates/
+ * attendance, instead of the old single product_id on the member row.
+ */
+function EnrollmentsSection({
+  memberId,
+  detail,
+  products,
+  cohorts,
+  canEdit,
+  onChanged,
+}: {
+  memberId: string;
+  detail: MemberDetail | null;
+  products: Tables<"products">[];
+  cohorts: Tables<"product_cohorts">[];
+  canEdit: boolean;
+  onChanged: () => void;
+}) {
   const t = useT();
-  const sessions = member.product_sessions ?? 0;
-  const [attended, setAttended] = useState(() => attendedArray(member.attended, sessions));
+  const [adding, setAdding] = useState(false);
+  const enrollments = detail?.enrollments ?? [];
+
+  return (
+    <div className="mt-5">
+      <div className="flex items-center justify-between">
+        <span className="text-xs font-medium text-ink-2">{t("headingCourses")}</span>
+        {canEdit && !adding && (
+          <button
+            type="button"
+            onClick={() => setAdding(true)}
+            className="text-xs font-medium text-ink-2 hover:underline"
+          >
+            {t("btnAddCourseShort")}
+          </button>
+        )}
+      </div>
+
+      {detail === null ? (
+        <p className="mt-2 text-xs text-muted">{t("loading")}</p>
+      ) : enrollments.length === 0 && !adding ? (
+        <p className="mt-2 text-xs text-muted">{t("emptyNoCoursesForMember")}</p>
+      ) : (
+        <div className="mt-2 flex flex-col gap-2">
+          {enrollments.map((e) => (
+            <EnrollmentCard key={e.id} enrollment={e} canEdit={canEdit} onChanged={onChanged} />
+          ))}
+        </div>
+      )}
+
+      {adding && (
+        <NewEnrollmentForm
+          memberId={memberId}
+          products={products}
+          cohorts={cohorts}
+          onCancel={() => setAdding(false)}
+          onSaved={() => {
+            setAdding(false);
+            onChanged();
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+function EnrollmentCard({
+  enrollment,
+  canEdit,
+  onChanged,
+}: {
+  enrollment: EnrollmentDetail;
+  canEdit: boolean;
+  onChanged: () => void;
+}) {
+  const { locale, t } = useLocale();
+  const [editing, setEditing] = useState(false);
+  const [pending, startTransition] = useTransition();
+  const [error, setError] = useState<string | null>(null);
+
+  function handleDelete() {
+    setError(null);
+    startTransition(async () => {
+      const res = await deleteEnrollment(enrollment.id);
+      if (res.error) setError(res.error);
+      else onChanged();
+    });
+  }
+
+  if (editing) {
+    return (
+      <EditEnrollmentForm
+        enrollment={enrollment}
+        onCancel={() => setEditing(false)}
+        onSaved={() => {
+          setEditing(false);
+          onChanged();
+        }}
+      />
+    );
+  }
+
+  return (
+    <div className="rounded-lg border border-border p-3">
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <div className="truncate text-sm font-medium text-foreground">
+            {enrollment.product_name ?? t("optionCourseNotChosen")}
+          </div>
+          <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted">
+            <span className={`rounded-full px-2 py-0.5 font-medium ${statusPillClasses(enrollment.status)}`}>
+              {statusLabel(enrollment.status, locale)}
+            </span>
+            {enrollment.start_date && <span>{enrollment.start_date}</span>}
+            <span className="text-ink-2">
+              <Money amountEur={enrollment.price} />
+            </span>
+          </div>
+        </div>
+        {canEdit && (
+          <div className="flex shrink-0 items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setEditing(true)}
+              className="text-xs text-muted hover:text-ink-2"
+            >
+              {t("edit")}
+            </button>
+            <button
+              type="button"
+              disabled={pending}
+              onClick={handleDelete}
+              className="text-xs text-accent-strong hover:underline disabled:opacity-50"
+            >
+              {pending ? "..." : t("delete")}
+            </button>
+          </div>
+        )}
+      </div>
+      {error && <p className="mt-1 text-xs text-accent-strong">{t(error)}</p>}
+      {enrollment.product_sessions ? (
+        <EnrollmentAttendance enrollment={enrollment} canEdit={canEdit} onChanged={onChanged} />
+      ) : null}
+    </div>
+  );
+}
+
+function EnrollmentAttendance({
+  enrollment,
+  canEdit,
+  onChanged,
+}: {
+  enrollment: EnrollmentDetail;
+  canEdit: boolean;
+  onChanged: () => void;
+}) {
+  const t = useT();
+  const sessions = enrollment.product_sessions ?? 0;
+  const [attended, setAttended] = useState(() => attendedArray(enrollment.attended, sessions));
   const [pending, startTransition] = useTransition();
 
   function cycle(index: number) {
@@ -270,7 +392,8 @@ function AttendanceSection({ member, canEdit }: { member: Member; canEdit: boole
     optimistic[index] = next;
     setAttended(optimistic);
     startTransition(async () => {
-      await setAttendance(member.id, index, next);
+      await setAttendance(enrollment.id, index, next);
+      onChanged();
     });
   }
 
@@ -279,7 +402,7 @@ function AttendanceSection({ member, canEdit }: { member: Member; canEdit: boole
   const pct = marked > 0 ? Math.round((present / marked) * 100) : null;
 
   return (
-    <div className="mt-5">
+    <div className="mt-3 border-t border-border pt-3">
       <div className="flex items-center justify-between">
         <span className="text-xs font-medium text-ink-2">{t("headingAttendance")}</span>
         <span className="text-xs text-muted">{pct === null ? "—" : `${pct}%`}</span>
@@ -306,6 +429,245 @@ function AttendanceSection({ member, canEdit }: { member: Member; canEdit: boole
       </div>
       <p className="mt-1 text-xs text-muted">{t("attendanceCycleHint")}</p>
     </div>
+  );
+}
+
+/** Shared status/date/price fields for both adding and editing an
+ * enrollment — price is always a plain number the partner types, on
+ * purpose (see project doc): a discount is just whatever she enters here,
+ * not a second fixed price stored on the course itself. */
+function EnrollmentFieldset({
+  status,
+  startDate,
+  price,
+  onStatusChange,
+  onStartDateChange,
+  onPriceChange,
+}: {
+  status: string;
+  startDate: string;
+  price: string;
+  onStatusChange: (v: string) => void;
+  onStartDateChange: (v: string) => void;
+  onPriceChange: (v: string) => void;
+}) {
+  const { locale, t } = useLocale();
+  return (
+    <>
+      <label className="flex flex-col gap-1.5 text-sm">
+        <span className="font-medium text-ink-2">{t("colStatus")}</span>
+        <select
+          name="status"
+          value={status}
+          onChange={(e) => onStatusChange(e.target.value)}
+          className="rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-accent focus:ring-1 focus:ring-accent"
+        >
+          {STATUSES.map((s) => (
+            <option key={s.id} value={s.id}>
+              {statusLabel(s.id, locale)}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label className="flex flex-col gap-1.5 text-sm">
+        <span className="font-medium text-ink-2">{t("colStartDate")}</span>
+        <input
+          name="start_date"
+          type="date"
+          value={startDate}
+          onChange={(e) => onStartDateChange(e.target.value)}
+          className="rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-accent focus:ring-1 focus:ring-accent"
+        />
+      </label>
+      <label className="flex flex-col gap-1.5 text-sm">
+        <span className="font-medium text-ink-2">{t("fieldValueEur")}</span>
+        <input
+          name="price"
+          type="number"
+          min="0"
+          step="0.01"
+          value={price}
+          onChange={(e) => onPriceChange(e.target.value)}
+          className="rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-accent focus:ring-1 focus:ring-accent"
+        />
+      </label>
+    </>
+  );
+}
+
+function EditEnrollmentForm({
+  enrollment,
+  onCancel,
+  onSaved,
+}: {
+  enrollment: EnrollmentDetail;
+  onCancel: () => void;
+  onSaved: () => void;
+}) {
+  const t = useT();
+  const [status, setStatus] = useState(enrollment.status);
+  const [startDate, setStartDate] = useState(enrollment.start_date ?? "");
+  const [price, setPrice] = useState(String(enrollment.price));
+  const [pending, startTransition] = useTransition();
+  const [error, setError] = useState<string | null>(null);
+
+  function handleSubmit(formData: FormData) {
+    setError(null);
+    startTransition(async () => {
+      const res = await updateEnrollment(enrollment.id, formData);
+      if (res.error) setError(res.error);
+      else onSaved();
+    });
+  }
+
+  return (
+    <form action={handleSubmit} className="rounded-lg border border-border p-3">
+      <div className="text-sm font-medium text-foreground">
+        {enrollment.product_name ?? t("optionCourseNotChosen")}
+      </div>
+      <div className="mt-2 flex flex-col gap-3">
+        <EnrollmentFieldset
+          status={status}
+          startDate={startDate}
+          price={price}
+          onStatusChange={setStatus}
+          onStartDateChange={setStartDate}
+          onPriceChange={setPrice}
+        />
+      </div>
+      {error && <p className="mt-2 text-xs text-accent-strong">{t(error)}</p>}
+      <div className="mt-3 flex justify-end gap-2">
+        <button
+          type="button"
+          onClick={onCancel}
+          className="rounded-lg border border-border px-3 py-1.5 text-xs font-medium text-ink-2 hover:bg-surface-2"
+        >
+          {t("cancel")}
+        </button>
+        <button
+          type="submit"
+          disabled={pending}
+          className="rounded-lg bg-foreground px-3 py-1.5 text-xs font-medium text-background disabled:opacity-50"
+        >
+          {pending ? "..." : t("save")}
+        </button>
+      </div>
+    </form>
+  );
+}
+
+function NewEnrollmentForm({
+  memberId,
+  products,
+  cohorts,
+  onCancel,
+  onSaved,
+}: {
+  memberId: string;
+  products: Tables<"products">[];
+  cohorts: Tables<"product_cohorts">[];
+  onCancel: () => void;
+  onSaved: () => void;
+}) {
+  const t = useT();
+  const [productId, setProductId] = useState("");
+  const [status, setStatus] = useState("sAwaiting");
+  const [startDate, setStartDate] = useState("");
+  const [price, setPrice] = useState("");
+  const [pending, startTransition] = useTransition();
+  const [error, setError] = useState<string | null>(null);
+
+  const productCohorts = useMemo(
+    () =>
+      cohorts
+        .filter((c) => c.product_id === productId)
+        .sort((a, b) => a.start_date.localeCompare(b.start_date)),
+    [cohorts, productId]
+  );
+
+  function handleProductChange(id: string) {
+    setProductId(id);
+    setStartDate("");
+    const product = products.find((p) => p.id === id);
+    if (product) setPrice(String(product.price));
+  }
+
+  function handleSubmit(formData: FormData) {
+    setError(null);
+    startTransition(async () => {
+      const res = await addEnrollment(memberId, formData);
+      if (res.error) setError(res.error);
+      else onSaved();
+    });
+  }
+
+  return (
+    <form action={handleSubmit} className="mt-2 rounded-lg border border-dashed border-border p-3">
+      <div className="flex flex-col gap-3">
+        <label className="flex flex-col gap-1.5 text-sm">
+          <span className="font-medium text-ink-2">{t("fieldCourseOptional")}</span>
+          <select
+            name="product_id"
+            value={productId}
+            onChange={(e) => handleProductChange(e.target.value)}
+            className="rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-accent focus:ring-1 focus:ring-accent"
+          >
+            <option value="">{t("optionCourseNotChosen")}</option>
+            {products.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.name} · <Money amountEur={p.price} />
+              </option>
+            ))}
+          </select>
+        </label>
+
+        {productId && productCohorts.length > 0 && (
+          <label className="flex flex-col gap-1.5 text-sm">
+            <span className="font-medium text-ink-2">{t("fieldCohortStart")}</span>
+            <select
+              value={startDate}
+              onChange={(e) => setStartDate(e.target.value)}
+              className="rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-accent focus:ring-1 focus:ring-accent"
+            >
+              <option value="">{t("optionNotChosen")}</option>
+              {productCohorts.map((c) => (
+                <option key={c.id} value={c.start_date}>
+                  {c.start_date}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
+
+        <EnrollmentFieldset
+          status={status}
+          startDate={startDate}
+          price={price}
+          onStatusChange={setStatus}
+          onStartDateChange={setStartDate}
+          onPriceChange={setPrice}
+        />
+      </div>
+
+      {error && <p className="mt-2 text-xs text-accent-strong">{t(error)}</p>}
+
+      <div className="mt-3 flex justify-end gap-2">
+        <button
+          type="button"
+          onClick={onCancel}
+          className="rounded-lg border border-border px-3 py-1.5 text-xs font-medium text-ink-2 hover:bg-surface-2"
+        >
+          {t("cancel")}
+        </button>
+        <button
+          type="submit"
+          disabled={pending}
+          className="rounded-lg bg-foreground px-3 py-1.5 text-xs font-medium text-background disabled:opacity-50"
+        >
+          {pending ? "..." : t("btnAddCourseShort")}
+        </button>
+      </div>
+    </form>
   );
 }
 

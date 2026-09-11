@@ -26,23 +26,36 @@ export default async function PaymentsPage() {
   const canEdit = !!profile.partner_id;
   const stripeEnabled =
     canEdit && !!profile.partner_id && profile.partner_id === process.env.STRIPE_ENABLED_PARTNER_ID;
+  // A member can hold several course enrollments now, so the picker offers
+  // one row per enrollment (each with its own default price) instead of
+  // one row per member.
   const { data: members } = canEdit
     ? await supabase
         .from("members")
-        .select("id, name, product_id, products(name, price)")
+        .select("id, name, member_enrollments(id, price, products(name))")
         .order("name")
     : { data: [] };
 
   const { scope, fallback } = scopeForProfile(profile);
   const localeScope = localeScopeForProfile(profile);
 
-  const memberOptions: MemberOption[] = (members ?? []).map((m) => ({
-    id: m.id,
-    name: m.name,
-    product_id: m.product_id,
-    product_name: (m as { products?: { name: string } | null }).products?.name ?? null,
-    product_price: (m as { products?: { price: number } | null }).products?.price ?? null,
-  }));
+  const memberOptions: MemberOption[] = (members ?? []).flatMap((m): MemberOption[] => {
+    const enrollments =
+      (m as { member_enrollments?: { id: string; price: number; products: { name: string } | null }[] })
+        .member_enrollments ?? [];
+    if (enrollments.length === 0) {
+      return [{ key: `member:${m.id}`, memberId: m.id, enrollmentId: null, label: m.name, defaultAmount: null }];
+    }
+    return enrollments.map(
+      (e): MemberOption => ({
+        key: e.id,
+        memberId: m.id,
+        enrollmentId: e.id,
+        label: e.products?.name ? `${m.name} — ${e.products.name}` : m.name,
+        defaultAmount: e.price,
+      })
+    );
+  });
 
   return (
     <AppShell

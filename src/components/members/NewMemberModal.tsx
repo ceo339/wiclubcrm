@@ -9,6 +9,12 @@ import type { Tables } from "@/types/database";
 
 const initialState: ActionResult = { error: null };
 
+/**
+ * Creates the person, and — only if a course was picked here — her first
+ * enrollment in one step. Any additional course (she can now be enrolled in
+ * several at once, see project doc) is added afterward from the member's
+ * own card, not from this form.
+ */
 export default function NewMemberModal({
   products,
   cohorts,
@@ -67,18 +73,30 @@ export default function NewMemberModal({
           </label>
 
           <label className="flex flex-col gap-1.5 text-sm">
-            <span className="font-medium text-ink-2">{t("colStatus")}</span>
-            <select
-              name="status"
-              defaultValue="sPaid"
+            <span className="font-medium text-ink-2">{t("fieldCity")}</span>
+            <input
+              name="city"
               className="rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-accent focus:ring-1 focus:ring-accent"
-            >
-              {STATUSES.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {statusLabel(s.id, locale)}
-                </option>
-              ))}
-            </select>
+            />
+          </label>
+
+          <label className="flex flex-col gap-1.5 text-sm">
+            <span className="font-medium text-ink-2">{t("fieldEmail")}</span>
+            <input
+              name="email"
+              type="email"
+              className="rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-accent focus:ring-1 focus:ring-accent"
+            />
+          </label>
+
+          <label className="flex flex-col gap-1.5 text-sm">
+            <span className="font-medium text-ink-2">{t("fieldMemberSince")}</span>
+            <input
+              name="member_since"
+              defaultValue={currentMonthYear()}
+              placeholder="09.2026"
+              className="rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-accent focus:ring-1 focus:ring-accent"
+            />
           </label>
 
           {products.length > 0 && (
@@ -100,77 +118,58 @@ export default function NewMemberModal({
             </label>
           )}
 
-          {productId ? (
-            <label className="flex flex-col gap-1.5 text-sm">
-              <span className="font-medium text-ink-2">{t("fieldCohortStart")}</span>
-              {productCohorts.length > 0 ? (
+          {productId && (
+            <>
+              <label className="flex flex-col gap-1.5 text-sm">
+                <span className="font-medium text-ink-2">{t("fieldCohortStart")}</span>
+                {productCohorts.length > 0 ? (
+                  <select
+                    name="start_date"
+                    value={startDate}
+                    onChange={(e) => setStartDate(e.target.value)}
+                    className="rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-accent focus:ring-1 focus:ring-accent"
+                  >
+                    <option value="">{t("optionNotChosen")}</option>
+                    {productCohorts.map((c) => (
+                      <option key={c.id} value={c.start_date}>
+                        {c.start_date}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <p className="text-xs text-muted">{t("emptyNoCohortsForCourse")}</p>
+                )}
+              </label>
+
+              <label className="flex flex-col gap-1.5 text-sm">
+                <span className="font-medium text-ink-2">{t("colStatus")}</span>
                 <select
-                  name="start_date"
-                  value={startDate}
-                  onChange={(e) => setStartDate(e.target.value)}
+                  name="status"
+                  defaultValue="sPaid"
                   className="rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-accent focus:ring-1 focus:ring-accent"
                 >
-                  <option value="">{t("optionNotChosen")}</option>
-                  {productCohorts.map((c) => (
-                    <option key={c.id} value={c.start_date}>
-                      {c.start_date}
+                  {STATUSES.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {statusLabel(s.id, locale)}
                     </option>
                   ))}
                 </select>
-              ) : (
-                <p className="text-xs text-muted">{t("emptyNoCohortsForCourse")}</p>
-              )}
-            </label>
-          ) : (
-            <label className="flex flex-col gap-1.5 text-sm">
-              <span className="font-medium text-ink-2">{t("colStartDate")}</span>
-              <input
-                name="start_date"
-                type="date"
-                value={startDate}
-                onChange={(e) => setStartDate(e.target.value)}
-                className="rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-accent focus:ring-1 focus:ring-accent"
-              />
-            </label>
+              </label>
+
+              <label className="flex flex-col gap-1.5 text-sm">
+                <span className="font-medium text-ink-2">{t("fieldValueEur")}</span>
+                <input
+                  name="price"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={price}
+                  onChange={(e) => setPrice(e.target.value)}
+                  className="rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-accent focus:ring-1 focus:ring-accent"
+                />
+              </label>
+            </>
           )}
-
-          <label className="flex flex-col gap-1.5 text-sm">
-            <span className="font-medium text-ink-2">{t("fieldCity")}</span>
-            <input
-              name="city"
-              className="rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-accent focus:ring-1 focus:ring-accent"
-            />
-          </label>
-
-          <label className="flex flex-col gap-1.5 text-sm">
-            <span className="font-medium text-ink-2">{t("fieldEmail")}</span>
-            <input
-              name="email"
-              type="email"
-              className="rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-accent focus:ring-1 focus:ring-accent"
-            />
-          </label>
-
-          <label className="flex flex-col gap-1.5 text-sm">
-            <span className="font-medium text-ink-2">{t("fieldValueEur")}</span>
-            <input
-              name="price_collected"
-              type="number"
-              value={price}
-              onChange={(e) => setPrice(e.target.value)}
-              className="rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-accent focus:ring-1 focus:ring-accent"
-            />
-          </label>
-
-          <label className="flex flex-col gap-1.5 text-sm">
-            <span className="font-medium text-ink-2">{t("fieldMemberSince")}</span>
-            <input
-              name="member_since"
-              defaultValue={currentMonthYear()}
-              placeholder="09.2026"
-              className="rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-accent focus:ring-1 focus:ring-accent"
-            />
-          </label>
         </div>
 
         {state.error && (

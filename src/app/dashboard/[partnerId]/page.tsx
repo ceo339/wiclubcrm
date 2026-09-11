@@ -49,15 +49,18 @@ export default async function ClubDashboardPage({
     .single();
   if (!partner) notFound();
 
-  const [{ data: leads }, { data: members }, { data: payments }, { data: products }] = await Promise.all([
-    supabase.from("leads").select("stage, source, added_date").eq("partner_id", partnerId),
-    supabase.from("members").select("created_at, product_id").eq("partner_id", partnerId),
-    supabase.from("payments").select("amount, status, paid_date").eq("partner_id", partnerId),
-    supabase.from("products").select("id, name").eq("partner_id", partnerId),
-  ]);
+  const [{ data: leads }, { data: members }, { data: enrollments }, { data: payments }, { data: products }] =
+    await Promise.all([
+      supabase.from("leads").select("stage, source, added_date").eq("partner_id", partnerId),
+      supabase.from("members").select("created_at").eq("partner_id", partnerId),
+      supabase.from("member_enrollments").select("product_id, created_at").eq("partner_id", partnerId),
+      supabase.from("payments").select("amount, status, paid_date").eq("partner_id", partnerId),
+      supabase.from("products").select("id, name").eq("partner_id", partnerId),
+    ]);
 
   const clubLeads = leads ?? [];
   const clubMembers = members ?? [];
+  const clubEnrollments = enrollments ?? [];
   const clubPayments = payments ?? [];
   const productNamesById = new Map((products ?? []).map((p) => [p.id, p.name]));
 
@@ -70,7 +73,7 @@ export default async function ClubDashboardPage({
     period,
   });
 
-  const membersInPeriod = clubMembers.filter((m) => inPeriod(period, m.created_at));
+  const enrollmentsInPeriod = clubEnrollments.filter((e) => inPeriod(period, e.created_at));
 
   const totals = {
     leads: clubLeads.length,
@@ -110,8 +113,8 @@ export default async function ClubDashboardPage({
         membersAdded={metrics.membersAdded}
         conversion={metrics.conversion}
         royalty={metrics.royalty}
-        productsPeriod={countByProduct(membersInPeriod, productNamesById)}
-        productsAllTime={countByProduct(clubMembers, productNamesById)}
+        productsPeriod={countByProduct(enrollmentsInPeriod, productNamesById)}
+        productsAllTime={countByProduct(clubEnrollments, productNamesById)}
       />
     </AppShell>
   );

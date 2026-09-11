@@ -313,8 +313,13 @@ export async function setTaskDone(taskId: string, done: boolean): Promise<Action
 
 /**
  * Turns a won lead into a member record — a one-way copy (name, city,
- * course, cohort date, amount), not a foreign-key link, matching how the
- * prototype kept leads and members as separate lists.
+ * email), not a foreign-key link, matching how the prototype kept leads and
+ * members as separate lists. If the lead had a course/cohort chosen, that
+ * becomes her first course enrollment (see member_enrollments) — she isn't
+ * limited to just this one course afterward: more can be added from her
+ * member card, since a member can now be enrolled in several at once
+ * (11 сен 2026, in response to Anastasiia's real workflow: one lead often
+ * becomes a participant in 2+ courses, not always exactly one).
  */
 export async function convertLeadToMember(leadId: string): Promise<ActionResult> {
   const profile = await getCurrentProfile();
@@ -331,21 +336,37 @@ export async function convertLeadToMember(leadId: string): Promise<ActionResult>
   if (fetchError) return { error: fetchError.message };
   if (!lead) return { error: "errLeadNotFound" };
 
-  const { error } = await supabase.from("members").insert({
-    partner_id: profile.partner_id,
-    name: lead.name,
-    status: "sPaid",
-    product_id: lead.product_id,
-    start_date: lead.cohort_start_date,
-    city: lead.city,
-    email: lead.email,
-    member_since: currentMonthYear(),
-    price_collected: lead.value ?? 0,
-    paid: true,
-    attended: [],
-  });
+  const { data: member, error } = await supabase
+    .from("members")
+    .insert({
+      partner_id: profile.partner_id,
+      name: lead.name,
+      city: lead.city,
+      email: lead.email,
+      member_since: currentMonthYear(),
+    })
+    .select("id")
+    .single();
 
-  if (error) return { error: error.message };
+  if (error || !member) return { error: error?.message ?? "errGeneric" };
+
+  if (lead.product_id) {
+    const { error: enrollError } = await supabase.from("member_enrollments").insert({
+      partner_id: profile.partner_id,
+      member_id: member.id,
+      product_id: lead.product_id,
+      start_date: lead.cohort_start_date,
+      price: lead.value ?? 0,
+      status: "sPaid",
+      paid: true,
+      attended: [],
+    });
+    if (enrollError) {
+      revalidatePath("/leads");
+      revalidatePath("/members");
+      return { error: enrollError.message };
+    }
+  }
 
   revalidatePath("/leads");
   revalidatePath("/members");

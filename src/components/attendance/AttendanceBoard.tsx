@@ -15,6 +15,10 @@ export type AttendanceCohort = {
   startDate: string;
 };
 
+/** One row per course ENROLLMENT, not per member — a member with two
+ * courses shows up here twice, once per course, each with its own
+ * attendance record. `id` is the enrollment id (what setAttendance below
+ * actually updates), `name` is the member's name via a join. */
 export type AttendanceMemberRow = {
   id: string;
   name: string;

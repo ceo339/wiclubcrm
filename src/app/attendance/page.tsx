@@ -17,13 +17,26 @@ export default async function AttendancePage() {
 
   const supabase = await createClient();
   // RLS scopes both queries to the caller's own club (or every club for hq).
-  const [{ data: cohorts, error }, { data: members }] = await Promise.all([
+  // The roster is enrollments now, not members directly — one member can
+  // have several, each its own row here with its own attendance record.
+  const [{ data: cohorts, error }, { data: enrollments }] = await Promise.all([
     supabase
       .from("product_cohorts")
       .select("id, product_id, start_date, partner_id, products(name, sessions), partners(name)")
       .order("start_date", { ascending: false }),
-    supabase.from("members").select("id, name, partner_id, product_id, start_date, attended"),
+    supabase
+      .from("member_enrollments")
+      .select("id, partner_id, product_id, start_date, attended, members(name)"),
   ]);
+
+  const members = (enrollments ?? []).map((e) => ({
+    id: e.id,
+    name: (e as { members?: { name: string } | null }).members?.name ?? "—",
+    partner_id: e.partner_id,
+    product_id: e.product_id,
+    start_date: e.start_date,
+    attended: e.attended,
+  }));
 
   const isHq = profile.role === "hq";
   const { scope, fallback } = scopeForProfile(profile);
@@ -66,7 +79,7 @@ export default async function AttendancePage() {
       ) : (
         <AttendanceBoard
           cohorts={attendanceCohorts}
-          members={members ?? []}
+          members={members}
           isHq={isHq}
           ownPartnerId={profile.partner_id}
         />

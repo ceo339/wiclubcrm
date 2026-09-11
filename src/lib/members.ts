@@ -4,6 +4,14 @@
 //
 // Ids double as their own dictionary keys (see src/lib/i18n.ts) — already
 // distinctive enough not to need a separate labelKey field.
+//
+// Status, price, dates and attendance all describe one COURSE ENROLLMENT
+// (see member_enrollments), not the member as a whole — a member can be
+// enrolled in several courses at once, each with its own status/price/
+// attendance, since Anastasiia asked to convert one lead into a member of
+// two or more courses (11 сен 2026). The functions below are unchanged in
+// shape from when they described a single member row; only what they're
+// applied to (an enrollment row instead of a member row) has changed.
 
 import { t, type Locale } from "@/lib/i18n";
 
@@ -27,16 +35,16 @@ export const STATUSES: { id: MemberStatus }[] = [
 export const statusLabel = (id: string, locale: Locale) => t(locale, id);
 
 /**
- * Colors a member's real status pill — reusing the same tokens the rest of
- * the app already assigns a meaning to (--accent-soft/--accent-strong for a
- * negative outcome, same as a "declined" lead; --warn-soft/--warn for
+ * Colors an enrollment's real status pill — reusing the same tokens the
+ * rest of the app already assigns a meaning to (--accent-soft/--accent-strong
+ * for a negative outcome, same as a "declined" lead; --warn-soft/--warn for
  * "waiting on something"; muted for inactive), rather than inventing new
  * colors. Deliberately NOT the prototype's churn-risk pill: that pill's
  * color came from a `churn()` score computed from attendance and, for
  * members with none of its other signals, a hash of the member's own name
  * (`hue(m.n)%5===0`) — not a real risk, and dropped entirely rather than
- * ported (see project doc). Only a member's own recorded status decides its
- * pill's color here.
+ * ported (see project doc). Only a real recorded status decides this pill's
+ * color here.
  */
 export function statusPillClasses(status: string): string {
   switch (status) {
@@ -64,7 +72,7 @@ export function currentMonthYear(): string {
 /**
  * Normalizes the `attended` jsonb column into a fixed-length array (one slot
  * per session): true = present, false = absent, null = not yet marked.
- * Shared by the per-member card tracker and the group attendance grid so
+ * Shared by the per-enrollment card tracker and the group attendance grid so
  * both read the same stored shape the same way.
  */
 export function attendedArray(raw: unknown, length: number): (boolean | null)[] {

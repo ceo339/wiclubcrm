@@ -6,10 +6,17 @@ export type Payment = Tables<"payments"> & {
   product_name: string | null;
 };
 
+/**
+ * One row per thing a payment can be logged against: a member's specific
+ * course enrollment (most common — a member with 2 courses shows up here
+ * twice, once per course, each with its own default price), or, for a
+ * member with no course at all yet, the bare member. `key` is what the
+ * <select> actually submits — see parsePaymentTarget in app/payments/actions.
+ */
 export type MemberOption = {
-  id: string;
-  name: string;
-  product_id: string | null;
-  product_name: string | null;
-  product_price: number | null;
+  key: string;
+  memberId: string;
+  enrollmentId: string | null;
+  label: string;
+  defaultAmount: number | null;
 };

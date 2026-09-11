@@ -109,17 +109,19 @@ export default async function Home({
   // /dashboard page did — nothing pre-aggregated, everything computed live
   // from the real leads/members/payments rows so it can't hide anything).
   if (profile.role === "hq") {
-    const [{ data: partners }, { data: leads }, { data: members }, { data: payments }, { data: products }] =
+    const [{ data: partners }, { data: leads }, { data: members }, { data: enrollments }, { data: payments }, { data: products }] =
       await Promise.all([
         supabase.from("partners").select("id, name").order("name"),
         supabase.from("leads").select("id, name, partner_id, stage, source, added_date, updated_at"),
-        supabase.from("members").select("partner_id, created_at, product_id"),
+        supabase.from("members").select("partner_id, created_at"),
+        supabase.from("member_enrollments").select("product_id, created_at"),
         supabase.from("payments").select("partner_id, amount, status, paid_date"),
         supabase.from("products").select("id, name"),
       ]);
 
     const allLeads = leads ?? [];
     const allMembers = members ?? [];
+    const allEnrollments = enrollments ?? [];
     const allPayments = payments ?? [];
     const productNamesById = new Map((products ?? []).map((p) => [p.id, p.name]));
     const partnerNamesById = new Map((partners ?? []).map((p) => [p.id, p.name]));
@@ -131,7 +133,10 @@ export default async function Home({
     const monthOptions = monthsWithActivity(allLeads, allMembers, allPayments);
     const metrics = computeCoreMetrics({ leads: allLeads, members: allMembers, payments: allPayments, period });
 
-    const membersInPeriod = allMembers.filter((m) => inPeriod(period, m.created_at));
+    // "Участницы по продуктам" counts ENROLLMENTS, not members — a member
+    // with two courses shows up in both buckets, which is the honest answer
+    // to "how many are signed up for this course".
+    const enrollmentsInPeriod = allEnrollments.filter((e) => inPeriod(period, e.created_at));
 
     const clubs: ClubRow[] = (partners ?? []).map((p) => {
       const clubLeads = allLeads.filter((l) => l.partner_id === p.id && inPeriod(period, l.added_date));
@@ -198,8 +203,8 @@ export default async function Home({
           membersAdded={metrics.membersAdded}
           conversion={metrics.conversion}
           royalty={metrics.royalty}
-          productsPeriod={countByProduct(membersInPeriod, productNamesById)}
-          productsAllTime={countByProduct(allMembers, productNamesById)}
+          productsPeriod={countByProduct(enrollmentsInPeriod, productNamesById)}
+          productsAllTime={countByProduct(allEnrollments, productNamesById)}
         />
       </AppShell>
     );
@@ -238,15 +243,18 @@ export default async function Home({
     .eq("id", partnerId)
     .single();
 
-  const [{ data: leads }, { data: members }, { data: payments }, { data: products }] = await Promise.all([
-    supabase.from("leads").select("stage, source, added_date").eq("partner_id", partnerId),
-    supabase.from("members").select("created_at, product_id").eq("partner_id", partnerId),
-    supabase.from("payments").select("amount, status, paid_date").eq("partner_id", partnerId),
-    supabase.from("products").select("id, name").eq("partner_id", partnerId),
-  ]);
+  const [{ data: leads }, { data: members }, { data: enrollments }, { data: payments }, { data: products }] =
+    await Promise.all([
+      supabase.from("leads").select("stage, source, added_date").eq("partner_id", partnerId),
+      supabase.from("members").select("created_at").eq("partner_id", partnerId),
+      supabase.from("member_enrollments").select("product_id, created_at").eq("partner_id", partnerId),
+      supabase.from("payments").select("amount, status, paid_date").eq("partner_id", partnerId),
+      supabase.from("products").select("id, name").eq("partner_id", partnerId),
+    ]);
 
   const clubLeads = leads ?? [];
   const clubMembers = members ?? [];
+  const clubEnrollments = enrollments ?? [];
   const clubPayments = payments ?? [];
   const productNamesById = new Map((products ?? []).map((p) => [p.id, p.name]));
 
@@ -254,7 +262,7 @@ export default async function Home({
   const monthOptions = monthsWithActivity(clubLeads, clubMembers, clubPayments);
   const metrics = computeCoreMetrics({ leads: clubLeads, members: clubMembers, payments: clubPayments, period });
 
-  const membersInPeriod = clubMembers.filter((m) => inPeriod(period, m.created_at));
+  const enrollmentsInPeriod = clubEnrollments.filter((e) => inPeriod(period, e.created_at));
 
   const totals = {
     leads: clubLeads.length,
@@ -298,8 +306,8 @@ export default async function Home({
         membersAdded={metrics.membersAdded}
         conversion={metrics.conversion}
         royalty={metrics.royalty}
-        productsPeriod={countByProduct(membersInPeriod, productNamesById)}
-        productsAllTime={countByProduct(clubMembers, productNamesById)}
+        productsPeriod={countByProduct(enrollmentsInPeriod, productNamesById)}
+        productsAllTime={countByProduct(clubEnrollments, productNamesById)}
       />
     </AppShell>
   );

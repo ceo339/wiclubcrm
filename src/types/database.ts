@@ -250,51 +250,94 @@ export type Database = {
           },
         ]
       }
-      members: {
+      member_enrollments: {
         Row: {
           attended: Json
-          city: string | null
           created_at: string
-          email: string | null
           id: string
-          member_since: string | null
-          name: string
+          member_id: string
           paid: boolean
           partner_id: string
-          price_collected: number
+          price: number
           product_id: string | null
           start_date: string | null
           status: string
         }
         Insert: {
           attended?: Json
+          created_at?: string
+          id?: string
+          member_id: string
+          paid?: boolean
+          partner_id: string
+          price?: number
+          product_id?: string | null
+          start_date?: string | null
+          status?: string
+        }
+        Update: {
+          attended?: Json
+          created_at?: string
+          id?: string
+          member_id?: string
+          paid?: boolean
+          partner_id?: string
+          price?: number
+          product_id?: string | null
+          start_date?: string | null
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "member_enrollments_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: false
+            referencedRelation: "members"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "member_enrollments_partner_id_fkey"
+            columns: ["partner_id"]
+            isOneToOne: false
+            referencedRelation: "partners"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "member_enrollments_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      members: {
+        Row: {
+          city: string | null
+          created_at: string
+          email: string | null
+          id: string
+          member_since: string | null
+          name: string
+          partner_id: string
+        }
+        Insert: {
           city?: string | null
           created_at?: string
           email?: string | null
           id?: string
           member_since?: string | null
           name: string
-          paid?: boolean
           partner_id: string
-          price_collected?: number
-          product_id?: string | null
-          start_date?: string | null
-          status: string
         }
         Update: {
-          attended?: Json
           city?: string | null
           created_at?: string
           email?: string | null
           id?: string
           member_since?: string | null
           name?: string
-          paid?: boolean
           partner_id?: string
-          price_collected?: number
-          product_id?: string | null
-          start_date?: string | null
-          status?: string
         }
         Relationships: [
           {
@@ -302,13 +345,6 @@ export type Database = {
             columns: ["partner_id"]
             isOneToOne: false
             referencedRelation: "partners"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "members_product_id_fkey"
-            columns: ["product_id"]
-            isOneToOne: false
-            referencedRelation: "products"
             referencedColumns: ["id"]
           },
         ]
@@ -344,6 +380,7 @@ export type Database = {
         Row: {
           amount: number
           created_at: string
+          enrollment_id: string | null
           id: string
           member_id: string | null
           paid_date: string
@@ -355,6 +392,7 @@ export type Database = {
         Insert: {
           amount: number
           created_at?: string
+          enrollment_id?: string | null
           id?: string
           member_id?: string | null
           paid_date?: string
@@ -366,6 +404,7 @@ export type Database = {
         Update: {
           amount?: number
           created_at?: string
+          enrollment_id?: string | null
           id?: string
           member_id?: string | null
           paid_date?: string
@@ -375,6 +414,13 @@ export type Database = {
           stripe_checkout_session_id?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "payments_enrollment_id_fkey"
+            columns: ["enrollment_id"]
+            isOneToOne: false
+            referencedRelation: "member_enrollments"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "payments_member_id_fkey"
             columns: ["member_id"]

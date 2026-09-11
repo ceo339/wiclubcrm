@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useMemo, useState } from "react";
+import { useActionState, useState } from "react";
 import { createPaymentLink, type PaymentLinkResult } from "@/app/payments/actions";
 import { useT } from "@/components/i18n/LocaleProvider";
 import type { MemberOption } from "./types";
@@ -15,7 +15,7 @@ export default function PaymentLinkModal({
   onClose: () => void;
 }) {
   const t = useT();
-  const [memberId, setMemberId] = useState("");
+  const [targetKey, setTargetKey] = useState("");
   const [amount, setAmount] = useState("");
   const [link, setLink] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
@@ -26,15 +26,10 @@ export default function PaymentLinkModal({
     return result;
   }, initialState);
 
-  const selectedMember = useMemo(
-    () => members.find((m) => m.id === memberId) ?? null,
-    [members, memberId]
-  );
-
-  function handleMemberChange(id: string) {
-    setMemberId(id);
-    const member = members.find((m) => m.id === id);
-    if (member?.product_price != null) setAmount(String(member.product_price));
+  function handleTargetChange(key: string) {
+    setTargetKey(key);
+    const target = members.find((m) => m.key === key);
+    if (target?.defaultAmount != null) setAmount(String(target.defaultAmount));
   }
 
   async function handleCopy() {
@@ -84,25 +79,20 @@ export default function PaymentLinkModal({
               <label className="flex flex-col gap-1.5 text-sm">
                 <span className="font-medium text-ink-2">{t("colMember")}</span>
                 <select
-                  name="member_id"
-                  value={memberId}
-                  onChange={(e) => handleMemberChange(e.target.value)}
+                  name="target"
+                  value={targetKey}
+                  onChange={(e) => handleTargetChange(e.target.value)}
                   required
                   className="rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-accent focus:ring-1 focus:ring-accent"
                 >
                   <option value="">{t("optionSelectMember")}</option>
                   {members.map((m) => (
-                    <option key={m.id} value={m.id}>
-                      {m.name}
-                      {m.product_name ? ` — ${m.product_name}` : ""}
+                    <option key={m.key} value={m.key}>
+                      {m.label}
                     </option>
                   ))}
                 </select>
               </label>
-
-              {selectedMember?.product_name && (
-                <p className="text-xs text-muted">{t("coursePrefix", { name: selectedMember.product_name })}</p>
-              )}
 
               <label className="flex flex-col gap-1.5 text-sm">
                 <span className="font-medium text-ink-2">{t("fieldValueEur")}</span>

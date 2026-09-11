@@ -38,7 +38,9 @@ export default function MembersBoard({
   const productOptions = useMemo(() => {
     const seen = new Map<string, string>();
     initialMembers.forEach((m) => {
-      if (m.product_id && m.product_name) seen.set(m.product_id, m.product_name);
+      m.enrollments.forEach((e) => {
+        if (e.product_id && e.product_name) seen.set(e.product_id, e.product_name);
+      });
     });
     return Array.from(seen.entries())
       .map(([id, name]) => ({ id, name }))
@@ -48,7 +50,9 @@ export default function MembersBoard({
   const dateOptions = useMemo(() => {
     const seen = new Set<string>();
     initialMembers.forEach((m) => {
-      if (m.start_date) seen.add(m.start_date);
+      m.enrollments.forEach((e) => {
+        if (e.start_date) seen.add(e.start_date);
+      });
     });
     return Array.from(seen).sort();
   }, [initialMembers]);
@@ -66,9 +70,9 @@ export default function MembersBoard({
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     return initialMembers.filter((m) => {
-      if (status !== "all" && m.status !== status) return false;
-      if (productId !== "all" && m.product_id !== productId) return false;
-      if (startDate !== "all" && m.start_date !== startDate) return false;
+      if (status !== "all" && !m.enrollments.some((e) => e.status === status)) return false;
+      if (productId !== "all" && !m.enrollments.some((e) => e.product_id === productId)) return false;
+      if (startDate !== "all" && !m.enrollments.some((e) => e.start_date === startDate)) return false;
       if (!q) return true;
       return m.name.toLowerCase().includes(q) || (m.city ?? "").toLowerCase().includes(q);
     });
@@ -166,43 +170,55 @@ export default function MembersBoard({
                 <th className="px-4 py-3 font-medium">{t("colName")}</th>
                 {isHq && <th className="px-4 py-3 font-medium">{t("colClub")}</th>}
                 <th className="px-4 py-3 font-medium">{t("colCourse")}</th>
-                <th className="px-4 py-3 font-medium">{t("colStatus")}</th>
-                <th className="px-4 py-3 font-medium">{t("colStart")}</th>
                 <th className="px-4 py-3 text-right font-medium">{t("colAmount")}</th>
               </tr>
             </thead>
             <tbody>
-              {filtered.map((m) => (
-                <tr
-                  key={m.id}
-                  onClick={() => setSelectedId(m.id)}
-                  className="cursor-pointer border-b border-border last:border-0 hover:bg-surface-2"
-                >
-                  <td className="px-4 py-3">
-                    <div className="flex items-center gap-3">
-                      <Avatar name={m.name} />
-                      <div className="min-w-0">
-                        <div className="truncate font-medium text-foreground">{m.name}</div>
-                        <div className="truncate text-xs text-muted">
-                          {m.city ?? "—"}
-                          {m.member_since ? ` · ${t("sincePrefix", { date: m.member_since })}` : ""}
+              {filtered.map((m) => {
+                const totalPrice = m.enrollments.reduce((sum, e) => sum + Number(e.price), 0);
+                return (
+                  <tr
+                    key={m.id}
+                    onClick={() => setSelectedId(m.id)}
+                    className="cursor-pointer border-b border-border last:border-0 hover:bg-surface-2"
+                  >
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-3">
+                        <Avatar name={m.name} />
+                        <div className="min-w-0">
+                          <div className="truncate font-medium text-foreground">{m.name}</div>
+                          <div className="truncate text-xs text-muted">
+                            {m.city ?? "—"}
+                            {m.member_since ? ` · ${t("sincePrefix", { date: m.member_since })}` : ""}
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  </td>
-                  {isHq && <td className="px-4 py-3 text-muted">{m.partner_name ?? "—"}</td>}
-                  <td className="px-4 py-3 text-muted">{m.product_name ?? "—"}</td>
-                  <td className="px-4 py-3">
-                    <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${statusPillClasses(m.status)}`}>
-                      {statusLabel(m.status, locale)}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3 text-muted">{m.start_date ?? "—"}</td>
-                  <td className="px-4 py-3 text-right font-medium text-foreground">
-                    {m.price_collected ? <Money amountEur={m.price_collected} /> : "—"}
-                  </td>
-                </tr>
-              ))}
+                    </td>
+                    {isHq && <td className="px-4 py-3 text-muted">{m.partner_name ?? "—"}</td>}
+                    <td className="px-4 py-3">
+                      {m.enrollments.length === 0 ? (
+                        <span className="text-muted">—</span>
+                      ) : (
+                        <div className="flex flex-col gap-1">
+                          {m.enrollments.map((e) => (
+                            <div key={e.id} className="flex items-center gap-2">
+                              <span className="text-ink-2">{e.product_name ?? t("optionCourseNotChosen")}</span>
+                              <span
+                                className={`rounded-full px-2 py-0.5 text-xs font-medium ${statusPillClasses(e.status)}`}
+                              >
+                                {statusLabel(e.status, locale)}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </td>
+                    <td className="px-4 py-3 text-right font-medium text-foreground">
+                      {totalPrice ? <Money amountEur={totalPrice} /> : "—"}
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
@@ -219,6 +235,8 @@ export default function MembersBoard({
         <MemberDetailModal
           key={selected.id}
           member={selected}
+          products={products}
+          cohorts={cohorts}
           canEdit={canEdit}
           onClose={() => setSelectedId(null)}
         />

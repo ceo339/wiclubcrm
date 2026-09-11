@@ -13,10 +13,22 @@ function normalizeStatus(raw: string | undefined | null): string {
   return match ? match.id : "sAwaiting";
 }
 
+function parsePrice(raw: FormDataEntryValue | null): number {
+  const value = Number(String(raw ?? "0").replace(",", "."));
+  return Number.isFinite(value) ? value : 0;
+}
+
 /**
  * Same RLS rule as everywhere else: only a partner account (has
  * partner_id) can write members. HQ (partner_id null) is read-only
  * across the whole network.
+ *
+ * A member is just the person now (name/city/email/member_since) — course
+ * enrollments are separate rows in member_enrollments (see addEnrollment
+ * below), since one member can be on several courses at once. If a course
+ * was picked right in the "new member" form, this also creates that first
+ * enrollment in the same call, so the common case (one course, right away)
+ * still takes one step.
  */
 export async function createMember(formData: FormData): Promise<ActionResult> {
   const profile = await getCurrentProfile();
@@ -28,44 +40,60 @@ export async function createMember(formData: FormData): Promise<ActionResult> {
   const name = String(formData.get("name") || "").trim();
   if (!name) return { error: "errEnterName" };
 
-  const status = normalizeStatus(String(formData.get("status") || ""));
-  const productId = String(formData.get("product_id") || "").trim() || null;
-  const startDate = String(formData.get("start_date") || "").trim() || null;
   const city = String(formData.get("city") || "").trim() || null;
   const email = String(formData.get("email") || "").trim() || null;
   const memberSince = String(formData.get("member_since") || "").trim() || currentMonthYear();
-  const priceRaw = String(formData.get("price_collected") || "0").replace(",", ".");
-  const priceCollected = Number.isFinite(Number(priceRaw)) ? Number(priceRaw) : 0;
-  const paid = status === "sPaid" || status === "sCompleted";
 
   const supabase = await createClient();
 
-  let verifiedProductId = productId;
-  if (verifiedProductId) {
+  const { data: member, error } = await supabase
+    .from("members")
+    .insert({
+      partner_id: profile.partner_id,
+      name,
+      city,
+      email,
+      member_since: memberSince,
+    })
+    .select("id")
+    .single();
+
+  if (error || !member) return { error: error?.message ?? "errGeneric" };
+
+  const productId = String(formData.get("product_id") || "").trim() || null;
+  if (productId) {
+    let verifiedProductId: string | null = productId;
     const { data: product } = await supabase
       .from("products")
       .select("id")
-      .eq("id", verifiedProductId)
+      .eq("id", productId)
       .eq("partner_id", profile.partner_id)
       .maybeSingle();
     if (!product) verifiedProductId = null;
+
+    const status = normalizeStatus(String(formData.get("status") || ""));
+    const startDate = String(formData.get("start_date") || "").trim() || null;
+    const price = parsePrice(formData.get("price"));
+    const paid = status === "sPaid" || status === "sCompleted";
+
+    const { error: enrollError } = await supabase.from("member_enrollments").insert({
+      partner_id: profile.partner_id,
+      member_id: member.id,
+      product_id: verifiedProductId,
+      start_date: startDate,
+      price,
+      status,
+      paid,
+      attended: [],
+    });
+    // The member itself was created successfully either way — an enrollment
+    // failure here isn't fatal, just means she'd need to add the course
+    // from the card afterward. Surface it rather than swallowing it though.
+    if (enrollError) {
+      revalidatePath("/members");
+      return { error: enrollError.message };
+    }
   }
-
-  const { error } = await supabase.from("members").insert({
-    partner_id: profile.partner_id,
-    name,
-    status,
-    product_id: verifiedProductId,
-    start_date: startDate,
-    city,
-    email,
-    member_since: memberSince,
-    price_collected: priceCollected,
-    paid,
-    attended: [],
-  });
-
-  if (error) return { error: error.message };
 
   revalidatePath("/members");
   return { error: null };
@@ -81,28 +109,14 @@ export async function updateMember(memberId: string, formData: FormData): Promis
   const name = String(formData.get("name") || "").trim();
   if (!name) return { error: "errEnterName" };
 
-  const status = normalizeStatus(String(formData.get("status") || ""));
-  const startDate = String(formData.get("start_date") || "").trim() || null;
   const city = String(formData.get("city") || "").trim() || null;
   const email = String(formData.get("email") || "").trim() || null;
   const memberSince = String(formData.get("member_since") || "").trim() || null;
-  const priceRaw = String(formData.get("price_collected") || "0").replace(",", ".");
-  const priceCollected = Number.isFinite(Number(priceRaw)) ? Number(priceRaw) : 0;
-  const paid = status === "sPaid" || status === "sCompleted";
 
   const supabase = await createClient();
   const { error } = await supabase
     .from("members")
-    .update({
-      name,
-      status,
-      start_date: startDate,
-      city,
-      email,
-      member_since: memberSince,
-      price_collected: priceCollected,
-      paid,
-    })
+    .update({ name, city, email, member_since: memberSince })
     .eq("id", memberId);
 
   if (error) return { error: error.message };
@@ -112,12 +126,109 @@ export async function updateMember(memberId: string, formData: FormData): Promis
 }
 
 /**
- * Toggles one session's attendance mark for a member. `index` is the
- * position in the `attended` jsonb array (true = present, false = absent,
- * null = not yet marked) — sized to the enrolled product's session count.
+ * Enrolls an existing member in one more course — the actual fix for "лид
+ * должен переходить в статус участниц на конкретные курсы (может быть 2 и
+ * более)": a member's card can now hold as many of these as she adds.
+ * Price is always freely typed here (not derived from products.price), so a
+ * discounted/negotiated amount for this one participant is just what she
+ * types, no separate "discount price" field on the course itself needed.
+ */
+export async function addEnrollment(memberId: string, formData: FormData): Promise<ActionResult> {
+  const profile = await getCurrentProfile();
+  if (!profile) return { error: "errNotAuthorized" };
+  if (!profile.partner_id) return { error: "errHqNoClubGeneric" };
+
+  const supabase = await createClient();
+  const { data: member } = await supabase
+    .from("members")
+    .select("id")
+    .eq("id", memberId)
+    .eq("partner_id", profile.partner_id)
+    .maybeSingle();
+  if (!member) return { error: "errMemberNotFound" };
+
+  const productId = String(formData.get("product_id") || "").trim() || null;
+  let verifiedProductId: string | null = productId;
+  if (verifiedProductId) {
+    const { data: product } = await supabase
+      .from("products")
+      .select("id")
+      .eq("id", verifiedProductId)
+      .eq("partner_id", profile.partner_id)
+      .maybeSingle();
+    if (!product) verifiedProductId = null;
+  }
+
+  const status = normalizeStatus(String(formData.get("status") || ""));
+  const startDate = String(formData.get("start_date") || "").trim() || null;
+  const price = parsePrice(formData.get("price"));
+  const paid = status === "sPaid" || status === "sCompleted";
+
+  const { error } = await supabase.from("member_enrollments").insert({
+    partner_id: profile.partner_id,
+    member_id: memberId,
+    product_id: verifiedProductId,
+    start_date: startDate,
+    price,
+    status,
+    paid,
+    attended: [],
+  });
+
+  if (error) return { error: error.message };
+
+  revalidatePath("/members");
+  revalidatePath("/attendance", "layout");
+  return { error: null };
+}
+
+export async function updateEnrollment(enrollmentId: string, formData: FormData): Promise<ActionResult> {
+  const profile = await getCurrentProfile();
+  if (!profile) return { error: "errNotAuthorized" };
+  if (!profile.partner_id) return { error: "errHqNoClubEdit" };
+
+  const status = normalizeStatus(String(formData.get("status") || ""));
+  const startDate = String(formData.get("start_date") || "").trim() || null;
+  const price = parsePrice(formData.get("price"));
+  const paid = status === "sPaid" || status === "sCompleted";
+
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("member_enrollments")
+    .update({ status, start_date: startDate, price, paid })
+    .eq("id", enrollmentId);
+
+  if (error) return { error: error.message };
+
+  revalidatePath("/members");
+  revalidatePath("/attendance", "layout");
+  return { error: null };
+}
+
+/** Removes one course from a member's card — she stays a member, just no
+ * longer enrolled in that particular course. Doesn't touch any payment
+ * already recorded against it (payments.enrollment_id just goes null). */
+export async function deleteEnrollment(enrollmentId: string): Promise<ActionResult> {
+  const profile = await getCurrentProfile();
+  if (!profile) return { error: "errNotAuthorized" };
+  if (!profile.partner_id) return { error: "errHqNoClubGeneric" };
+
+  const supabase = await createClient();
+  const { error } = await supabase.from("member_enrollments").delete().eq("id", enrollmentId);
+  if (error) return { error: error.message };
+
+  revalidatePath("/members");
+  revalidatePath("/attendance", "layout");
+  return { error: null };
+}
+
+/**
+ * Toggles one session's attendance mark for one course enrollment. `index`
+ * is the position in the `attended` jsonb array (true = present, false =
+ * absent, null = not yet marked) — sized to that course's session count.
  */
 export async function setAttendance(
-  memberId: string,
+  enrollmentId: string,
   index: number,
   value: boolean | null
 ): Promise<ActionResult> {
@@ -126,20 +237,20 @@ export async function setAttendance(
   if (!profile.partner_id) return { error: "errHqNoClubGeneric" };
 
   const supabase = await createClient();
-  const { data: member, error: fetchError } = await supabase
-    .from("members")
+  const { data: enrollment, error: fetchError } = await supabase
+    .from("member_enrollments")
     .select("attended")
-    .eq("id", memberId)
+    .eq("id", enrollmentId)
     .maybeSingle();
 
   if (fetchError) return { error: fetchError.message };
-  if (!member) return { error: "errMemberNotFound" };
+  if (!enrollment) return { error: "errMemberNotFound" };
 
-  const attended = Array.isArray(member.attended) ? [...member.attended] : [];
+  const attended = Array.isArray(enrollment.attended) ? [...enrollment.attended] : [];
   while (attended.length <= index) attended.push(null);
   attended[index] = value;
 
-  const { error } = await supabase.from("members").update({ attended }).eq("id", memberId);
+  const { error } = await supabase.from("member_enrollments").update({ attended }).eq("id", enrollmentId);
   if (error) return { error: error.message };
 
   revalidatePath("/members");
@@ -147,17 +258,24 @@ export async function setAttendance(
   return { error: null };
 }
 
+export type EnrollmentDetail = Tables<"member_enrollments"> & {
+  product_name: string | null;
+  product_price: number | null;
+  product_sessions: number | null;
+};
+
 export type MemberDetail = {
   comments: Tables<"comments">[];
   tasks: Tables<"tasks">[];
+  enrollments: EnrollmentDetail[];
 };
 
 export async function getMemberDetail(memberId: string): Promise<MemberDetail> {
   const profile = await getCurrentProfile();
-  if (!profile) return { comments: [], tasks: [] };
+  if (!profile) return { comments: [], tasks: [], enrollments: [] };
 
   const supabase = await createClient();
-  const [{ data: comments }, { data: tasks }] = await Promise.all([
+  const [{ data: comments }, { data: tasks }, { data: enrollments }] = await Promise.all([
     supabase
       .from("comments")
       .select("*")
@@ -170,9 +288,24 @@ export async function getMemberDetail(memberId: string): Promise<MemberDetail> {
       .eq("entity_type", "member")
       .eq("entity_id", memberId)
       .order("due_date", { ascending: true }),
+    supabase
+      .from("member_enrollments")
+      .select("*, products(name, price, sessions)")
+      .eq("member_id", memberId)
+      .order("created_at", { ascending: true }),
   ]);
 
-  return { comments: comments ?? [], tasks: tasks ?? [] };
+  return {
+    comments: comments ?? [],
+    tasks: tasks ?? [],
+    enrollments: (enrollments ?? []).map((e) => ({
+      ...e,
+      product_name: (e as { products?: { name: string } | null }).products?.name ?? null,
+      product_price: (e as { products?: { price: number } | null }).products?.price ?? null,
+      product_sessions:
+        (e as { products?: { sessions: number | null } | null }).products?.sessions ?? null,
+    })),
+  };
 }
 
 export async function addMemberComment(memberId: string, text: string): Promise<ActionResult> {

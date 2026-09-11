@@ -10,6 +10,7 @@ import LocaleScope from "@/components/i18n/LocaleScope";
 import T from "@/components/i18n/T";
 import MembersBoard from "@/components/members/MembersBoard";
 import AppShell from "@/components/shell/AppShell";
+import type { Tables } from "@/types/database";
 
 export default async function MembersPage() {
   const profile = await getCurrentProfile();
@@ -17,9 +18,11 @@ export default async function MembersPage() {
 
   const supabase = await createClient();
   // RLS scopes this to the caller's partner_id (or every partner for hq).
+  // A member can hold several course enrollments now, so they come in as a
+  // nested array rather than flat columns on the member row itself.
   const { data: members, error } = await supabase
     .from("members")
-    .select("*, partners(name), products(name, price, sessions)")
+    .select("*, partners(name), member_enrollments(*, products(name, price, sessions))")
     .order("created_at", { ascending: false });
 
   const { scope, fallback } = scopeForProfile(profile);
@@ -52,17 +55,24 @@ export default async function MembersPage() {
         </p>
       ) : (
         <MembersBoard
-          initialMembers={(members ?? []).map((m) => ({
-            ...m,
-            partner_name: (m as { partners?: { name: string } | null }).partners?.name ?? null,
-            product_name:
-              (m as { products?: { name: string } | null }).products?.name ?? null,
-            product_price:
-              (m as { products?: { price: number } | null }).products?.price ?? null,
-            product_sessions:
-              (m as { products?: { sessions: number | null } | null }).products?.sessions ??
-              null,
-          }))}
+          initialMembers={(members ?? []).map((m) => {
+            const raw = m as unknown as {
+              partners?: { name: string } | null;
+              member_enrollments?: (Tables<"member_enrollments"> & {
+                products?: { name: string; price: number; sessions: number | null } | null;
+              })[];
+            };
+            return {
+              ...m,
+              partner_name: raw.partners?.name ?? null,
+              enrollments: (raw.member_enrollments ?? []).map((e) => ({
+                ...e,
+                product_name: e.products?.name ?? null,
+                product_price: e.products?.price ?? null,
+                product_sessions: e.products?.sessions ?? null,
+              })),
+            };
+          })}
           products={products ?? []}
           cohorts={cohorts ?? []}
           isHq={profile.role === "hq"}

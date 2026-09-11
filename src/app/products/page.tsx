@@ -31,9 +31,9 @@ export default async function ProductsPage() {
   // this product overall, and (per start date) how many members actually
   // enrolled in that cohort. Both scoped by the same RLS as everything else
   // on this page, so HQ still sees network-wide numbers.
-  const [{ data: leadsForCount }, { data: membersForCount }] = await Promise.all([
+  const [{ data: leadsForCount }, { data: enrollmentsForCount }] = await Promise.all([
     supabase.from("leads").select("product_id"),
-    supabase.from("members").select("product_id, start_date"),
+    supabase.from("member_enrollments").select("product_id, start_date"),
   ]);
 
   const { scope, fallback } = scopeForProfile(profile);
@@ -65,8 +65,8 @@ export default async function ProductsPage() {
           initialCohorts={cohorts ?? []}
           leadsCountByProduct={countBy(leadsForCount ?? [], (l) => l.product_id)}
           membersCountByCohort={countBy(
-            membersForCount ?? [],
-            (m) => (m.product_id && m.start_date ? `${m.product_id}|${m.start_date}` : null)
+            enrollmentsForCount ?? [],
+            (e) => (e.product_id && e.start_date ? `${e.product_id}|${e.start_date}` : null)
           )}
           isHq={profile.role === "hq"}
           canEdit={!!profile.partner_id}
