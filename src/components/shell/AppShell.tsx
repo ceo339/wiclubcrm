@@ -10,6 +10,7 @@ import {
   IconHome,
   IconFunnel,
   IconUsers,
+  IconContact,
   IconCalendar,
   IconBook,
   IconWallet,
@@ -40,6 +41,7 @@ function navItemsForProfile(profile: Profile): NavItem[] {
   const items: NavItem[] = [{ href: "/", labelKey: "navHome", icon: <IconHome /> }];
 
   items.push(
+    { href: "/contacts", labelKey: "navContacts", icon: <IconContact /> },
     { href: "/leads", labelKey: "navLeads", icon: <IconFunnel /> },
     { href: "/members", labelKey: "navMembers", icon: <IconUsers /> },
     { href: "/attendance", labelKey: "navAttendance", icon: <IconCalendar />, matchPrefix: true },

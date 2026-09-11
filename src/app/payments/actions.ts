@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getCurrentProfile } from "@/lib/auth";
 import { getStripeClient } from "@/lib/stripe";
 import { STATUSES, todayIso } from "@/lib/payments";
+import { findOrCreateContact } from "@/lib/server/contacts";
 
 export type ActionResult = { error: string | null };
 export type PaymentLinkResult = { error: string | null; url?: string };
@@ -71,16 +72,30 @@ async function ensureLeadForMember(
 ): Promise<string | null> {
   const { data: member } = await supabase
     .from("members")
-    .select("id, lead_id, name, phone, email, city, birthday")
+    .select("id, lead_id, contact_id, name, phone, email, city, birthday")
     .eq("id", memberId)
     .maybeSingle();
   if (!member) return null;
   if (member.lead_id) return member.lead_id;
 
+  // Same Контакт as the member's own card — create one if she somehow
+  // doesn't have one yet (a member added before this round's migration).
+  let contactId = member.contact_id;
+  if (!contactId) {
+    contactId = await findOrCreateContact(supabase, partnerId, {
+      name: member.name,
+      phone: member.phone,
+      email: member.email,
+      city: member.city,
+      birthday: member.birthday,
+    });
+  }
+
   const { data: newLead, error } = await supabase
     .from("leads")
     .insert({
       partner_id: partnerId,
+      contact_id: contactId,
       name: member.name,
       phone: member.phone,
       email: member.email,
@@ -95,7 +110,10 @@ async function ensureLeadForMember(
     .single();
   if (error || !newLead) return null;
 
-  await supabase.from("members").update({ lead_id: newLead.id }).eq("id", memberId);
+  await supabase
+    .from("members")
+    .update({ lead_id: newLead.id, contact_id: contactId })
+    .eq("id", memberId);
   return newLead.id;
 }
 
@@ -143,6 +161,7 @@ export async function createPayment(formData: FormData): Promise<ActionResult> {
 
   revalidatePath("/payments");
   revalidatePath("/leads");
+  revalidatePath("/contacts");
   return { error: null };
 }
 

@@ -3,6 +3,7 @@
 import { useMemo, useRef, useState, useTransition } from "react";
 import { createLead, type CreateLeadResult } from "@/app/leads/actions";
 import { COUNTRIES, GENERIC_PLANS, SOURCES, countryDefaultCity, sourceLabel, stageLabel } from "@/lib/leads";
+import { statusLabel } from "@/lib/members";
 import Money from "@/components/currency/Money";
 import { useLocale } from "@/components/i18n/LocaleProvider";
 import type { Tables } from "@/types/database";
@@ -35,23 +36,24 @@ export default function NewLeadModal({
   const { locale, t } = useLocale();
   const formRef = useRef<HTMLFormElement>(null);
   const [state, setState] = useState<CreateLeadResult>(initialState);
+  // The lead is always created — a repeat inquiry from a contact already on
+  // file is never blocked (Anastasiia, 11 сен 2026). Once created, if that
+  // contact turns out to have other leads/courses, the modal stays open one
+  // more beat to show that (contactHistory) instead of closing right away,
+  // so the partner actually sees it before moving on.
+  const [created, setCreated] = useState(false);
   const [pending, startTransition] = useTransition();
 
-  // Anastasiia's rule: block a new lead that duplicates an existing one
-  // (email first, then phone — see createLead/lib/leads.ts), but let her
-  // add it anyway once she's seen the match, by resubmitting the same form
-  // with a hidden force=true field.
-  function submit(force: boolean) {
+  function submit() {
     if (!formRef.current) return;
     const formData = new FormData(formRef.current);
-    formData.set("force", force ? "true" : "false");
     startTransition(async () => {
       const result = await createLead(formData);
-      if (!result.error) {
-        onClose();
-        return;
-      }
       setState(result);
+      if (!result.error) {
+        if (result.contactHistory) setCreated(true);
+        else onClose();
+      }
     });
   }
 
@@ -117,7 +119,7 @@ export default function NewLeadModal({
         ref={formRef}
         onSubmit={(e) => {
           e.preventDefault();
-          submit(false);
+          submit();
         }}
         onClick={(e) => e.stopPropagation()}
         className="max-h-[90vh] w-full max-w-sm overflow-y-auto rounded-2xl border border-border bg-background p-6 shadow-lg"
@@ -263,41 +265,68 @@ export default function NewLeadModal({
         {state.error && (
           <div className="mt-3 rounded-md bg-accent/10 px-3 py-2 text-sm text-accent-strong">
             <p>{t(state.error)}</p>
-            {state.duplicate && (
-              <>
-                <p className="mt-1 text-ink-2">
-                  {t("duplicateExistingLead", { name: state.duplicate.name })} ·{" "}
-                  {stageLabel(state.duplicate.stage, locale)}
-                </p>
-                <button
-                  type="button"
-                  disabled={pending}
-                  onClick={() => submit(true)}
-                  className="mt-2 rounded-lg border border-accent-strong px-3 py-1.5 text-xs font-medium text-accent-strong hover:bg-accent/10 disabled:opacity-50"
-                >
-                  {t("btnAddAnyway")}
-                </button>
-              </>
-            )}
           </div>
         )}
 
-        <div className="mt-5 flex justify-end gap-2">
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-lg border border-border px-4 py-2 text-sm font-medium text-ink-2 hover:bg-surface-2"
-          >
-            {t("cancel")}
-          </button>
-          <button
-            type="submit"
-            disabled={pending}
-            className="rounded-lg bg-foreground px-4 py-2 text-sm font-medium text-background disabled:opacity-50"
-          >
-            {pending ? "..." : t("btnCreate")}
-          </button>
-        </div>
+        {/* The lead above was already created — this is purely informational,
+            visibility for the partner, never a block (Anastasiia, 11 сен
+            2026): "Пусть добавляется заявка, но блокировка дубля только
+            вручную". */}
+        {created && state.contactHistory && (
+          <div className="mt-3 rounded-md bg-accent/10 px-3 py-2 text-sm text-ink-2">
+            <p className="font-medium text-accent-strong">{t("repeatContactTitle")}</p>
+            {state.contactHistory.otherLeads.length > 0 && (
+              <>
+                <p className="mt-1.5 text-xs font-medium text-ink-2">{t("lblOtherInquiries")}</p>
+                <ul className="mt-1 list-disc pl-4 text-xs">
+                  {state.contactHistory.otherLeads.map((l) => (
+                    <li key={l.id}>
+                      {l.name} · {stageLabel(l.stage, locale)}
+                    </li>
+                  ))}
+                </ul>
+              </>
+            )}
+            {state.contactHistory.enrollments.length > 0 && (
+              <>
+                <p className="mt-1.5 text-xs font-medium text-ink-2">{t("navCourses")}</p>
+                <ul className="mt-1 list-disc pl-4 text-xs">
+                  {state.contactHistory.enrollments.map((e, i) => (
+                    <li key={i}>
+                      {e.productName ?? t("optionCourseNotChosen")} · {statusLabel(e.status, locale)}
+                    </li>
+                  ))}
+                </ul>
+              </>
+            )}
+            <button
+              type="button"
+              onClick={onClose}
+              className="mt-2 rounded-lg bg-foreground px-3 py-1.5 text-xs font-medium text-background"
+            >
+              {t("btnUnderstood")}
+            </button>
+          </div>
+        )}
+
+        {!created && (
+          <div className="mt-5 flex justify-end gap-2">
+            <button
+              type="button"
+              onClick={onClose}
+              className="rounded-lg border border-border px-4 py-2 text-sm font-medium text-ink-2 hover:bg-surface-2"
+            >
+              {t("cancel")}
+            </button>
+            <button
+              type="submit"
+              disabled={pending}
+              className="rounded-lg bg-foreground px-4 py-2 text-sm font-medium text-background disabled:opacity-50"
+            >
+              {pending ? "..." : t("btnCreate")}
+            </button>
+          </div>
+        )}
       </form>
     </div>
   );

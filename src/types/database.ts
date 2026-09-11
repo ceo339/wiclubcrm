@@ -52,6 +52,53 @@ export type Database = {
           },
         ]
       }
+      contacts: {
+        Row: {
+          birthday: string | null
+          city: string | null
+          country: string | null
+          created_at: string
+          email: string | null
+          id: string
+          name: string
+          partner_id: string
+          phone: string | null
+          updated_at: string
+        }
+        Insert: {
+          birthday?: string | null
+          city?: string | null
+          country?: string | null
+          created_at?: string
+          email?: string | null
+          id?: string
+          name: string
+          partner_id: string
+          phone?: string | null
+          updated_at?: string
+        }
+        Update: {
+          birthday?: string | null
+          city?: string | null
+          country?: string | null
+          created_at?: string
+          email?: string | null
+          id?: string
+          name?: string
+          partner_id?: string
+          phone?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "contacts_partner_id_fkey"
+            columns: ["partner_id"]
+            isOneToOne: false
+            referencedRelation: "partners"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       email_campaign_recipients: {
         Row: {
           campaign_id: string
@@ -170,6 +217,7 @@ export type Database = {
           birthday: string | null
           city: string | null
           cohort_start_date: string | null
+          contact_id: string | null
           country: string | null
           created_at: string
           decline_note: string | null
@@ -193,6 +241,7 @@ export type Database = {
           birthday?: string | null
           city?: string | null
           cohort_start_date?: string | null
+          contact_id?: string | null
           country?: string | null
           created_at?: string
           decline_note?: string | null
@@ -216,6 +265,7 @@ export type Database = {
           birthday?: string | null
           city?: string | null
           cohort_start_date?: string | null
+          contact_id?: string | null
           country?: string | null
           created_at?: string
           decline_note?: string | null
@@ -234,6 +284,13 @@ export type Database = {
           value?: number
         }
         Relationships: [
+          {
+            foreignKeyName: "leads_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "contacts"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "leads_partner_id_fkey"
             columns: ["partner_id"]
@@ -315,6 +372,7 @@ export type Database = {
         Row: {
           birthday: string | null
           city: string | null
+          contact_id: string | null
           created_at: string
           email: string | null
           id: string
@@ -327,6 +385,7 @@ export type Database = {
         Insert: {
           birthday?: string | null
           city?: string | null
+          contact_id?: string | null
           created_at?: string
           email?: string | null
           id?: string
@@ -339,6 +398,7 @@ export type Database = {
         Update: {
           birthday?: string | null
           city?: string | null
+          contact_id?: string | null
           created_at?: string
           email?: string | null
           id?: string
@@ -349,6 +409,13 @@ export type Database = {
           phone?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "members_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "contacts"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "members_lead_id_fkey"
             columns: ["lead_id"]

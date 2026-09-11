@@ -23,6 +23,7 @@ import {
   stageLabel,
   type StageId,
 } from "@/lib/leads";
+import { statusLabel } from "@/lib/members";
 import Money from "@/components/currency/Money";
 import { useLocale, useT } from "@/components/i18n/LocaleProvider";
 import T from "@/components/i18n/T";
@@ -164,6 +165,7 @@ export default function LeadDetailModal({
           />
         )}
 
+        <ContactHistorySection detail={detail} />
         <CommentsSection leadId={lead.id} detail={detail} canEdit={canEdit} onChanged={refreshDetail} />
         <TasksSection leadId={lead.id} detail={detail} canEdit={canEdit} onChanged={refreshDetail} />
       </div>
@@ -269,6 +271,49 @@ function ReadView({
         </div>
       )}
     </>
+  );
+}
+
+/**
+ * Shows this lead's Контакт cross-history — other заявки (leads) the same
+ * person made, and every course she's enrolled in — the direct fix for
+ * "в Лидах нет информации о том, что этот лид уже проходил или куда
+ * записан" (Anastasiia, 11 сен 2026, re: Nina Drenovska's card). Renders
+ * nothing for a first-time, not-yet-enrolled contact.
+ */
+function ContactHistorySection({ detail }: { detail: LeadDetail | null }) {
+  const { locale, t } = useLocale();
+  const history = detail?.contactHistory;
+  if (!history) return null;
+
+  return (
+    <div className="mt-5 rounded-lg bg-surface-2 p-3">
+      <span className="text-xs font-medium text-ink-2">{t("headingContactHistory")}</span>
+      {history.otherLeads.length > 0 && (
+        <>
+          <p className="mt-2 text-xs font-medium text-ink-2">{t("lblOtherInquiries")}</p>
+          <ul className="mt-1 flex flex-col gap-1 text-xs text-ink-2">
+            {history.otherLeads.map((l) => (
+              <li key={l.id}>
+                {l.name} · {stageLabel(l.stage, locale)}
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
+      {history.enrollments.length > 0 && (
+        <>
+          <p className="mt-2 text-xs font-medium text-ink-2">{t("navCourses")}</p>
+          <ul className="mt-1 flex flex-col gap-1 text-xs text-ink-2">
+            {history.enrollments.map((e, i) => (
+              <li key={i}>
+                {e.productName ?? t("optionCourseNotChosen")} · {statusLabel(e.status, locale)}
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
+    </div>
   );
 }
 

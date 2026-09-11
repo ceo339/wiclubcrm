@@ -15,6 +15,7 @@ import {
   type MemberDetail,
 } from "@/app/members/actions";
 import { attendedArray, STATUSES, statusLabel, statusPillClasses } from "@/lib/members";
+import { stageLabel } from "@/lib/leads";
 import Money from "@/components/currency/Money";
 import { useLocale, useT } from "@/components/i18n/LocaleProvider";
 import SendEmailButton from "@/components/email/SendEmailButton";
@@ -94,6 +95,8 @@ export default function MemberDetailModal({
           canEdit={canEdit}
           onChanged={refresh}
         />
+
+        <ContactLeadsSection detail={detail} />
 
         <CommentsSection memberId={member.id} detail={detail} canEdit={canEdit} onChanged={refresh} />
         <TasksSection memberId={member.id} detail={detail} canEdit={canEdit} onChanged={refresh} />
@@ -696,6 +699,32 @@ function NewEnrollmentForm({
         </button>
       </div>
     </form>
+  );
+}
+
+/**
+ * Shows this member's Контакт's other заявки (leads/inquiries) — the
+ * reverse of LeadDetailModal's ContactHistorySection: her enrollments are
+ * already visible above via EnrollmentsSection, so this only adds what
+ * wasn't shown yet, per Anastasiia's point that neither card had this
+ * before (11 сен 2026). Renders nothing when she has no other leads.
+ */
+function ContactLeadsSection({ detail }: { detail: MemberDetail | null }) {
+  const { locale, t } = useLocale();
+  const leads = detail?.contactHistory?.otherLeads ?? [];
+  if (leads.length === 0) return null;
+
+  return (
+    <div className="mt-5 rounded-lg bg-surface-2 p-3">
+      <span className="text-xs font-medium text-ink-2">{t("headingContactLeads")}</span>
+      <ul className="mt-2 flex flex-col gap-1 text-xs text-ink-2">
+        {leads.map((l) => (
+          <li key={l.id}>
+            {l.name} · {stageLabel(l.stage, locale)}
+          </li>
+        ))}
+      </ul>
+    </div>
   );
 }
 

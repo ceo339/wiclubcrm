@@ -94,6 +94,17 @@ export function IconMail() {
   );
 }
 
+export function IconContact() {
+  return (
+    <svg {...iconProps()}>
+      <rect x="3.5" y="4.5" width="17" height="15" rx="2.5" />
+      <circle cx="9.5" cy="10.5" r="2" />
+      <path d="M6 16c.5-2 2-3 3.5-3s3 1 3.5 3" />
+      <path d="M15 9h2.5M15 12.5h2.5" />
+    </svg>
+  );
+}
+
 export function IconBuilding() {
   return (
     <svg {...iconProps()}>

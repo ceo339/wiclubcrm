@@ -283,6 +283,11 @@ export const DICT: Record<string, Entry> = {
     ru: "Письма участницам и лидам, с реальной статистикой открытий",
     bg: "Писма до участнички и запитвания, с реална статистика на отваряния",
   },
+  navContacts: { ru: "Контакты", bg: "Контакти" },
+  navContactsDesc: {
+    ru: "Все люди в базе — лиды и участницы одной карточкой на человека",
+    bg: "Всички хора в базата — запитвания и участнички с една карта на човек",
+  },
 
   // ---- home page: "Мои задачи" widget ----
   headingMyTasks: { ru: "Мои задачи", bg: "Моите задачи" },
@@ -365,6 +370,20 @@ export const DICT: Record<string, Entry> = {
     bg: "Режим HQ: видими са запитванията на всички клубове в мрежата, само за преглед.",
   },
 
+  // ---- contacts page ----
+  searchContactsPlaceholder: {
+    ru: "Поиск по имени, телефону, email",
+    bg: "Търсене по име, телефон, имейл",
+  },
+  hqReadOnlyContactsBanner: {
+    ru: "Режим HQ: видны контакты всех клубов сети, доступно только для просмотра.",
+    bg: "Режим HQ: видими са контактите на всички клубове в мрежата, само за преглед.",
+  },
+  emptyNoContacts: { ru: "Пока нет контактов", bg: "Все още няма контакти" },
+  emptyNoInquiries: { ru: "Пока нет заявок", bg: "Все още няма запитвания" },
+  colLeadsShort: { ru: "Заявки", bg: "Запитвания" },
+  errLoadContactsFailed: { ru: "Не удалось загрузить контакты", bg: "Неуспешно зареждане на контактите" },
+
   // ---- duplicate leads (HQ tool) ----
   btnFindDuplicates: { ru: "Найти дубли", bg: "Намери дубликати" },
   headingDuplicates: { ru: "Дубли лидов", bg: "Дублирани запитвания" },
@@ -423,6 +442,17 @@ export const DICT: Record<string, Entry> = {
   errDuplicatePhone: { ru: "Лид с таким номером телефона уже есть в базе.", bg: "Вече има запитване с този телефонен номер." },
   duplicateExistingLead: { ru: "Уже в базе: {name}", bg: "Вече в базата: {name}" },
   btnAddAnyway: { ru: "Всё равно добавить", bg: "Добави въпреки това" },
+
+  // ---- contacts: repeat-contact visibility (never blocks, just informs —
+  // Anastasiia, 11 сен 2026) ----
+  repeatContactTitle: {
+    ru: "Это повторное обращение того же контакта",
+    bg: "Това е повторно запитване от същия контакт",
+  },
+  lblOtherInquiries: { ru: "Другие заявки", bg: "Други запитвания" },
+  btnUnderstood: { ru: "Понятно", bg: "Разбрах" },
+  headingContactHistory: { ru: "История контакта", bg: "История на контакта" },
+  headingContactLeads: { ru: "Заявки этого контакта", bg: "Запитвания на този контакт" },
 
   // ---- import leads modal ----
   headingImportLeads: { ru: "Импорт лидов из CSV", bg: "Импорт на запитвания от CSV" },

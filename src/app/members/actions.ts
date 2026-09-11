@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentProfile } from "@/lib/auth";
 import { currentMonthYear, enrollmentIsDueForCompletion, STATUSES } from "@/lib/members";
+import { findOrCreateContact, loadContactHistory, type ContactHistory } from "@/lib/server/contacts";
 import type { Tables } from "@/types/database";
 
 export type ActionResult = { error: string | null };
@@ -64,6 +65,13 @@ export async function createMember(formData: FormData): Promise<ActionResult> {
 
   if (error || !member) return { error: error?.message ?? "errGeneric" };
 
+  // A member created directly here (not via convertLeadToMember) still
+  // needs a Контакт — same matching rule as a new lead, so a repeat person
+  // added straight to Участницы still lines up with any lead she made
+  // earlier or makes later.
+  const contactId = await findOrCreateContact(supabase, profile.partner_id, { name, phone, email, city, birthday });
+  if (contactId) await supabase.from("members").update({ contact_id: contactId }).eq("id", member.id);
+
   const productId = String(formData.get("product_id") || "").trim() || null;
   if (productId) {
     let verifiedProductId: string | null = productId;
@@ -100,6 +108,7 @@ export async function createMember(formData: FormData): Promise<ActionResult> {
   }
 
   revalidatePath("/members");
+  revalidatePath("/contacts");
   return { error: null };
 }
 
@@ -109,7 +118,9 @@ export async function createMember(formData: FormData): Promise<ActionResult> {
  * city/birthday — are mirrored back onto that lead row too: Anastasiia's
  * request (11 сен 2026) that a lead and the participant she became are
  * "one contact" whichever card you edit it from. member_since is
- * membership-only and never touches the lead.
+ * membership-only and never touches the lead. The underlying Контакт row
+ * (member.contact_id) gets the same fields mirrored too, so it stays the
+ * canonical, up-to-date copy regardless of which card was actually edited.
  */
 export async function updateMember(memberId: string, formData: FormData): Promise<ActionResult> {
   const profile = await getCurrentProfile();
@@ -130,7 +141,7 @@ export async function updateMember(memberId: string, formData: FormData): Promis
   const supabase = await createClient();
   const { data: existing } = await supabase
     .from("members")
-    .select("lead_id")
+    .select("lead_id, contact_id")
     .eq("id", memberId)
     .maybeSingle();
 
@@ -144,9 +155,13 @@ export async function updateMember(memberId: string, formData: FormData): Promis
   if (existing?.lead_id) {
     await supabase.from("leads").update({ name, phone, email, city, birthday }).eq("id", existing.lead_id);
   }
+  if (existing?.contact_id) {
+    await supabase.from("contacts").update({ name, phone, email, city, birthday }).eq("id", existing.contact_id);
+  }
 
   revalidatePath("/members");
   revalidatePath("/leads");
+  revalidatePath("/contacts");
   return { error: null };
 }
 
@@ -332,16 +347,24 @@ export type MemberDetail = {
   comments: Tables<"comments">[];
   tasks: Tables<"tasks">[];
   enrollments: EnrollmentDetail[];
+  contactHistory: ContactHistory | null;
 };
 
+/**
+ * Loads comments/tasks/enrollments for one member's detail card, plus her
+ * Контакт's other заявки (leads) — the reverse direction of what
+ * LeadDetailModal shows, so a member's card also surfaces "she asked about
+ * X before becoming a member" instead of only her own courses.
+ */
 export async function getMemberDetail(memberId: string): Promise<MemberDetail> {
   const profile = await getCurrentProfile();
-  if (!profile) return { comments: [], tasks: [], enrollments: [] };
+  if (!profile) return { comments: [], tasks: [], enrollments: [], contactHistory: null };
 
   await autoCompleteDueEnrollments();
 
   const supabase = await createClient();
-  const [{ data: comments }, { data: tasks }, { data: enrollments }] = await Promise.all([
+  const { data: memberRow } = await supabase.from("members").select("contact_id").eq("id", memberId).maybeSingle();
+  const [{ data: comments }, { data: tasks }, { data: enrollments }, contactHistory] = await Promise.all([
     supabase
       .from("comments")
       .select("*")
@@ -359,6 +382,7 @@ export async function getMemberDetail(memberId: string): Promise<MemberDetail> {
       .select("*, products(name, price, sessions)")
       .eq("member_id", memberId)
       .order("created_at", { ascending: true }),
+    loadContactHistory(supabase, memberRow?.contact_id ?? null),
   ]);
 
   return {
@@ -371,6 +395,7 @@ export async function getMemberDetail(memberId: string): Promise<MemberDetail> {
       product_sessions:
         (e as { products?: { sessions: number | null } | null }).products?.sessions ?? null,
     })),
+    contactHistory,
   };
 }
 

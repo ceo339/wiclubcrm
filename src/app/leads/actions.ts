@@ -6,6 +6,7 @@ import { getCurrentProfile } from "@/lib/auth";
 import { SOURCES, duplicateKey, normalizeEmail, normalizePhone, type DuplicateField, type StageId } from "@/lib/leads";
 import { currentMonthYear } from "@/lib/members";
 import { todayIso } from "@/lib/payments";
+import { findOrCreateContact, loadContactHistory, type ContactHistory } from "@/lib/server/contacts";
 import type { Tables } from "@/types/database";
 
 export type ActionResult = { error: string | null };
@@ -14,43 +15,6 @@ function normalizeSource(raw: string | undefined | null): string | null {
   if (!raw) return null;
   const match = SOURCES.find((s) => s.toLowerCase() === raw.trim().toLowerCase());
   return match ?? null;
-}
-
-export type DuplicateMatch = { id: string; name: string; stage: string; field: DuplicateField };
-
-/**
- * Looks for an existing lead of this partner matching the given email/phone
- * by the shared duplicateKey() rule (email first, then phone — see
- * lib/leads.ts). Fetches the partner's leads and compares client-side
- * rather than pushing the match into SQL, since phone numbers are
- * free-typed text (formatting varies) and need the same normalizePhone()
- * comparison used everywhere else in this feature — fine at the lead
- * volumes a single club has.
- */
-async function findDuplicateInPartner(
-  supabase: Awaited<ReturnType<typeof createClient>>,
-  partnerId: string,
-  email: string | null,
-  phone: string | null,
-  excludeLeadId?: string
-): Promise<DuplicateMatch | null> {
-  const key = duplicateKey(email, phone);
-  if (!key) return null;
-
-  let query = supabase
-    .from("leads")
-    .select("id, name, stage, email, phone")
-    .eq("partner_id", partnerId);
-  if (excludeLeadId) query = query.neq("id", excludeLeadId);
-  const { data } = await query;
-  if (!data) return null;
-
-  if (key.field === "email") {
-    const match = data.find((l) => normalizeEmail(l.email) === key.value);
-    return match ? { id: match.id, name: match.name, stage: match.stage, field: "email" } : null;
-  }
-  const match = data.find((l) => normalizePhone(l.phone) === key.value);
-  return match ? { id: match.id, name: match.name, stage: match.stage, field: "phone" } : null;
 }
 
 /**
@@ -119,8 +83,19 @@ export async function updateLeadStage(
   return { error: null };
 }
 
-export type CreateLeadResult = ActionResult & { duplicate?: DuplicateMatch };
+export type CreateLeadResult = ActionResult & { contactHistory?: ContactHistory | null };
 
+/**
+ * Creates a new lead (заявка). Always creates it — a repeat inquiry from a
+ * contact already on file is never blocked (Anastasiia, 11 сен 2026:
+ * "Пусть добавляется заявка, но блокировка дубля только вручную, чтоб
+ * партнер видел, что человек снова хочет и интересуется курсом"). What used
+ * to be a hard block is now purely informational: the new lead is always
+ * attached to a matching Контакт (or a fresh one), and if that contact
+ * already has other leads/enrollments, they come back in `contactHistory`
+ * for the form to show — any actual removal of a duplicate stays a manual
+ * partner action (the existing HQ "Найти дубли" tool), never automatic.
+ */
 export async function createLead(formData: FormData): Promise<CreateLeadResult> {
   const profile = await getCurrentProfile();
   if (!profile) return { error: "errNotAuthorized" };
@@ -143,20 +118,8 @@ export async function createLead(formData: FormData): Promise<CreateLeadResult> 
   let productId = String(formData.get("product_id") || "").trim() || null;
   let cohortStartDate = String(formData.get("cohort_start_date") || "").trim() || null;
   const plan = String(formData.get("plan") || "").trim() || null;
-  const force = String(formData.get("force") || "") === "true";
 
   const supabase = await createClient();
-
-  // "Не давать создавать новые дубли" — block by default (email first, then
-  // phone — see duplicateKey), but let the form resubmit with force=true
-  // once the partner has seen the existing match and still wants to add it
-  // (e.g. a genuine repeat enquiry from the same person).
-  if (!force) {
-    const duplicate = await findDuplicateInPartner(supabase, profile.partner_id, email, phone);
-    if (duplicate) {
-      return { error: duplicate.field === "email" ? "errDuplicateEmail" : "errDuplicatePhone", duplicate };
-    }
-  }
 
   // The product id/cohort date arrive via a hidden form field, so re-verify
   // the product actually belongs to this partner before trusting it.
@@ -173,26 +136,43 @@ export async function createLead(formData: FormData): Promise<CreateLeadResult> 
     }
   }
 
-  const { error } = await supabase.from("leads").insert({
-    partner_id: profile.partner_id,
+  const { data: inserted, error } = await supabase
+    .from("leads")
+    .insert({
+      partner_id: profile.partner_id,
+      name,
+      phone,
+      email,
+      source,
+      value,
+      country,
+      city,
+      birthday,
+      product_id: productId,
+      cohort_start_date: cohortStartDate,
+      plan,
+      stage: "new",
+    })
+    .select("id")
+    .single();
+
+  if (error || !inserted) return { error: error?.message ?? "errGeneric" };
+
+  const contactId = await findOrCreateContact(supabase, profile.partner_id, {
     name,
     phone,
     email,
-    source,
-    value,
-    country,
     city,
     birthday,
-    product_id: productId,
-    cohort_start_date: cohortStartDate,
-    plan,
-    stage: "new",
+    country,
   });
+  if (contactId) await supabase.from("leads").update({ contact_id: contactId }).eq("id", inserted.id);
 
-  if (error) return { error: error.message };
+  const contactHistory = await loadContactHistory(supabase, contactId, inserted.id);
 
   revalidatePath("/leads");
-  return { error: null };
+  revalidatePath("/contacts");
+  return { error: null, contactHistory };
 }
 
 export type ImportRow = {
@@ -288,7 +268,10 @@ export async function importLeads(rows: ImportRow[]): Promise<ImportResult> {
   let imported = 0;
   for (let i = 0; i < deduped.length; i += IMPORT_CHUNK_SIZE) {
     const chunk = deduped.slice(i, i + IMPORT_CHUNK_SIZE);
-    const { error, count } = await supabase.from("leads").insert(chunk, { count: "exact" });
+    const { data: insertedRows, error, count } = await supabase
+      .from("leads")
+      .insert(chunk, { count: "exact" })
+      .select("id, name, phone, email");
     if (error) {
       return {
         error: "errImportPartial",
@@ -298,9 +281,23 @@ export async function importLeads(rows: ImportRow[]): Promise<ImportResult> {
       };
     }
     imported += count ?? chunk.length;
+
+    // Each imported row still gets a Контакт — matched against contacts
+    // created earlier in this same import batch too, so 50 rows for the
+    // same person (rare, but the CSV dedup above already covers the exact
+    // email/phone case) don't spawn 50 contacts.
+    for (const row of insertedRows ?? []) {
+      const contactId = await findOrCreateContact(supabase, profile.partner_id as string, {
+        name: row.name,
+        phone: row.phone,
+        email: row.email,
+      });
+      if (contactId) await supabase.from("leads").update({ contact_id: contactId }).eq("id", row.id);
+    }
   }
 
   revalidatePath("/leads");
+  revalidatePath("/contacts");
   return { error: null, imported, duplicatesSkipped };
 }
 
@@ -334,10 +331,12 @@ export async function updateLead(leadId: string, formData: FormData): Promise<Ac
   const value = Number.isFinite(Number(valueRaw)) ? Number(valueRaw) : 0;
 
   const supabase = await createClient();
-  const { error } = await supabase
+  const { data: updated, error } = await supabase
     .from("leads")
     .update({ name, phone, email, source, country, city, birthday, note, value })
-    .eq("id", leadId);
+    .eq("id", leadId)
+    .select("contact_id")
+    .maybeSingle();
 
   if (error) return { error: error.message };
 
@@ -345,29 +344,40 @@ export async function updateLead(leadId: string, formData: FormData): Promise<Ac
   // the shared fields (name/phone/email/city/birthday) mirrored onto her
   // member card too, so editing either one shows up in both (Anastasiia,
   // 11 сен 2026). member_since/stage/source/value/note stay one-sided:
-  // those describe the funnel or the membership, not the person.
+  // those describe the funnel or the membership, not the person. The
+  // Контакт row underneath both cards gets the same mirroring, so it stays
+  // the canonical copy of the shared fields.
   await supabase.from("members").update({ name, phone, email, city, birthday }).eq("lead_id", leadId);
+  if (updated?.contact_id) {
+    await supabase.from("contacts").update({ name, phone, email, city, birthday, country }).eq("id", updated.contact_id);
+  }
 
   revalidatePath("/leads");
   revalidatePath("/members");
+  revalidatePath("/contacts");
   return { error: null };
 }
 
 export type LeadDetail = {
   comments: Tables<"comments">[];
   tasks: Tables<"tasks">[];
+  contactHistory: ContactHistory | null;
 };
 
 /**
  * Loads comments/tasks for one lead's detail card, fetched on demand when
- * the card opens rather than upfront with the whole leads list.
+ * the card opens rather than upfront with the whole leads list. Also loads
+ * this lead's Контакт cross-history (other заявки/enrollments) — the direct
+ * fix for "в Лидах нет информации о том, что этот лид уже проходил или куда
+ * записан" (Anastasiia, 11 сен 2026).
  */
 export async function getLeadDetail(leadId: string): Promise<LeadDetail> {
   const profile = await getCurrentProfile();
-  if (!profile) return { comments: [], tasks: [] };
+  if (!profile) return { comments: [], tasks: [], contactHistory: null };
 
   const supabase = await createClient();
-  const [{ data: comments }, { data: tasks }] = await Promise.all([
+  const { data: leadRow } = await supabase.from("leads").select("contact_id").eq("id", leadId).maybeSingle();
+  const [{ data: comments }, { data: tasks }, contactHistory] = await Promise.all([
     supabase
       .from("comments")
       .select("*")
@@ -380,9 +390,10 @@ export async function getLeadDetail(leadId: string): Promise<LeadDetail> {
       .eq("entity_type", "lead")
       .eq("entity_id", leadId)
       .order("due_date", { ascending: true }),
+    loadContactHistory(supabase, leadRow?.contact_id ?? null, leadId),
   ]);
 
-  return { comments: comments ?? [], tasks: tasks ?? [] };
+  return { comments: comments ?? [], tasks: tasks ?? [], contactHistory };
 }
 
 export async function addComment(leadId: string, text: string): Promise<ActionResult> {
@@ -525,12 +536,29 @@ export async function convertLeadToMember(
 
   let memberId = existingMember?.id ?? null;
 
+  // Every lead gets a contact_id on creation now, but this is a safety net
+  // for any lead that somehow doesn't have one yet (e.g. one predating this
+  // round's migration that the backfill missed).
+  let contactId = lead.contact_id;
+  if (!contactId) {
+    contactId = await findOrCreateContact(supabase, profile.partner_id, {
+      name: lead.name,
+      phone: lead.phone,
+      email: lead.email,
+      city: lead.city,
+      birthday: lead.birthday,
+      country: lead.country,
+    });
+    if (contactId) await supabase.from("leads").update({ contact_id: contactId }).eq("id", lead.id);
+  }
+
   if (!memberId) {
     const { data: member, error } = await supabase
       .from("members")
       .insert({
         partner_id: profile.partner_id,
         lead_id: lead.id,
+        contact_id: contactId,
         name: lead.name,
         city: lead.city,
         email: lead.email,
@@ -565,6 +593,7 @@ export async function convertLeadToMember(
 
   revalidatePath("/leads");
   revalidatePath("/members");
+  revalidatePath("/contacts");
   return { error: null };
 }
 
