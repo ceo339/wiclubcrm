@@ -313,33 +313,49 @@ export type Database = {
       }
       members: {
         Row: {
+          birthday: string | null
           city: string | null
           created_at: string
           email: string | null
           id: string
+          lead_id: string | null
           member_since: string | null
           name: string
           partner_id: string
+          phone: string | null
         }
         Insert: {
+          birthday?: string | null
           city?: string | null
           created_at?: string
           email?: string | null
           id?: string
+          lead_id?: string | null
           member_since?: string | null
           name: string
           partner_id: string
+          phone?: string | null
         }
         Update: {
+          birthday?: string | null
           city?: string | null
           created_at?: string
           email?: string | null
           id?: string
+          lead_id?: string | null
           member_since?: string | null
           name?: string
           partner_id?: string
+          phone?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "members_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: true
+            referencedRelation: "leads"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "members_partner_id_fkey"
             columns: ["partner_id"]

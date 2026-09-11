@@ -115,8 +115,16 @@ function ReadView({
   return (
     <>
       <dl className="mt-4 grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
+        <dt className="text-muted">{t("fieldPhone")}</dt>
+        <dd className="text-ink-2">{member.phone ?? "—"}</dd>
         <dt className="text-muted">{t("fieldEmail")}</dt>
         <dd className="text-ink-2">{member.email ?? "—"}</dd>
+        {member.birthday && (
+          <>
+            <dt className="text-muted">{t("fieldBirthday")}</dt>
+            <dd className="text-ink-2">{member.birthday}</dd>
+          </>
+        )}
       </dl>
 
       {canEdit && (
@@ -170,6 +178,16 @@ function EditForm({
       </label>
 
       <label className="flex flex-col gap-1.5 text-sm">
+        <span className="font-medium text-ink-2">{t("fieldPhone")}</span>
+        <input
+          name="phone"
+          type="tel"
+          defaultValue={member.phone ?? ""}
+          className="rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-accent focus:ring-1 focus:ring-accent"
+        />
+      </label>
+
+      <label className="flex flex-col gap-1.5 text-sm">
         <span className="font-medium text-ink-2">{t("fieldCity")}</span>
         <input
           name="city"
@@ -184,6 +202,16 @@ function EditForm({
           name="email"
           type="email"
           defaultValue={member.email ?? ""}
+          className="rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-accent focus:ring-1 focus:ring-accent"
+        />
+      </label>
+
+      <label className="flex flex-col gap-1.5 text-sm">
+        <span className="font-medium text-ink-2">{t("fieldBirthday")}</span>
+        <input
+          name="birthday"
+          type="date"
+          defaultValue={member.birthday ?? ""}
           className="rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-accent focus:ring-1 focus:ring-accent"
         />
       </label>

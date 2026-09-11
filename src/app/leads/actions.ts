@@ -304,7 +304,15 @@ export async function updateLead(leadId: string, formData: FormData): Promise<Ac
 
   if (error) return { error: error.message };
 
+  // Lead and member are the same contact once she's been converted — keep
+  // the shared fields (name/phone/email/city/birthday) mirrored onto her
+  // member card too, so editing either one shows up in both (Anastasiia,
+  // 11 сен 2026). member_since/stage/source/value/note stay one-sided:
+  // those describe the funnel or the membership, not the person.
+  await supabase.from("members").update({ name, phone, email, city, birthday }).eq("lead_id", leadId);
+
   revalidatePath("/leads");
+  revalidatePath("/members");
   return { error: null };
 }
 
@@ -416,18 +424,26 @@ export type ConvertCourseChoice = {
 };
 
 /**
- * Turns a won lead into a member record — a one-way copy (name, city,
- * email), not a foreign-key link, matching how the prototype kept leads and
- * members as separate lists. `choice` is whatever course/cohort/price the
- * person picked in the convert dialog (LeadDetailModal) — she can pick a
- * different course than whatever was on the lead, change the cohort date,
- * or leave it unset entirely; omitting `choice` falls back to copying the
- * lead's own product_id/cohort_start_date/value, same as before this could
- * be chosen (11 сен 2026, Anastasiia: "чтоб в карточке лида можно было
- * сразу сделать участницей и выбрать курс"). That becomes her first course
- * enrollment (see member_enrollments) — she isn't limited to just this one
- * course afterward: more can be added from her member card, since a member
- * can be enrolled in several at once.
+ * Turns a won lead into a member — linked by members.lead_id, not a
+ * one-way copy: the lead and the participant she becomes are the same
+ * contact from here on (Anastasiia, 11 сен 2026 — "по сути это 1 контакт и
+ * 1 карточка клиента"). `updateLead`/`updateMember` keep the shared contact
+ * fields (name/phone/email/city/birthday) mirrored between the two rows
+ * whichever card gets edited.
+ *
+ * Calling this again for a lead that's already linked to a member does NOT
+ * create a second member — it used to, and that was a real bug: clicking
+ * "Сделать участницей" a second time (e.g. after reopening the card) just
+ * inserted a brand-new row every time, which is exactly how "Даниела
+ * Василева" ended up with two duplicate participant cards. Now it just adds
+ * the chosen course as another enrollment on her existing member card,
+ * which is the right behaviour anyway since a member can hold several
+ * course enrollments at once.
+ *
+ * `choice` is whatever course/cohort/price was picked in the convert
+ * dialog (LeadDetailModal) — can differ from whatever was already on the
+ * lead; omitting it falls back to the lead's own product_id/
+ * cohort_start_date/value (pre-picker behaviour).
  */
 export async function convertLeadToMember(
   leadId: string,
@@ -464,24 +480,38 @@ export async function convertLeadToMember(
     if (!product) return { error: "errCourseNotFound" };
   }
 
-  const { data: member, error } = await supabase
+  const { data: existingMember } = await supabase
     .from("members")
-    .insert({
-      partner_id: profile.partner_id,
-      name: lead.name,
-      city: lead.city,
-      email: lead.email,
-      member_since: currentMonthYear(),
-    })
     .select("id")
-    .single();
+    .eq("lead_id", leadId)
+    .maybeSingle();
 
-  if (error || !member) return { error: error?.message ?? "errGeneric" };
+  let memberId = existingMember?.id ?? null;
+
+  if (!memberId) {
+    const { data: member, error } = await supabase
+      .from("members")
+      .insert({
+        partner_id: profile.partner_id,
+        lead_id: lead.id,
+        name: lead.name,
+        city: lead.city,
+        email: lead.email,
+        phone: lead.phone,
+        birthday: lead.birthday,
+        member_since: currentMonthYear(),
+      })
+      .select("id")
+      .single();
+
+    if (error || !member) return { error: error?.message ?? "errGeneric" };
+    memberId = member.id;
+  }
 
   if (productId) {
     const { error: enrollError } = await supabase.from("member_enrollments").insert({
       partner_id: profile.partner_id,
-      member_id: member.id,
+      member_id: memberId,
       product_id: productId,
       start_date: cohortStartDate,
       price,

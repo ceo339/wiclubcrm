@@ -11,10 +11,17 @@ import T from "@/components/i18n/T";
 import MembersBoard from "@/components/members/MembersBoard";
 import AppShell from "@/components/shell/AppShell";
 import type { Tables } from "@/types/database";
+import { autoCompleteDueEnrollments } from "./actions";
 
 export default async function MembersPage() {
   const profile = await getCurrentProfile();
   if (!profile) redirect("/login");
+
+  // Catch up any "sPaid" enrollment that's become due for "sCompleted"
+  // (see enrollmentIsDueForCompletion) before reading the list, so a
+  // finished МК or fully-attended course shows the right status without
+  // Anastasiia having to open each card by hand.
+  await autoCompleteDueEnrollments();
 
   const supabase = await createClient();
   // RLS scopes this to the caller's partner_id (or every partner for hq).

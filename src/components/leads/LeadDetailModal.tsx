@@ -337,6 +337,13 @@ function DeleteLeadButton({ leadId, onDeleted }: { leadId: string; onDeleted: ()
  * course/cohort/amount when it has one, but she can pick a different course
  * or leave it unset. Clubs with no courses yet skip straight to a single
  * confirm button (same as before this change).
+ *
+ * `lead.member_id` is the persisted truth for "already converted" (set
+ * once members.lead_id points back at this lead) — it survives closing and
+ * reopening the card, unlike a plain local flag. Once linked, this button
+ * doesn't disappear: clicking it again safely adds one more course to the
+ * same member instead of creating a duplicate (see convertLeadToMember) —
+ * that duplicate-on-reclick was a real bug this round fixed.
  */
 function ConvertToMemberButton({
   lead,
@@ -355,6 +362,8 @@ function ConvertToMemberButton({
   const [productId, setProductId] = useState(lead.product_id ?? "");
   const [cohortDate, setCohortDate] = useState(lead.cohort_start_date ?? "");
   const [price, setPrice] = useState(String(lead.value ?? 0));
+
+  const alreadyMember = !!lead.member_id || done;
 
   const productCohorts = useMemo(
     () => cohorts.filter((c) => c.product_id === productId),
@@ -376,16 +385,21 @@ function ConvertToMemberButton({
         price: Number(String(price).replace(",", ".")) || 0,
       });
       if (res.error) setError(res.error);
-      else setDone(true);
+      else {
+        setDone(true);
+        setOpen(false);
+        setProductId("");
+        setCohortDate("");
+        setPrice("0");
+      }
     });
   }
 
-  if (done) {
-    return <p className="text-xs text-muted">{t("convertedToMember")}</p>;
-  }
-
-  // No courses configured at all — nothing to pick, keep the old one-click flow.
+  // No courses configured at all — nothing to pick. Once she's already a
+  // member there's nothing left for this button to do either (no course to
+  // add), so it just shows the confirmation text.
   if (products.length === 0) {
+    if (alreadyMember) return <p className="text-xs text-muted">{t("convertedToMember")}</p>;
     return (
       <div className="flex flex-col gap-1">
         <button
@@ -403,13 +417,16 @@ function ConvertToMemberButton({
 
   if (!open) {
     return (
-      <button
-        type="button"
-        onClick={() => setOpen(true)}
-        className="rounded-lg bg-foreground px-3 py-1.5 text-xs font-medium text-background"
-      >
-        {t("btnConvertToMember")}
-      </button>
+      <div className="flex flex-col items-start gap-1">
+        {alreadyMember && <p className="text-xs text-muted">{t("convertedToMember")}</p>}
+        <button
+          type="button"
+          onClick={() => setOpen(true)}
+          className="rounded-lg bg-foreground px-3 py-1.5 text-xs font-medium text-background"
+        >
+          {alreadyMember ? t("btnAddAnotherCourse") : t("btnConvertToMember")}
+        </button>
+      </div>
     );
   }
 

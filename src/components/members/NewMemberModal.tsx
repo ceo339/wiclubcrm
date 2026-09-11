@@ -73,6 +73,15 @@ export default function NewMemberModal({
           </label>
 
           <label className="flex flex-col gap-1.5 text-sm">
+            <span className="font-medium text-ink-2">{t("fieldPhone")}</span>
+            <input
+              name="phone"
+              type="tel"
+              className="rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-accent focus:ring-1 focus:ring-accent"
+            />
+          </label>
+
+          <label className="flex flex-col gap-1.5 text-sm">
             <span className="font-medium text-ink-2">{t("fieldCity")}</span>
             <input
               name="city"
@@ -85,6 +94,15 @@ export default function NewMemberModal({
             <input
               name="email"
               type="email"
+              className="rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-accent focus:ring-1 focus:ring-accent"
+            />
+          </label>
+
+          <label className="flex flex-col gap-1.5 text-sm">
+            <span className="font-medium text-ink-2">{t("fieldBirthday")}</span>
+            <input
+              name="birthday"
+              type="date"
               className="rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-accent focus:ring-1 focus:ring-accent"
             />
           </label>

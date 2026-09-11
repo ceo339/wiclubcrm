@@ -78,6 +78,21 @@ export default function MembersBoard({
     });
   }, [initialMembers, search, status, productId, startDate]);
 
+  // "нужен виджет кол-во участниц на выбранный курс, поток" (Anastasiia,
+  // 11 сен 2026) — a plain-language readout of how many rows the current
+  // course/stream filters actually match, since counting table rows by eye
+  // gets unreliable once a list is long.
+  const countLabel = useMemo(() => {
+    const courseName = productId !== "all" ? productOptions.find((p) => p.id === productId)?.name ?? "" : "";
+    if (productId !== "all" && startDate !== "all") {
+      return t("countInStream", { course: courseName, date: startDate, count: String(filtered.length) });
+    }
+    if (productId !== "all") {
+      return t("countInCourse", { course: courseName, count: String(filtered.length) });
+    }
+    return t("countTotalMembers", { count: String(filtered.length) });
+  }, [productId, startDate, filtered.length, productOptions, t]);
+
   const selected = initialMembers.find((m) => m.id === selectedId) ?? null;
 
   return (
@@ -158,6 +173,8 @@ export default function MembersBoard({
         </p>
       )}
 
+      <p className="text-sm font-medium text-ink-2">{countLabel}</p>
+
       {filtered.length === 0 ? (
         <p className="rounded-lg border border-dashed border-border p-8 text-center text-sm text-muted">
           {t("emptyNoMembersFiltered")}
@@ -167,6 +184,7 @@ export default function MembersBoard({
           <table className="w-full min-w-[720px] text-left text-sm">
             <thead className="border-b border-border text-xs uppercase tracking-wide text-muted">
               <tr>
+                <th className="w-10 px-4 py-3 text-right font-medium">№</th>
                 <th className="px-4 py-3 font-medium">{t("colName")}</th>
                 {isHq && <th className="px-4 py-3 font-medium">{t("colClub")}</th>}
                 <th className="px-4 py-3 font-medium">{t("colCourse")}</th>
@@ -174,7 +192,7 @@ export default function MembersBoard({
               </tr>
             </thead>
             <tbody>
-              {filtered.map((m) => {
+              {filtered.map((m, index) => {
                 const totalPrice = m.enrollments.reduce((sum, e) => sum + Number(e.price), 0);
                 return (
                   <tr
@@ -182,6 +200,7 @@ export default function MembersBoard({
                     onClick={() => setSelectedId(m.id)}
                     className="cursor-pointer border-b border-border last:border-0 hover:bg-surface-2"
                   >
+                    <td className="px-4 py-3 text-right text-muted">{index + 1}</td>
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-3">
                         <Avatar name={m.name} />

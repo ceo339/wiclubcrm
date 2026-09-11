@@ -17,10 +17,12 @@ export default async function LeadsPage() {
 
   const supabase = await createClient();
   // RLS already scopes this to the caller's partner_id (or every partner
-  // for hq) — no manual filtering needed here.
+  // for hq) — no manual filtering needed here. members(id) is the reverse
+  // side of members.lead_id — lets the lead card know whether it's already
+  // linked to a member (see the Lead type's member_id).
   const { data: leads, error } = await supabase
     .from("leads")
-    .select("*, partners(name)")
+    .select("*, partners(name), members(id)")
     .order("added_date", { ascending: false });
 
   const { scope, fallback } = scopeForProfile(profile);
@@ -53,10 +55,18 @@ export default async function LeadsPage() {
         </p>
       ) : (
         <LeadsBoard
-          initialLeads={(leads ?? []).map((l) => ({
-            ...l,
-            partner_name: (l as { partners?: { name: string } | null }).partners?.name ?? null,
-          }))}
+          initialLeads={(leads ?? []).map((l) => {
+            const raw = l as unknown as {
+              partners?: { name: string } | null;
+              members?: { id: string } | { id: string }[] | null;
+            };
+            const memberRow = Array.isArray(raw.members) ? raw.members[0] : raw.members;
+            return {
+              ...l,
+              partner_name: raw.partners?.name ?? null,
+              member_id: memberRow?.id ?? null,
+            };
+          })}
           isHq={profile.role === "hq"}
           canEdit={canEdit}
           products={products ?? []}

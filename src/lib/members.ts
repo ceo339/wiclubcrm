@@ -84,3 +84,38 @@ export function attendedArray(raw: unknown, length: number): (boolean | null)[] 
   }
   return out;
 }
+
+/** A course with at most one session is a single-day event (a "МК" —
+ * мастер-класс — by Anastasiia's own naming convention), where the start
+ * date IS the end date; more than one session is a real multi-week "Курс".
+ * `sessions` null is treated the same as 1 (no session count recorded yet
+ * means nothing to track attendance against, so it can't be a multi-session
+ * course in practice). */
+export function courseIsSingleSession(sessions: number | null): boolean {
+  return (sessions ?? 1) <= 1;
+}
+
+/**
+ * Whether a "sPaid" enrollment is due to flip to "sCompleted" on its own —
+ * Anastasiia's rule (11 сен 2026): a single-session МК finishes the day it
+ * starts (there's no separate end date to check, only cohort start_date);
+ * a multi-session course finishes once every one of its sessions has an
+ * attendance mark, present or absent ("по списку посещаемости" — her
+ * words). Only ever fires FROM "sPaid" — every other status (sAwaiting,
+ * sFailed, sRefunded, sCancelled, and sCompleted itself) is left alone, so
+ * a manual override to any of those is never immediately re-flipped by
+ * this check.
+ */
+export function enrollmentIsDueForCompletion(
+  enrollment: { status: string; start_date: string | null; attended: unknown },
+  sessions: number | null
+): boolean {
+  if (enrollment.status !== "sPaid") return false;
+  if (courseIsSingleSession(sessions)) {
+    if (!enrollment.start_date) return false;
+    const today = new Date().toISOString().slice(0, 10);
+    return enrollment.start_date <= today;
+  }
+  const arr = attendedArray(enrollment.attended, sessions ?? 0);
+  return arr.length > 0 && arr.every((v) => v !== null);
+}

@@ -396,6 +396,7 @@ export const DICT: Record<string, Entry> = {
   convertedToMember: { ru: "Добавлена в «Участницы»", bg: "Добавена в „Участнички“" },
   chooseCourseOnConvert: { ru: "Выберите курс (необязательно)", bg: "Изберете курс (незадължително)" },
   btnConfirmConvert: { ru: "Подтвердить", bg: "Потвърди" },
+  btnAddAnotherCourse: { ru: "+ Добавить курс", bg: "+ Добави курс" },
   errCourseNotFound: { ru: "Курс не найден", bg: "Курсът не е намерен" },
   errGeneric: { ru: "Что-то пошло не так", bg: "Нещо се обърка" },
   placeholderAddComment: { ru: "Добавить комментарий…", bg: "Добави коментар…" },
@@ -479,6 +480,9 @@ export const DICT: Record<string, Entry> = {
   allStatuses: { ru: "Все статусы", bg: "Всички статуси" },
   allCourses: { ru: "Все курсы", bg: "Всички курсове" },
   allStartDates: { ru: "Все даты старта", bg: "Всички начални дати" },
+  countTotalMembers: { ru: "Всего участниц: {count}", bg: "Общо участнички: {count}" },
+  countInCourse: { ru: "На курсе «{course}»: {count}", bg: "В курс „{course}“: {count}" },
+  countInStream: { ru: "На курсе «{course}», поток {date}: {count}", bg: "В курс „{course}“, поток {date}: {count}" },
   btnResetFilter: { ru: "Сбросить фильтр", bg: "Изчисти филтъра" },
   btnAddMemberShort: { ru: "+ Участница", bg: "+ Участничка" },
   hqReadOnlyMembersBanner: {

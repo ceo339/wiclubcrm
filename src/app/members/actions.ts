@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentProfile } from "@/lib/auth";
-import { currentMonthYear, STATUSES } from "@/lib/members";
+import { currentMonthYear, enrollmentIsDueForCompletion, STATUSES } from "@/lib/members";
 import type { Tables } from "@/types/database";
 
 export type ActionResult = { error: string | null };
@@ -40,8 +40,10 @@ export async function createMember(formData: FormData): Promise<ActionResult> {
   const name = String(formData.get("name") || "").trim();
   if (!name) return { error: "errEnterName" };
 
+  const phone = String(formData.get("phone") || "").trim() || null;
   const city = String(formData.get("city") || "").trim() || null;
   const email = String(formData.get("email") || "").trim() || null;
+  const birthday = String(formData.get("birthday") || "").trim() || null;
   const memberSince = String(formData.get("member_since") || "").trim() || currentMonthYear();
 
   const supabase = await createClient();
@@ -51,8 +53,10 @@ export async function createMember(formData: FormData): Promise<ActionResult> {
     .insert({
       partner_id: profile.partner_id,
       name,
+      phone,
       city,
       email,
+      birthday,
       member_since: memberSince,
     })
     .select("id")
@@ -99,6 +103,14 @@ export async function createMember(formData: FormData): Promise<ActionResult> {
   return { error: null };
 }
 
+/**
+ * Updates a member's own card. When she was converted from a lead
+ * (member.lead_id set), the shared contact fields — name/phone/email/
+ * city/birthday — are mirrored back onto that lead row too: Anastasiia's
+ * request (11 сен 2026) that a lead and the participant she became are
+ * "one contact" whichever card you edit it from. member_since is
+ * membership-only and never touches the lead.
+ */
 export async function updateMember(memberId: string, formData: FormData): Promise<ActionResult> {
   const profile = await getCurrentProfile();
   if (!profile) return { error: "errNotAuthorized" };
@@ -109,20 +121,67 @@ export async function updateMember(memberId: string, formData: FormData): Promis
   const name = String(formData.get("name") || "").trim();
   if (!name) return { error: "errEnterName" };
 
+  const phone = String(formData.get("phone") || "").trim() || null;
   const city = String(formData.get("city") || "").trim() || null;
   const email = String(formData.get("email") || "").trim() || null;
+  const birthday = String(formData.get("birthday") || "").trim() || null;
   const memberSince = String(formData.get("member_since") || "").trim() || null;
 
   const supabase = await createClient();
+  const { data: existing } = await supabase
+    .from("members")
+    .select("lead_id")
+    .eq("id", memberId)
+    .maybeSingle();
+
   const { error } = await supabase
     .from("members")
-    .update({ name, city, email, member_since: memberSince })
+    .update({ name, phone, city, email, birthday, member_since: memberSince })
     .eq("id", memberId);
 
   if (error) return { error: error.message };
 
+  if (existing?.lead_id) {
+    await supabase.from("leads").update({ name, phone, email, city, birthday }).eq("id", existing.lead_id);
+  }
+
   revalidatePath("/members");
+  revalidatePath("/leads");
   return { error: null };
+}
+
+/**
+ * Sweeps this club's own "sPaid" enrollments and flips any that are due
+ * (see enrollmentIsDueForCompletion in lib/members) to "sCompleted" —
+ * Anastasiia asked for this to happen on its own rather than her having to
+ * remember to change it by hand (11 сен 2026). Called on every Участницы
+ * page load and right after marking attendance, so it catches up within
+ * moments rather than needing a scheduled job. A safe no-op for hq
+ * accounts: RLS's member_enrollments_update policy requires
+ * partner_id = current_partner_id(), which is null for hq, so an hq
+ * caller's update just matches zero rows instead of erroring.
+ */
+export async function autoCompleteDueEnrollments(): Promise<void> {
+  const profile = await getCurrentProfile();
+  if (!profile?.partner_id) return;
+
+  const supabase = await createClient();
+  const { data: candidates } = await supabase
+    .from("member_enrollments")
+    .select("id, status, start_date, attended, products(sessions)")
+    .eq("partner_id", profile.partner_id)
+    .eq("status", "sPaid");
+
+  const due = (candidates ?? [])
+    .filter((e) => {
+      const sessions = (e as { products?: { sessions: number | null } | null }).products?.sessions ?? null;
+      return enrollmentIsDueForCompletion(e, sessions);
+    })
+    .map((e) => e.id);
+
+  if (due.length === 0) return;
+
+  await supabase.from("member_enrollments").update({ status: "sCompleted" }).in("id", due);
 }
 
 /**
@@ -253,6 +312,11 @@ export async function setAttendance(
   const { error } = await supabase.from("member_enrollments").update({ attended }).eq("id", enrollmentId);
   if (error) return { error: error.message };
 
+  // Marking the last session can be exactly what makes this enrollment due
+  // for "sCompleted" (multi-session courses finish by attendance) — check
+  // right away instead of waiting for the next page load.
+  await autoCompleteDueEnrollments();
+
   revalidatePath("/members");
   revalidatePath("/attendance", "layout");
   return { error: null };
@@ -273,6 +337,8 @@ export type MemberDetail = {
 export async function getMemberDetail(memberId: string): Promise<MemberDetail> {
   const profile = await getCurrentProfile();
   if (!profile) return { comments: [], tasks: [], enrollments: [] };
+
+  await autoCompleteDueEnrollments();
 
   const supabase = await createClient();
   const [{ data: comments }, { data: tasks }, { data: enrollments }] = await Promise.all([
