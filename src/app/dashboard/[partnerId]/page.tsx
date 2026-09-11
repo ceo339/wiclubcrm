@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import {
   computeCoreMetrics,
   countByProduct,
+  enrollmentAttributionDate,
   inPeriod,
   monthlyConversion,
   monthlyMemberTotal,
@@ -51,29 +52,39 @@ export default async function ClubDashboardPage({
 
   const [{ data: leads }, { data: members }, { data: enrollments }, { data: payments }, { data: products }] =
     await Promise.all([
-      supabase.from("leads").select("stage, source, added_date").eq("partner_id", partnerId),
+      supabase.from("leads").select("stage, source, added_date, cohort_start_date").eq("partner_id", partnerId),
       supabase.from("members").select("created_at").eq("partner_id", partnerId),
-      supabase.from("member_enrollments").select("product_id, created_at").eq("partner_id", partnerId),
-      supabase.from("payments").select("amount, status, paid_date").eq("partner_id", partnerId),
+      supabase.from("member_enrollments").select("product_id, created_at, start_date").eq("partner_id", partnerId),
+      supabase
+        .from("payments")
+        .select("amount, status, paid_date, member_enrollments(start_date, created_at), leads(cohort_start_date, added_date)")
+        .eq("partner_id", partnerId),
       supabase.from("products").select("id, name").eq("partner_id", partnerId),
     ]);
 
   const clubLeads = leads ?? [];
   const clubMembers = members ?? [];
   const clubEnrollments = enrollments ?? [];
-  const clubPayments = payments ?? [];
+  // See src/app/page.tsx's own club branch — same start-date attribution
+  // for revenue (Anastasiia, 11 сен 2026).
+  const clubPayments = (payments ?? []).map((p) => ({
+    ...p,
+    enrollment: (p as { member_enrollments?: { start_date: string | null; created_at: string } | null })
+      .member_enrollments ?? null,
+    lead: (p as { leads?: { cohort_start_date: string | null; added_date: string } | null }).leads ?? null,
+  }));
   const productNamesById = new Map((products ?? []).map((p) => [p.id, p.name]));
 
   const period = parsePeriodParams(searchParamsResolved);
-  const monthOptions = monthsWithActivity(clubLeads, clubMembers, clubPayments);
+  const monthOptions = monthsWithActivity(clubLeads, clubEnrollments, clubPayments);
   const metrics = computeCoreMetrics({
     leads: clubLeads,
-    members: clubMembers,
+    enrollments: clubEnrollments,
     payments: clubPayments,
     period,
   });
 
-  const enrollmentsInPeriod = clubEnrollments.filter((e) => inPeriod(period, e.created_at));
+  const enrollmentsInPeriod = clubEnrollments.filter((e) => inPeriod(period, enrollmentAttributionDate(e)));
 
   const totals = {
     leads: clubLeads.length,
@@ -108,7 +119,7 @@ export default async function ClubDashboardPage({
         basePath={`/dashboard/${partnerId}`}
         revenue={metrics.revenue}
         revenueTrend={monthlyRevenue(clubPayments)}
-        memberTrend={monthlyMemberTotal(clubMembers)}
+        memberTrend={monthlyMemberTotal(clubEnrollments)}
         conversionTrend={monthlyConversion(clubLeads)}
         membersAdded={metrics.membersAdded}
         conversion={metrics.conversion}
