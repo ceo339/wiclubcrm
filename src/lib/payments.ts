@@ -28,3 +28,20 @@ export const statusLabel = (id: string, locale: Locale) => {
 export function todayIso(): string {
   return new Date().toISOString().slice(0, 10);
 }
+
+/** Same coloring convention as members' statusPillClasses (and leads'
+ * "declined" styling): paid is the normal/expected outcome, pending is
+ * "waiting on something", refunded is a negative outcome — real statuses
+ * only, no invented "failed"/retry state (the schema has none, see
+ * STATUSES above). */
+export function statusPillClasses(status: string): string {
+  switch (status) {
+    case "paid":
+      return "bg-surface-3 text-ink-2";
+    case "pending":
+      return "bg-warn-soft text-warn";
+    case "refunded":
+    default:
+      return "bg-accent-soft text-accent-strong";
+  }
+}

@@ -10,7 +10,7 @@ import {
   updateMember,
   type MemberDetail,
 } from "@/app/members/actions";
-import { attendedArray, STATUSES, statusLabel } from "@/lib/members";
+import { attendedArray, STATUSES, statusLabel, statusPillClasses } from "@/lib/members";
 import Money from "@/components/currency/Money";
 import { useLocale, useT } from "@/components/i18n/LocaleProvider";
 import SendEmailButton from "@/components/email/SendEmailButton";
@@ -104,7 +104,11 @@ function ReadView({
         <dt className="text-muted">{t("colCourse")}</dt>
         <dd className="text-ink-2">{member.product_name ?? "—"}</dd>
         <dt className="text-muted">{t("colStatus")}</dt>
-        <dd className="text-ink-2">{statusLabel(member.status, locale)}</dd>
+        <dd>
+          <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${statusPillClasses(member.status)}`}>
+            {statusLabel(member.status, locale)}
+          </span>
+        </dd>
         <dt className="text-muted">{t("colStart")}</dt>
         <dd className="text-ink-2">{member.start_date ?? "—"}</dd>
         <dt className="text-muted">{t("colAmount")}</dt>

@@ -2,8 +2,9 @@
 
 import { useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { STATUSES, statusLabel } from "@/lib/members";
+import { STATUSES, statusLabel, statusPillClasses } from "@/lib/members";
 import Money from "@/components/currency/Money";
+import Avatar from "@/components/ui/Avatar";
 import { useLocale } from "@/components/i18n/LocaleProvider";
 import type { Tables } from "@/types/database";
 import type { Member } from "./types";
@@ -166,9 +167,8 @@ export default function MembersBoard({
                 {isHq && <th className="px-4 py-3 font-medium">{t("colClub")}</th>}
                 <th className="px-4 py-3 font-medium">{t("colCourse")}</th>
                 <th className="px-4 py-3 font-medium">{t("colStatus")}</th>
-                <th className="px-4 py-3 font-medium">{t("fieldCity")}</th>
                 <th className="px-4 py-3 font-medium">{t("colStart")}</th>
-                <th className="px-4 py-3 font-medium">{t("colAmount")}</th>
+                <th className="px-4 py-3 text-right font-medium">{t("colAmount")}</th>
               </tr>
             </thead>
             <tbody>
@@ -178,17 +178,27 @@ export default function MembersBoard({
                   onClick={() => setSelectedId(m.id)}
                   className="cursor-pointer border-b border-border last:border-0 hover:bg-surface-2"
                 >
-                  <td className="px-4 py-3 font-medium text-foreground">{m.name}</td>
+                  <td className="px-4 py-3">
+                    <div className="flex items-center gap-3">
+                      <Avatar name={m.name} />
+                      <div className="min-w-0">
+                        <div className="truncate font-medium text-foreground">{m.name}</div>
+                        <div className="truncate text-xs text-muted">
+                          {m.city ?? "—"}
+                          {m.member_since ? ` · ${t("sincePrefix", { date: m.member_since })}` : ""}
+                        </div>
+                      </div>
+                    </div>
+                  </td>
                   {isHq && <td className="px-4 py-3 text-muted">{m.partner_name ?? "—"}</td>}
                   <td className="px-4 py-3 text-muted">{m.product_name ?? "—"}</td>
                   <td className="px-4 py-3">
-                    <span className="rounded-full bg-surface-2 px-2 py-0.5 text-xs text-ink-2">
+                    <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${statusPillClasses(m.status)}`}>
                       {statusLabel(m.status, locale)}
                     </span>
                   </td>
-                  <td className="px-4 py-3 text-muted">{m.city ?? "—"}</td>
                   <td className="px-4 py-3 text-muted">{m.start_date ?? "—"}</td>
-                  <td className="px-4 py-3 text-muted">
+                  <td className="px-4 py-3 text-right font-medium text-foreground">
                     {m.price_collected ? <Money amountEur={m.price_collected} /> : "—"}
                   </td>
                 </tr>

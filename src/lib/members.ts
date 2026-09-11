@@ -26,6 +26,34 @@ export const STATUSES: { id: MemberStatus }[] = [
 
 export const statusLabel = (id: string, locale: Locale) => t(locale, id);
 
+/**
+ * Colors a member's real status pill — reusing the same tokens the rest of
+ * the app already assigns a meaning to (--accent-soft/--accent-strong for a
+ * negative outcome, same as a "declined" lead; --warn-soft/--warn for
+ * "waiting on something"; muted for inactive), rather than inventing new
+ * colors. Deliberately NOT the prototype's churn-risk pill: that pill's
+ * color came from a `churn()` score computed from attendance and, for
+ * members with none of its other signals, a hash of the member's own name
+ * (`hue(m.n)%5===0`) — not a real risk, and dropped entirely rather than
+ * ported (see project doc). Only a member's own recorded status decides its
+ * pill's color here.
+ */
+export function statusPillClasses(status: string): string {
+  switch (status) {
+    case "sPaid":
+    case "sCompleted":
+      return "bg-surface-3 text-ink-2";
+    case "sAwaiting":
+      return "bg-warn-soft text-warn";
+    case "sFailed":
+    case "sRefunded":
+      return "bg-accent-soft text-accent-strong";
+    case "sCancelled":
+    default:
+      return "bg-surface-2 text-muted";
+  }
+}
+
 /** "MM.YYYY", matching the prototype's member_since format. */
 export function currentMonthYear(): string {
   const now = new Date();

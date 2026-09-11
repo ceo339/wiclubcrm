@@ -1,8 +1,10 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { STATUSES, statusLabel } from "@/lib/payments";
+import { STATUSES, statusLabel, statusPillClasses } from "@/lib/payments";
+import { currentMonthKey, formatPctDelta, monthKeyOf, monthLabel, pctChange, previousMonthKey } from "@/lib/dashboard";
 import Money from "@/components/currency/Money";
+import Avatar from "@/components/ui/Avatar";
 import { useLocale } from "@/components/i18n/LocaleProvider";
 import type { MemberOption, Payment } from "./types";
 import NewPaymentModal from "./NewPaymentModal";
@@ -33,35 +35,70 @@ export default function PaymentsBoard({
     return initialPayments.filter((p) => p.status === status);
   }, [initialPayments, status]);
 
-  const totalPaid = useMemo(
-    () => filtered.filter((p) => p.status === "paid").reduce((sum, p) => sum + Number(p.amount), 0),
-    [filtered]
+  // The four headline tiles deliberately read from ALL payments, not the
+  // status-filtered `filtered` list below — same reasoning as the Leads
+  // page's top KPIs (see LeadsBoard): a filter changes what the table
+  // shows, not the club's real totals.
+  const thisMonth = currentMonthKey();
+  const prevMonth = previousMonthKey();
+  const paidPayments = useMemo(() => initialPayments.filter((p) => p.status === "paid"), [initialPayments]);
+  const collectedThisMonth = useMemo(
+    () => paidPayments.filter((p) => monthKeyOf(p.paid_date) === thisMonth).reduce((sum, p) => sum + Number(p.amount), 0),
+    [paidPayments, thisMonth]
   );
-  const totalPending = useMemo(
-    () => filtered.filter((p) => p.status === "pending").reduce((sum, p) => sum + Number(p.amount), 0),
-    [filtered]
+  const collectedPrevMonth = useMemo(
+    () => paidPayments.filter((p) => monthKeyOf(p.paid_date) === prevMonth).reduce((sum, p) => sum + Number(p.amount), 0),
+    [paidPayments, prevMonth]
   );
+  const collectedAllTime = useMemo(() => paidPayments.reduce((sum, p) => sum + Number(p.amount), 0), [paidPayments]);
+  const pendingPayments = useMemo(() => initialPayments.filter((p) => p.status === "pending"), [initialPayments]);
+  const totalExpected = useMemo(() => pendingPayments.reduce((sum, p) => sum + Number(p.amount), 0), [pendingPayments]);
 
   const selected = initialPayments.find((p) => p.id === selectedId) ?? null;
 
   return (
     <div className="flex flex-1 flex-col gap-4">
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <div className="rounded-xl border border-border bg-background shadow-card p-4">
-          <div className="text-xs uppercase tracking-wide text-muted">{t("tileCollected")}</div>
-          <div className="mt-1 text-xl font-semibold text-foreground">
-            <Money amountEur={totalPaid} />
+          <div className="text-xs uppercase tracking-wide text-muted">
+            {t("tileCollectedMonth", { month: monthLabel(thisMonth, locale) })}
           </div>
+          <div
+            className="mt-1 font-display text-[28px] leading-[1.05] tracking-[-0.02em] text-foreground"
+            style={{ fontVariantNumeric: "tabular-nums" }}
+          >
+            <Money amountEur={collectedThisMonth} />
+          </div>
+          <div className="mt-1 text-xs text-muted">{formatPctDelta(pctChange(collectedThisMonth, collectedPrevMonth), locale)}</div>
         </div>
         <div className="rounded-xl border border-border bg-background shadow-card p-4">
-          <div className="text-xs uppercase tracking-wide text-muted">{t("statPending")}</div>
-          <div className="mt-1 text-xl font-semibold text-foreground">
-            <Money amountEur={totalPending} />
+          <div className="text-xs uppercase tracking-wide text-muted">{t("kExpected")}</div>
+          <div
+            className="mt-1 font-display text-[28px] leading-[1.05] tracking-[-0.02em] text-foreground"
+            style={{ fontVariantNumeric: "tabular-nums" }}
+          >
+            <Money amountEur={totalExpected} />
           </div>
+          <div className="mt-1 text-xs text-muted">{t("awaitingCount", { n: pendingPayments.length })}</div>
+        </div>
+        <div className="rounded-xl border border-border bg-background shadow-card p-4">
+          <div className="text-xs uppercase tracking-wide text-muted">{t("statCollectedTotal")}</div>
+          <div
+            className="mt-1 font-display text-[28px] leading-[1.05] tracking-[-0.02em] text-foreground"
+            style={{ fontVariantNumeric: "tabular-nums" }}
+          >
+            <Money amountEur={collectedAllTime} />
+          </div>
+          <div className="mt-1 text-xs text-muted">{t("deltaAllTime")}</div>
         </div>
         <div className="rounded-xl border border-border bg-background shadow-card p-4">
           <div className="text-xs uppercase tracking-wide text-muted">{t("tileTotalRecords")}</div>
-          <div className="mt-1 text-xl font-semibold text-foreground">{filtered.length}</div>
+          <div
+            className="mt-1 font-display text-[28px] leading-[1.05] tracking-[-0.02em] text-foreground"
+            style={{ fontVariantNumeric: "tabular-nums" }}
+          >
+            {filtered.length}
+          </div>
         </div>
       </div>
 
@@ -118,7 +155,7 @@ export default function PaymentsBoard({
                 <th className="px-4 py-3 font-medium">{t("colCourse")}</th>
                 <th className="px-4 py-3 font-medium">{t("colStatus")}</th>
                 <th className="px-4 py-3 font-medium">{t("colDate")}</th>
-                <th className="px-4 py-3 font-medium">{t("colAmount")}</th>
+                <th className="px-4 py-3 text-right font-medium">{t("colAmount")}</th>
               </tr>
             </thead>
             <tbody>
@@ -128,16 +165,21 @@ export default function PaymentsBoard({
                   onClick={() => setSelectedId(p.id)}
                   className="cursor-pointer border-b border-border last:border-0 hover:bg-surface-2"
                 >
-                  <td className="px-4 py-3 font-medium text-foreground">{p.member_name ?? "—"}</td>
+                  <td className="px-4 py-3">
+                    <div className="flex items-center gap-3">
+                      <Avatar name={p.member_name ?? "?"} size={28} />
+                      <span className="font-medium text-foreground">{p.member_name ?? "—"}</span>
+                    </div>
+                  </td>
                   {isHq && <td className="px-4 py-3 text-muted">{p.partner_name ?? "—"}</td>}
                   <td className="px-4 py-3 text-muted">{p.product_name ?? "—"}</td>
                   <td className="px-4 py-3">
-                    <span className="rounded-full bg-surface-2 px-2 py-0.5 text-xs text-ink-2">
+                    <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${statusPillClasses(p.status ?? "paid")}`}>
                       {statusLabel(p.status ?? "paid", locale)}
                     </span>
                   </td>
                   <td className="px-4 py-3 text-muted">{p.paid_date}</td>
-                  <td className="px-4 py-3 font-medium text-foreground">
+                  <td className="px-4 py-3 text-right font-medium text-foreground">
                     <Money amountEur={p.amount} />
                   </td>
                 </tr>

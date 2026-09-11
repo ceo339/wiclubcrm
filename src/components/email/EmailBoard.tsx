@@ -33,7 +33,10 @@ export default function EmailBoard({
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="rounded-xl border border-border bg-background shadow-card p-4">
           <div className="text-xs uppercase tracking-wide text-muted">{t("statListSize")}</div>
-          <div className="mt-1 text-2xl font-semibold text-foreground">
+          <div
+            className="mt-1 font-display text-[32px] leading-[1.05] tracking-[-0.02em] text-foreground"
+            style={{ fontVariantNumeric: "tabular-nums" }}
+          >
             {listSize.members + listSize.leadsAll}
           </div>
           <div className="mt-1 text-xs text-muted">
@@ -52,6 +55,9 @@ export default function EmailBoard({
       </div>
 
       <div className="rounded-xl border border-border bg-background shadow-card">
+        <div className="border-b border-border px-5 py-4">
+          <h2 className="text-sm font-semibold text-foreground">{t("cLetters")}</h2>
+        </div>
         {campaigns.length === 0 ? (
           <p className="p-5 text-sm text-muted">{t("emptyNoCampaigns")}</p>
         ) : (
@@ -71,9 +77,13 @@ export default function EmailBoard({
                 {campaigns.map((c) => {
                   const stats = computeCampaignStats(c.email_campaign_recipients);
                   return (
-                    <tr key={c.id} className="border-b border-border last:border-0">
+                    <tr key={c.id} className="border-b border-border last:border-0 hover:bg-surface-2">
                       <td className="px-5 py-3 font-medium text-foreground">{c.subject}</td>
-                      <td className="px-5 py-3 text-muted">{t(audienceLabelKey(c.audience))}</td>
+                      <td className="px-5 py-3">
+                        <span className="rounded-full bg-surface-2 px-2 py-0.5 text-xs text-ink-2">
+                          {t(audienceLabelKey(c.audience))}
+                        </span>
+                      </td>
                       <td className="px-5 py-3 text-right text-muted">{stats.recipientsCount}</td>
                       <td className="px-5 py-3 text-right text-muted">
                         {c.status === "sending"
@@ -85,12 +95,18 @@ export default function EmailBoard({
                       <td className="px-5 py-3 text-right text-muted">
                         {stats.clickedPct === null ? t("dash") : `${stats.clickedPct}%`}
                       </td>
-                      <td className="px-5 py-3 text-muted">
-                        {c.status === "failed"
-                          ? t("campaignStatusFailed")
-                          : c.sent_at
-                            ? new Date(c.sent_at).toLocaleDateString(dateLocale)
-                            : t("campaignStatusSending")}
+                      <td className="px-5 py-3">
+                        {c.status === "failed" ? (
+                          <span className="rounded-full bg-accent-soft px-2 py-0.5 text-xs font-medium text-accent-strong">
+                            {t("campaignStatusFailed")}
+                          </span>
+                        ) : c.sent_at ? (
+                          <span className="text-muted">{new Date(c.sent_at).toLocaleDateString(dateLocale)}</span>
+                        ) : (
+                          <span className="rounded-full bg-warn-soft px-2 py-0.5 text-xs font-medium text-warn">
+                            {t("campaignStatusSending")}
+                          </span>
+                        )}
                       </td>
                     </tr>
                   );

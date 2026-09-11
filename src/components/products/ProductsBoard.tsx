@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { addCohort, deleteCohort, deleteProduct } from "@/app/products/actions";
+import { todayIso } from "@/lib/payments";
 import Money from "@/components/currency/Money";
 import { useT } from "@/components/i18n/LocaleProvider";
 import type { Cohort, Product } from "./types";
@@ -10,11 +11,19 @@ import NewProductModal from "./NewProductModal";
 export default function ProductsBoard({
   initialProducts,
   initialCohorts,
+  leadsCountByProduct,
+  membersCountByCohort,
   isHq,
   canEdit,
 }: {
   initialProducts: Product[];
   initialCohorts: Cohort[];
+  /** Real count of leads interested in each product (by product id) — the
+   * prototype's own "N в воронке" caption, computed from real leads rather
+   * than fabricated. */
+  leadsCountByProduct: Record<string, number>;
+  /** Real enrolled-member count per cohort, keyed "productId|startDate". */
+  membersCountByCohort: Record<string, number>;
   isHq: boolean;
   canEdit: boolean;
 }) {
@@ -51,6 +60,8 @@ export default function ProductsBoard({
             key={product.id}
             product={product}
             cohorts={initialCohorts.filter((c) => c.product_id === product.id)}
+            leadsInPipeline={leadsCountByProduct[product.id] ?? 0}
+            membersCountByCohort={membersCountByCohort}
             canEdit={canEdit}
             showPartner={isHq}
           />
@@ -65,11 +76,15 @@ export default function ProductsBoard({
 function ProductCard({
   product,
   cohorts,
+  leadsInPipeline,
+  membersCountByCohort,
   canEdit,
   showPartner,
 }: {
   product: Product;
   cohorts: Cohort[];
+  leadsInPipeline: number;
+  membersCountByCohort: Record<string, number>;
   canEdit: boolean;
   showPartner: boolean;
 }) {
@@ -119,15 +134,20 @@ function ProductCard({
             {showPartner && product.partner_name ? ` · ${product.partner_name}` : ""}
           </div>
         </div>
-        {canEdit && (
-          <button
-            onClick={handleDeleteProduct}
-            disabled={pending}
-            className="shrink-0 text-xs text-muted hover:text-accent-strong"
-          >
-            {t("delete")}
-          </button>
-        )}
+        <div className="flex shrink-0 flex-col items-end gap-1.5">
+          <span className="rounded-full bg-surface-2 px-2 py-0.5 text-xs text-muted">
+            {t("prodEnrolled", { n: leadsInPipeline })}
+          </span>
+          {canEdit && (
+            <button
+              onClick={handleDeleteProduct}
+              disabled={pending}
+              className="text-xs text-muted hover:text-accent-strong"
+            >
+              {t("delete")}
+            </button>
+          )}
+        </div>
       </div>
 
       <div className="mt-3 flex flex-col gap-1.5">
@@ -135,21 +155,33 @@ function ProductCard({
         {sortedCohorts.length === 0 && (
           <p className="text-xs text-muted">{t("emptyNoCohorts")}</p>
         )}
-        {sortedCohorts.map((c) => (
-          <div key={c.id} className="flex items-center justify-between text-xs text-ink-2">
-            <span>{c.start_date}</span>
-            {canEdit && (
-              <button
-                onClick={() => handleDeleteCohort(c.id)}
-                disabled={pending}
-                className="text-muted hover:text-accent-strong"
-                aria-label={t("ariaDeleteCohort")}
+        {sortedCohorts.map((c) => {
+          const enrolled = membersCountByCohort[`${product.id}|${c.start_date}`] ?? 0;
+          const isPast = c.start_date < todayIso();
+          return (
+            <div key={c.id} className="flex flex-wrap items-center gap-2 text-xs text-ink-2">
+              <span>{c.start_date}</span>
+              <span className="text-muted">{t("prodSeats", { n: enrolled })}</span>
+              <span
+                className={`rounded-full px-2 py-0.5 font-medium ${
+                  isPast ? "bg-surface-2 text-muted" : "bg-surface-3 text-ink-2"
+                }`}
               >
-                ×
-              </button>
-            )}
-          </div>
-        ))}
+                {t(isPast ? "prodPast" : "prodUpcoming")}
+              </span>
+              {canEdit && (
+                <button
+                  onClick={() => handleDeleteCohort(c.id)}
+                  disabled={pending}
+                  className="ml-auto text-muted hover:text-accent-strong"
+                  aria-label={t("ariaDeleteCohort")}
+                >
+                  ×
+                </button>
+              )}
+            </div>
+          );
+        })}
       </div>
 
       {canEdit && (

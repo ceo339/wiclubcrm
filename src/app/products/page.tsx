@@ -27,6 +27,15 @@ export default async function ProductsPage() {
     .select("*")
     .order("start_date");
 
+  // Real, disclosed counts for each card — how many leads are interested in
+  // this product overall, and (per start date) how many members actually
+  // enrolled in that cohort. Both scoped by the same RLS as everything else
+  // on this page, so HQ still sees network-wide numbers.
+  const [{ data: leadsForCount }, { data: membersForCount }] = await Promise.all([
+    supabase.from("leads").select("product_id"),
+    supabase.from("members").select("product_id, start_date"),
+  ]);
+
   const { scope, fallback } = scopeForProfile(profile);
   const localeScope = localeScopeForProfile(profile);
 
@@ -54,10 +63,27 @@ export default async function ProductsPage() {
             partner_name: (p as { partners?: { name: string } | null }).partners?.name ?? null,
           }))}
           initialCohorts={cohorts ?? []}
+          leadsCountByProduct={countBy(leadsForCount ?? [], (l) => l.product_id)}
+          membersCountByCohort={countBy(
+            membersForCount ?? [],
+            (m) => (m.product_id && m.start_date ? `${m.product_id}|${m.start_date}` : null)
+          )}
           isHq={profile.role === "hq"}
           canEdit={!!profile.partner_id}
         />
       )}
     </AppShell>
   );
+}
+
+/** Groups `rows` by whatever key `keyOf` returns (skipping null keys) and
+ * counts them — the plain tally behind both of this page's real counts. */
+function countBy<T>(rows: T[], keyOf: (row: T) => string | null): Record<string, number> {
+  const counts: Record<string, number> = {};
+  for (const row of rows) {
+    const key = keyOf(row);
+    if (key === null) continue;
+    counts[key] = (counts[key] ?? 0) + 1;
+  }
+  return counts;
 }

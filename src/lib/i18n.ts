@@ -672,6 +672,25 @@ export const DICT: Record<string, Entry> = {
   // ---- revenue trend widget ----
   headingRevenueTrend: { ru: "Динамика выручки", bg: "Динамика на прихода" },
   emptyNoRevenueHistory: { ru: "Пока недостаточно данных за прошлые месяцы.", bg: "Все още няма достатъчно данни за минали месеци." },
+
+  // ---- attendance board (product + start-date filters) ----
+  kAvgAttend: { ru: "Средняя посещаемость", bg: "Средно присъствие" },
+  statEnrolled: { ru: "Записалось", bg: "Записани" },
+  thProgress: { ru: "Прогресс", bg: "Прогрес" },
+  prodSeats: { ru: "{n} записались", bg: "{n} записани" },
+
+  // ---- payments board: month KPI tiles ----
+  tileCollectedMonth: { ru: "Собрано в {month}", bg: "Събрано през {month}" },
+  kExpected: { ru: "Ожидается от записавшихся", bg: "Очаква се от записалите се" },
+  awaitingCount: { ru: "{n} записались, ещё не оплатили", bg: "{n} записани, все още не са платили" },
+
+  // ---- products board: real pipeline/cohort counts ----
+  prodEnrolled: { ru: "{n} в воронке", bg: "{n} във фунията" },
+  prodPast: { ru: "Прошёл", bg: "Минал" },
+  prodUpcoming: { ru: "Скоро", bg: "Предстои" },
+
+  // ---- email board ----
+  cLetters: { ru: "Письма", bg: "Писма" },
 };
 
 /**
