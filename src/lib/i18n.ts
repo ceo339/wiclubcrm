@@ -74,6 +74,7 @@ type Entry = Record<Locale, string>;
 export const DICT: Record<string, Entry> = {
   // ---- chrome / common ----
   appName: { ru: "WI Club CRM", bg: "WI Club CRM" },
+  headingHome: { ru: "Обзор", bg: "Преглед" },
   close: { ru: "Закрыть", bg: "Затвори" },
   cancel: { ru: "Отмена", bg: "Отказ" },
   save: { ru: "Сохранить", bg: "Запази" },
@@ -240,6 +241,7 @@ export const DICT: Record<string, Entry> = {
   roleLabelHq: { ru: "HQ (головной офис)", bg: "Централен офис" },
   noClubAttached: { ru: "Без привязки к клубу", bg: "Без обвързан клуб" },
   signOut: { ru: "Выйти", bg: "Изход" },
+  navHome: { ru: "Главная", bg: "Начало" },
   navNetworkSummaryDesc: {
     ru: "Лиды, участницы и оплаты по всей сети и по каждому клубу",
     bg: "Запитвания, участнички и плащания по цялата мрежа и по всеки клуб",

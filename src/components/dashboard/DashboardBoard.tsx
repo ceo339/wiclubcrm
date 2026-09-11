@@ -35,9 +35,14 @@ type Totals = {
 
 function StatTile({ label, value, delta }: { label: string; value: ReactNode; delta: string }) {
   return (
-    <div className="rounded-xl border border-border bg-background shadow-card p-4">
+    <div className="rounded-xl border border-border bg-background p-4 shadow-card transition-transform hover:-translate-y-0.5 hover:shadow-card-hover">
       <div className="text-xs uppercase tracking-wide text-muted">{label}</div>
-      <div className="mt-1 text-2xl font-semibold text-foreground">{value}</div>
+      <div
+        className="mt-1 font-display text-[32px] leading-[1.05] tracking-[-0.02em] text-foreground"
+        style={{ fontVariantNumeric: "tabular-nums" }}
+      >
+        {value}
+      </div>
       <div className="mt-1 text-xs text-muted">{delta}</div>
     </div>
   );

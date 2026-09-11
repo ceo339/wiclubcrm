@@ -1,5 +1,4 @@
 import { notFound, redirect } from "next/navigation";
-import Link from "next/link";
 import { getCurrentProfile } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import {
@@ -18,6 +17,7 @@ import LocaleSwitcher from "@/components/i18n/LocaleSwitcher";
 import LocaleScope from "@/components/i18n/LocaleScope";
 import DashboardBoard from "@/components/dashboard/DashboardBoard";
 import T from "@/components/i18n/T";
+import AppShell from "@/components/shell/AppShell";
 
 export default async function ClubDashboardPage({
   params,
@@ -81,46 +81,37 @@ export default async function ClubDashboardPage({
   };
 
   return (
-    <div className="flex flex-1 flex-col bg-surface-2">
-      <header className="flex items-center justify-between border-b border-border bg-background px-6 py-4">
-        <div>
-          <Link
-            href={profile.role === "hq" ? "/dashboard" : "/"}
-            className="text-sm text-muted hover:text-ink-2"
-          >
-            ← <T k={profile.role === "hq" ? "headingNetworkSummary" : "appName"} />
-          </Link>
-          <h1 className="mt-1 text-lg font-semibold tracking-tight text-foreground">
-            {partner.name}
-          </h1>
-        </div>
-        <div className="flex items-center gap-2">
+    <AppShell
+      profile={profile}
+      title={partner.name}
+      backHref={profile.role === "hq" ? "/dashboard" : undefined}
+      backLabel={<T k="headingNetworkSummary" />}
+      headerExtra={
+        <>
           <CurrencyScope scope={`club:${partnerId}`} fallback={currencyForCountry(partner.country)} />
           <CurrencySwitcher />
           <LocaleScope scope={`club:${partnerId}`} fallback={localeForCountry(partner.country)} />
           <LocaleSwitcher />
-        </div>
-      </header>
-
-      <main className="flex flex-1 flex-col p-6">
-        <DashboardBoard
-          totals={totals}
-          fourthTile={{ labelKey: "statCourses", value: String((products ?? []).length), deltaKey: "deltaActiveCourses" }}
-          funnel={metrics.funnel}
-          declinedCount={metrics.declinedCount}
-          sourceConversion={metrics.sourceConversion}
-          period={period}
-          monthOptions={monthOptions}
-          basePath={`/dashboard/${partnerId}`}
-          revenue={metrics.revenue}
-          revenueTrend={monthlyRevenue(clubPayments)}
-          membersAdded={metrics.membersAdded}
-          conversion={metrics.conversion}
-          royalty={metrics.royalty}
-          productsPeriod={countByProduct(membersInPeriod, productNamesById)}
-          productsAllTime={countByProduct(clubMembers, productNamesById)}
-        />
-      </main>
-    </div>
+        </>
+      }
+    >
+      <DashboardBoard
+        totals={totals}
+        fourthTile={{ labelKey: "statCourses", value: String((products ?? []).length), deltaKey: "deltaActiveCourses" }}
+        funnel={metrics.funnel}
+        declinedCount={metrics.declinedCount}
+        sourceConversion={metrics.sourceConversion}
+        period={period}
+        monthOptions={monthOptions}
+        basePath={`/dashboard/${partnerId}`}
+        revenue={metrics.revenue}
+        revenueTrend={monthlyRevenue(clubPayments)}
+        membersAdded={metrics.membersAdded}
+        conversion={metrics.conversion}
+        royalty={metrics.royalty}
+        productsPeriod={countByProduct(membersInPeriod, productNamesById)}
+        productsAllTime={countByProduct(clubMembers, productNamesById)}
+      />
+    </AppShell>
   );
 }

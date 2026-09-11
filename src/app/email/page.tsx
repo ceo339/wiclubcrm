@@ -1,5 +1,4 @@
 import { redirect } from "next/navigation";
-import Link from "next/link";
 import { getCurrentProfile } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { localeScopeForProfile } from "@/lib/i18n";
@@ -7,6 +6,7 @@ import LocaleSwitcher from "@/components/i18n/LocaleSwitcher";
 import LocaleScope from "@/components/i18n/LocaleScope";
 import T from "@/components/i18n/T";
 import EmailBoard from "@/components/email/EmailBoard";
+import AppShell from "@/components/shell/AppShell";
 
 export default async function EmailPage() {
   const profile = await getCurrentProfile();
@@ -34,25 +34,17 @@ export default async function EmailPage() {
   const localeScope = localeScopeForProfile(profile);
 
   return (
-    <div className="flex flex-1 flex-col bg-surface-2">
-      <header className="flex items-center justify-between border-b border-border bg-background px-6 py-4">
-        <div>
-          <Link href="/" className="text-sm text-muted hover:text-ink-2">
-            ← <T k="appName" />
-          </Link>
-          <h1 className="mt-1 text-lg font-semibold tracking-tight text-foreground">
-            <T k="headingEmail" />
-          </h1>
-        </div>
-        <div className="flex items-center gap-2">
+    <AppShell
+      profile={profile}
+      title={<T k="headingEmail" />}
+      headerExtra={
+        <>
           <LocaleScope scope={localeScope.scope} fallback={localeScope.fallback} />
           <LocaleSwitcher />
-        </div>
-      </header>
-
-      <main className="flex flex-1 flex-col p-6">
-        <EmailBoard campaigns={campaigns ?? []} canEdit={canEdit} listSize={listSize} />
-      </main>
-    </div>
+        </>
+      }
+    >
+      <EmailBoard campaigns={campaigns ?? []} canEdit={canEdit} listSize={listSize} />
+    </AppShell>
   );
 }

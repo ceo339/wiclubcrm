@@ -9,6 +9,7 @@ import CurrencyScope from "@/components/currency/CurrencyScope";
 import LocaleSwitcher from "@/components/i18n/LocaleSwitcher";
 import LocaleScope from "@/components/i18n/LocaleScope";
 import T from "@/components/i18n/T";
+import AppShell from "@/components/shell/AppShell";
 
 export default async function AttendancePage() {
   const profile = await getCurrentProfile();
@@ -46,72 +47,64 @@ export default async function AttendancePage() {
   });
 
   return (
-    <div className="flex flex-1 flex-col bg-surface-2">
-      <header className="flex items-center justify-between border-b border-border bg-background px-6 py-4">
-        <div>
-          <Link href="/" className="text-sm text-muted hover:text-ink-2">
-            ← <T k="appName" />
-          </Link>
-          <h1 className="mt-1 text-lg font-semibold tracking-tight text-foreground">
-            <T k="navAttendance" />
-          </h1>
-        </div>
-        <div className="flex items-center gap-2">
+    <AppShell
+      profile={profile}
+      title={<T k="navAttendance" />}
+      headerExtra={
+        <>
           <CurrencyScope scope={scope} fallback={fallback} />
           <CurrencySwitcher />
           <LocaleScope scope={localeScope.scope} fallback={localeScope.fallback} />
           <LocaleSwitcher />
-        </div>
-      </header>
-
-      <main className="flex flex-1 flex-col p-6">
-        {error ? (
-          <p className="rounded-lg bg-accent/10 px-4 py-3 text-sm text-accent-strong">
-            <T k="errLoadStreamsFailed" />: {error.message}
-          </p>
-        ) : streams.length === 0 ? (
-          <p className="text-sm text-muted">
-            <T k="emptyNoStreams" />
-          </p>
-        ) : (
-          <div className="rounded-xl border border-border bg-background shadow-card">
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[560px] text-left text-sm">
-                <thead className="border-b border-border text-xs uppercase tracking-wide text-muted">
-                  <tr>
-                    <th className="px-5 py-3 font-medium"><T k="colCourse" /></th>
-                    <th className="px-5 py-3 font-medium"><T k="colStartDate" /></th>
-                    {isHq && <th className="px-5 py-3 font-medium"><T k="colClub" /></th>}
-                    <th className="px-5 py-3 font-medium"><T k="colSessions" /></th>
-                    <th className="px-5 py-3 font-medium"><T k="statMembers" /></th>
+        </>
+      }
+    >
+      {error ? (
+        <p className="rounded-lg bg-accent/10 px-4 py-3 text-sm text-accent-strong">
+          <T k="errLoadStreamsFailed" />: {error.message}
+        </p>
+      ) : streams.length === 0 ? (
+        <p className="text-sm text-muted">
+          <T k="emptyNoStreams" />
+        </p>
+      ) : (
+        <div className="rounded-xl border border-border bg-background shadow-card">
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[560px] text-left text-sm">
+              <thead className="border-b border-border text-xs uppercase tracking-wide text-muted">
+                <tr>
+                  <th className="px-5 py-3 font-medium"><T k="colCourse" /></th>
+                  <th className="px-5 py-3 font-medium"><T k="colStartDate" /></th>
+                  {isHq && <th className="px-5 py-3 font-medium"><T k="colClub" /></th>}
+                  <th className="px-5 py-3 font-medium"><T k="colSessions" /></th>
+                  <th className="px-5 py-3 font-medium"><T k="statMembers" /></th>
+                </tr>
+              </thead>
+              <tbody>
+                {streams.map((s) => (
+                  <tr key={s.id} className="border-b border-border last:border-0">
+                    <td className="px-5 py-3 font-medium text-foreground">
+                      {s.count > 0 ? (
+                        <Link href={`/attendance/${s.id}`} className="hover:text-accent hover:underline">
+                          {s.productName ?? <T k="courseDeleted" />}
+                        </Link>
+                      ) : (
+                        s.productName ?? <T k="courseDeleted" />
+                      )}
+                    </td>
+                    <td className="px-5 py-3 text-muted">{s.startDate}</td>
+                    {isHq && <td className="px-5 py-3 text-muted">{s.partnerName}</td>}
+                    <td className="px-5 py-3 text-muted">{s.sessions || "—"}</td>
+                    <td className="px-5 py-3 text-muted">
+                      {s.count === 0 ? <T k="noMembersCount" /> : s.count}
+                    </td>
                   </tr>
-                </thead>
-                <tbody>
-                  {streams.map((s) => (
-                    <tr key={s.id} className="border-b border-border last:border-0">
-                      <td className="px-5 py-3 font-medium text-foreground">
-                        {s.count > 0 ? (
-                          <Link href={`/attendance/${s.id}`} className="hover:text-accent hover:underline">
-                            {s.productName ?? <T k="courseDeleted" />}
-                          </Link>
-                        ) : (
-                          s.productName ?? <T k="courseDeleted" />
-                        )}
-                      </td>
-                      <td className="px-5 py-3 text-muted">{s.startDate}</td>
-                      {isHq && <td className="px-5 py-3 text-muted">{s.partnerName}</td>}
-                      <td className="px-5 py-3 text-muted">{s.sessions || "—"}</td>
-                      <td className="px-5 py-3 text-muted">
-                        {s.count === 0 ? <T k="noMembersCount" /> : s.count}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                ))}
+              </tbody>
+            </table>
           </div>
-        )}
-      </main>
-    </div>
+        </div>
+      )}
+    </AppShell>
   );
 }

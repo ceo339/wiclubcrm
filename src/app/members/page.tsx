@@ -1,5 +1,4 @@
 import { redirect } from "next/navigation";
-import Link from "next/link";
 import { getCurrentProfile } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { scopeForProfile } from "@/lib/currency";
@@ -10,6 +9,7 @@ import LocaleSwitcher from "@/components/i18n/LocaleSwitcher";
 import LocaleScope from "@/components/i18n/LocaleScope";
 import T from "@/components/i18n/T";
 import MembersBoard from "@/components/members/MembersBoard";
+import AppShell from "@/components/shell/AppShell";
 
 export default async function MembersPage() {
   const profile = await getCurrentProfile();
@@ -34,49 +34,41 @@ export default async function MembersPage() {
     : [{ data: [] }, { data: [] }];
 
   return (
-    <div className="flex flex-1 flex-col bg-surface-2">
-      <header className="flex items-center justify-between border-b border-border bg-background px-6 py-4">
-        <div>
-          <Link href="/" className="text-sm text-muted hover:text-ink-2">
-            ← <T k="appName" />
-          </Link>
-          <h1 className="mt-1 text-lg font-semibold tracking-tight text-foreground">
-            <T k="navMembers" />
-          </h1>
-        </div>
-        <div className="flex items-center gap-2">
+    <AppShell
+      profile={profile}
+      title={<T k="navMembers" />}
+      headerExtra={
+        <>
           <CurrencyScope scope={scope} fallback={fallback} />
           <CurrencySwitcher />
           <LocaleScope scope={localeScope.scope} fallback={localeScope.fallback} />
           <LocaleSwitcher />
-        </div>
-      </header>
-
-      <main className="flex flex-1 flex-col p-6">
-        {error ? (
-          <p className="rounded-lg bg-accent/10 px-4 py-3 text-sm text-accent-strong">
-            <T k="errLoadMembersFailed" />: {error.message}
-          </p>
-        ) : (
-          <MembersBoard
-            initialMembers={(members ?? []).map((m) => ({
-              ...m,
-              partner_name: (m as { partners?: { name: string } | null }).partners?.name ?? null,
-              product_name:
-                (m as { products?: { name: string } | null }).products?.name ?? null,
-              product_price:
-                (m as { products?: { price: number } | null }).products?.price ?? null,
-              product_sessions:
-                (m as { products?: { sessions: number | null } | null }).products?.sessions ??
-                null,
-            }))}
-            products={products ?? []}
-            cohorts={cohorts ?? []}
-            isHq={profile.role === "hq"}
-            canEdit={canEdit}
-          />
-        )}
-      </main>
-    </div>
+        </>
+      }
+    >
+      {error ? (
+        <p className="rounded-lg bg-accent/10 px-4 py-3 text-sm text-accent-strong">
+          <T k="errLoadMembersFailed" />: {error.message}
+        </p>
+      ) : (
+        <MembersBoard
+          initialMembers={(members ?? []).map((m) => ({
+            ...m,
+            partner_name: (m as { partners?: { name: string } | null }).partners?.name ?? null,
+            product_name:
+              (m as { products?: { name: string } | null }).products?.name ?? null,
+            product_price:
+              (m as { products?: { price: number } | null }).products?.price ?? null,
+            product_sessions:
+              (m as { products?: { sessions: number | null } | null }).products?.sessions ??
+              null,
+          }))}
+          products={products ?? []}
+          cohorts={cohorts ?? []}
+          isHq={profile.role === "hq"}
+          canEdit={canEdit}
+        />
+      )}
+    </AppShell>
   );
 }

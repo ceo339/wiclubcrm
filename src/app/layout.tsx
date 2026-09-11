@@ -7,18 +7,23 @@ import { LocaleProvider } from "@/components/i18n/LocaleProvider";
  * fails in any environment without outbound access to fonts.googleapis.com
  * (this one included) — Fontsource ships the same variable-font files as a
  * plain npm package, so the build never depends on that network call.
- * - Jost — brandbook's body/nav/labels font (WIClub_Brandbook.pdf).
- * - Playfair Display — stands in for the brandbook's Kazimir Text on
- *   headings/quotes, which is a paid Contrast Foundry face with no free web
- *   license and (worse for us) no Cyrillic coverage at all. See globals.css
- *   for where each is actually wired up (--font-sans / --font-display).
+ * These are the actual fonts used by the original design prototype
+ * (velora-final2.html), which match the WIClub brandbook's black/white/red
+ * palette but chose Manrope + Lora over the brandbook's own Jost / Kazimir
+ * Text spec — Kazimir Text is a paid Contrast Foundry face with no free web
+ * license and no Cyrillic coverage at all, so the prototype substituted
+ * Cyrillic-capable alternatives instead. See globals.css for where each is
+ * wired up (--font-sans / --font-display).
+ * - Manrope — body / nav / labels.
+ * - Lora — headings, quotes, KPI figures (incl. italic, for the login page
+ *   tagline).
  * Both imports include the cyrillic subset — almost every visible label in
  * this app is Russian/Bulgarian, not the Latin leftovers a latin-only
  * subset would cover.
  */
-import "@fontsource-variable/jost";
-import "@fontsource-variable/playfair-display";
-import "@fontsource-variable/playfair-display/wght-italic.css";
+import "@fontsource-variable/manrope";
+import "@fontsource-variable/lora";
+import "@fontsource-variable/lora/wght-italic.css";
 import "./globals.css";
 
 export const metadata: Metadata = {

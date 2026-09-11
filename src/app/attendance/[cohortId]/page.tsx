@@ -1,5 +1,4 @@
 import { notFound, redirect } from "next/navigation";
-import Link from "next/link";
 import { getCurrentProfile } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { currencyForCountry } from "@/lib/currency";
@@ -10,6 +9,7 @@ import LocaleSwitcher from "@/components/i18n/LocaleSwitcher";
 import LocaleScope from "@/components/i18n/LocaleScope";
 import T from "@/components/i18n/T";
 import GroupAttendanceBoard from "@/components/attendance/GroupAttendanceBoard";
+import AppShell from "@/components/shell/AppShell";
 
 export default async function CohortAttendancePage({
   params,
@@ -50,21 +50,19 @@ export default async function CohortAttendancePage({
   const canEdit = !!profile.partner_id;
 
   return (
-    <div className="flex flex-1 flex-col bg-surface-2">
-      <header className="flex items-center justify-between border-b border-border bg-background px-6 py-4">
-        <div>
-          <Link href="/attendance" className="text-sm text-muted hover:text-ink-2">
-            ← <T k="navAttendance" />
-          </Link>
-          <h1 className="mt-1 text-lg font-semibold tracking-tight text-foreground">
-            {product?.name ?? <T k="courseDeleted" />}
-          </h1>
-          <p className="mt-0.5 text-xs text-muted">
-            {profile.role === "hq" && partner?.name ? `${partner.name} · ` : ""}
-            <T k="startsOn" vars={{ date: cohort.start_date }} />
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
+    <AppShell
+      profile={profile}
+      title={product?.name ?? <T k="courseDeleted" />}
+      subtitle={
+        <>
+          {profile.role === "hq" && partner?.name ? `${partner.name} · ` : ""}
+          <T k="startsOn" vars={{ date: cohort.start_date }} />
+        </>
+      }
+      backHref="/attendance"
+      backLabel={<T k="navAttendance" />}
+      headerExtra={
+        <>
           <CurrencyScope
             scope={`club:${cohort.partner_id}`}
             fallback={currencyForCountry(partner?.country)}
@@ -75,18 +73,16 @@ export default async function CohortAttendancePage({
             fallback={localeForCountry(partner?.country)}
           />
           <LocaleSwitcher />
-        </div>
-      </header>
-
-      <main className="flex flex-1 flex-col p-6">
-        <div className="rounded-xl border border-border bg-background shadow-card">
-          <GroupAttendanceBoard
-            members={members ?? []}
-            sessions={product?.sessions ?? 0}
-            canEdit={canEdit}
-          />
-        </div>
-      </main>
-    </div>
+        </>
+      }
+    >
+      <div className="rounded-xl border border-border bg-background shadow-card">
+        <GroupAttendanceBoard
+          members={members ?? []}
+          sessions={product?.sessions ?? 0}
+          canEdit={canEdit}
+        />
+      </div>
+    </AppShell>
   );
 }

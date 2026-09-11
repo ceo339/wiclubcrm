@@ -1,5 +1,4 @@
 import { redirect } from "next/navigation";
-import Link from "next/link";
 import { getCurrentProfile } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { scopeForProfile } from "@/lib/currency";
@@ -11,6 +10,7 @@ import LocaleScope from "@/components/i18n/LocaleScope";
 import T from "@/components/i18n/T";
 import PaymentsBoard from "@/components/payments/PaymentsBoard";
 import type { MemberOption } from "@/components/payments/types";
+import AppShell from "@/components/shell/AppShell";
 
 export default async function PaymentsPage() {
   const profile = await getCurrentProfile();
@@ -45,41 +45,35 @@ export default async function PaymentsPage() {
   }));
 
   return (
-    <div className="flex flex-1 flex-col bg-surface-2">
-      <header className="flex items-center justify-between border-b border-border bg-background px-6 py-4">
-        <div>
-          <Link href="/" className="text-sm text-muted hover:text-ink-2">
-            ← <T k="appName" />
-          </Link>
-          <h1 className="mt-1 text-lg font-semibold tracking-tight text-foreground"><T k="navPayments" /></h1>
-        </div>
-        <div className="flex items-center gap-2">
+    <AppShell
+      profile={profile}
+      title={<T k="navPayments" />}
+      headerExtra={
+        <>
           <CurrencyScope scope={scope} fallback={fallback} />
           <CurrencySwitcher />
           <LocaleScope scope={localeScope.scope} fallback={localeScope.fallback} />
           <LocaleSwitcher />
-        </div>
-      </header>
-
-      <main className="flex flex-1 flex-col p-6">
-        {error ? (
-          <p className="rounded-lg bg-accent/10 px-4 py-3 text-sm text-accent-strong">
-            <T k="errLoadPaymentsFailed" />: {error.message}
-          </p>
-        ) : (
-          <PaymentsBoard
-            initialPayments={(payments ?? []).map((p) => ({
-              ...p,
-              partner_name: (p as { partners?: { name: string } | null }).partners?.name ?? null,
-              member_name: (p as { members?: { name: string } | null }).members?.name ?? null,
-              product_name: (p as { products?: { name: string } | null }).products?.name ?? null,
-            }))}
-            memberOptions={memberOptions}
-            canEdit={canEdit}
-            stripeEnabled={stripeEnabled}
-          />
-        )}
-      </main>
-    </div>
+        </>
+      }
+    >
+      {error ? (
+        <p className="rounded-lg bg-accent/10 px-4 py-3 text-sm text-accent-strong">
+          <T k="errLoadPaymentsFailed" />: {error.message}
+        </p>
+      ) : (
+        <PaymentsBoard
+          initialPayments={(payments ?? []).map((p) => ({
+            ...p,
+            partner_name: (p as { partners?: { name: string } | null }).partners?.name ?? null,
+            member_name: (p as { members?: { name: string } | null }).members?.name ?? null,
+            product_name: (p as { products?: { name: string } | null }).products?.name ?? null,
+          }))}
+          memberOptions={memberOptions}
+          canEdit={canEdit}
+          stripeEnabled={stripeEnabled}
+        />
+      )}
+    </AppShell>
   );
 }

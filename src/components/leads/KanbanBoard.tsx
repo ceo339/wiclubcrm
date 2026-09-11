@@ -65,22 +65,22 @@ export default function KanbanBoard({
               key={stage.id}
               onDragOver={(e) => canEdit && e.preventDefault()}
               onDrop={() => handleDrop(stage.id)}
-              className="flex w-72 shrink-0 flex-col rounded-xl border border-border bg-background"
+              className="flex w-72 shrink-0 flex-col rounded-xl bg-surface-2 p-3"
             >
-              <div className="flex items-center justify-between border-b border-border px-3 py-2.5">
+              <div className="flex items-center justify-between px-0.5 pb-2.5">
                 <span className="text-sm font-medium text-ink-2">{t(stage.labelKey)}</span>
-                <span className="rounded-full bg-surface-2 px-2 py-0.5 text-xs text-muted">
+                <span className="rounded-full bg-surface-3 px-2 py-0.5 text-xs text-muted">
                   {stageLeads.length}
                 </span>
               </div>
-              <div className="flex flex-col gap-2 p-2 min-h-[120px]">
+              <div className="flex min-h-[120px] flex-col gap-2">
                 {stageLeads.map((lead) => (
                   <div
                     key={lead.id}
                     draggable={canEdit}
                     onDragStart={() => setDragId(lead.id)}
                     onClick={() => onSelect(lead.id)}
-                    className={`rounded-lg border border-border bg-background p-3 text-sm shadow-sm hover:border-accent ${
+                    className={`rounded-[12px] border border-border bg-background p-3 text-sm shadow-card transition-all hover:-translate-y-px hover:border-border-strong hover:shadow-card-hover ${
                       canEdit ? "cursor-grab active:cursor-grabbing" : "cursor-pointer"
                     }`}
                   >
