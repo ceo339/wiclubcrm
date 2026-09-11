@@ -540,6 +540,7 @@ export const DICT: Record<string, Entry> = {
 
   // ---- edit payment modal ----
   fallbackPaymentTitle: { ru: "Оплата", bg: "Плащане" },
+  paymentFromLeadOnly: { ru: "из лида, ещё не участница", bg: "от запитване, все още не е участничка" },
 
   // ---- payment link modal ----
   headingLinkReady: { ru: "Ссылка готова", bg: "Линкът е готов" },

@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getCurrentProfile } from "@/lib/auth";
 import { SOURCES, duplicateKey, normalizeEmail, normalizePhone, type DuplicateField, type StageId } from "@/lib/leads";
 import { currentMonthYear } from "@/lib/members";
+import { todayIso } from "@/lib/payments";
 import type { Tables } from "@/types/database";
 
 export type ActionResult = { error: string | null };
@@ -67,18 +68,54 @@ export async function updateLeadStage(
   if (!profile) return { error: "errNotAuthorized" };
 
   const supabase = await createClient();
-  const { error } = await supabase
+  const { data: updated, error } = await supabase
     .from("leads")
     .update({
       stage,
       decline_reason: stage === "declined" ? decline?.reason ?? null : null,
       decline_note: stage === "declined" ? decline?.note ?? null : null,
     })
-    .eq("id", leadId);
+    .eq("id", leadId)
+    .select("id, partner_id, value, product_id")
+    .maybeSingle();
 
   if (error) return { error: error.message };
 
+  // "Оплата в лидах создаёт запись в Платежах автоматически" (Anastasiia,
+  // 11 сен 2026) — the moment a lead reaches "Оплата", it should show up
+  // in the Платежи ledger without a separate manual step. Idempotent (skips
+  // if this lead already has a payment — e.g. dragged back and forth on the
+  // board) and skipped when there's no partner (hq can't write payments
+  // anyway) or nothing to record (value is 0/unset).
+  if (stage === "paid" && updated && updated.partner_id && Number(updated.value) > 0) {
+    const { data: existingPayment } = await supabase
+      .from("payments")
+      .select("id")
+      .eq("lead_id", leadId)
+      .maybeSingle();
+
+    if (!existingPayment) {
+      const { data: existingMember } = await supabase
+        .from("members")
+        .select("id")
+        .eq("lead_id", leadId)
+        .maybeSingle();
+
+      await supabase.from("payments").insert({
+        partner_id: updated.partner_id,
+        lead_id: leadId,
+        member_id: existingMember?.id ?? null,
+        product_id: updated.product_id,
+        amount: updated.value,
+        status: "paid",
+        paid_date: todayIso(),
+      });
+    }
+  }
+
   revalidatePath("/leads");
+  revalidatePath("/payments");
+  revalidatePath("/");
   return { error: null };
 }
 

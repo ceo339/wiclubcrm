@@ -134,19 +134,60 @@ export function periodLabel(period: Period, locale: Locale): string {
     : `${formatDateRu(period.from)} – ${formatDateRu(period.to)}`;
 }
 
+/**
+ * Which month a course/enrollment counts toward everywhere on this
+ * dashboard (the participant widget, revenue, the running member total) —
+ * Anastasiia's rule (11 сен 2026): "по дате старта. если дата старта была
+ * в августе, то это считается в август" — the month the course actually
+ * STARTS, not the month it was sold or the card was created. Falls back to
+ * when the enrollment itself was created only when no start date has been
+ * picked yet (a sold course with no stream assigned), so it still shows up
+ * somewhere rather than vanishing from every count.
+ */
+export function enrollmentAttributionDate(e: { start_date: string | null; created_at: string }): string {
+  return e.start_date ?? e.created_at.slice(0, 10);
+}
+
+/** Same idea as enrollmentAttributionDate, for a lead that hasn't (yet, or
+ * ever) become a member — the course/stream she was offered at
+ * `cohort_start_date`, falling back to when the lead itself was added. */
+export function leadCohortDate(l: { cohort_start_date: string | null; added_date: string }): string {
+  return l.cohort_start_date ?? l.added_date;
+}
+
+export type PaymentContext = {
+  paid_date: string;
+  enrollment: { start_date: string | null; created_at: string } | null;
+  lead: { cohort_start_date: string | null; added_date: string } | null;
+};
+
+/**
+ * Which month a payment counts toward — "выручка считается по
+ * предоставленной услуге (старту курса)" (Anastasiia, 11 сен 2026). Prefers
+ * the course it was actually for (via its enrollment); before she's been
+ * converted to a member yet, falls back to the lead's own chosen stream
+ * (see leadCohortDate); only a payment with neither attached (an old row,
+ * or one never tied to a course at all) falls back to its own paid_date.
+ */
+export function paymentAttributionDate(p: PaymentContext): string {
+  if (p.enrollment) return enrollmentAttributionDate(p.enrollment);
+  if (p.lead) return leadCohortDate(p.lead);
+  return p.paid_date;
+}
+
 /** Every month with real activity in the given rows, plus the current month
  * even if it's still empty. Never a fabricated "last N months" — only
  * months that actually have (or could have) something to show. */
 export function monthsWithActivity(
   leads: { added_date: string }[],
-  members: { created_at: string }[],
-  payments: { paid_date: string }[],
+  enrollments: { start_date: string | null; created_at: string }[],
+  payments: PaymentContext[],
   limit = 6
 ): string[] {
   const set = new Set<string>([currentMonthKey()]);
   leads.forEach((l) => set.add(monthKeyOf(l.added_date)));
-  members.forEach((m) => set.add(monthKeyOf(m.created_at)));
-  payments.forEach((p) => set.add(monthKeyOf(p.paid_date)));
+  enrollments.forEach((e) => set.add(monthKeyOf(enrollmentAttributionDate(e))));
+  payments.forEach((p) => set.add(monthKeyOf(paymentAttributionDate(p))));
   return [...set].sort().reverse().slice(0, limit);
 }
 
@@ -176,14 +217,14 @@ export function lastNMonthKeys(months: number): string[] {
 }
 
 export function monthlyRevenue(
-  payments: { amount: number; status: string | null; paid_date: string }[],
+  payments: (PaymentContext & { amount: number; status: string | null })[],
   months = 6
 ): MonthlyRevenue[] {
   const paid = payments.filter((p) => p.status === "paid");
   return lastNMonthKeys(months).map((monthKey) => ({
     monthKey,
     amount: paid
-      .filter((p) => monthKeyOf(p.paid_date) === monthKey)
+      .filter((p) => monthKeyOf(paymentAttributionDate(p)) === monthKey)
       .reduce((sum, p) => sum + Number(p.amount), 0),
   }));
 }
@@ -196,10 +237,13 @@ export type MonthlyCount = { monthKey: string; value: number };
  * month". Powers the KPI tile's sparkline the same honest way
  * monthlyRevenue powers the revenue chart: real rows, no smoothing.
  */
-export function monthlyMemberTotal(members: { created_at: string }[], months = 6): MonthlyCount[] {
+export function monthlyMemberTotal(
+  enrollments: { start_date: string | null; created_at: string }[],
+  months = 6
+): MonthlyCount[] {
   return lastNMonthKeys(months).map((monthKey) => ({
     monthKey,
-    value: members.filter((m) => monthKeyOf(m.created_at) <= monthKey).length,
+    value: enrollments.filter((e) => monthKeyOf(enrollmentAttributionDate(e)) <= monthKey).length,
   }));
 }
 
@@ -209,9 +253,12 @@ export function monthlyMemberTotal(members: { created_at: string }[], months = 6
  * 0 in the sparkline rather than breaking the line — there's no "no data"
  * gap to render in a tiny trend line, unlike the KPI tile's own delta text.
  */
-export function monthlyConversion(leads: { added_date: string; stage: string }[], months = 6): MonthlyCount[] {
+export function monthlyConversion(
+  leads: { added_date: string; cohort_start_date: string | null; stage: string }[],
+  months = 6
+): MonthlyCount[] {
   return lastNMonthKeys(months).map((monthKey) => {
-    const inMonth = leads.filter((l) => monthKeyOf(l.added_date) === monthKey);
+    const inMonth = leads.filter((l) => monthKeyOf(leadCohortDate(l)) === monthKey);
     return { monthKey, value: conversionRate(inMonth) ?? 0 };
   });
 }
@@ -322,27 +369,41 @@ export type CoreMetrics = {
  */
 export function computeCoreMetrics({
   leads,
-  members,
+  enrollments,
   payments,
   period,
 }: {
-  leads: { stage: string; added_date: string; source: string | null }[];
-  members: { created_at: string }[];
-  payments: { amount: number; status: string | null; paid_date: string }[];
+  leads: { stage: string; added_date: string; cohort_start_date: string | null; source: string | null }[];
+  enrollments: { start_date: string | null; created_at: string }[];
+  payments: (PaymentContext & { amount: number; status: string | null })[];
   period: Period;
 }): CoreMetrics {
   const paid = payments.filter((p) => p.status === "paid");
-  const revenue = paid.filter((p) => inPeriod(period, p.paid_date)).reduce((s, p) => s + Number(p.amount), 0);
+  const revenue = paid
+    .filter((p) => inPeriod(period, paymentAttributionDate(p)))
+    .reduce((s, p) => s + Number(p.amount), 0);
   const revenuePrevious = paid
-    .filter((p) => inPreviousMonth(period, p.paid_date))
+    .filter((p) => inPreviousMonth(period, paymentAttributionDate(p)))
     .reduce((s, p) => s + Number(p.amount), 0);
 
-  const membersAdded = members.filter((m) => inPeriod(period, m.created_at)).length;
+  // "участниц на главной считать по дате старта" (Anastasiia, 11 сен
+  // 2026) — counts course ENROLLMENTS whose start date falls in this
+  // period, not members whose card was created then; a member with two
+  // courses starting in different months is counted in both.
+  const membersAdded = enrollments.filter((e) => inPeriod(period, enrollmentAttributionDate(e))).length;
 
+  // Funnel / declined / source-conversion below stay on the lead's own
+  // added_date (unchanged) — only the headline "Лид → Оплата" conversion
+  // rate moves to the course's own start date ("конверсия из лида в
+  // оплаты — аналогично", same request, 11 сен 2026): that's the one
+  // figure she asked to follow the course calendar rather than when the
+  // lead first came in.
   const leadsInPeriod = leads.filter((l) => inPeriod(period, l.added_date));
-  const leadsPrevious = leads.filter((l) => inPreviousMonth(period, l.added_date));
-  const conversion = conversionRate(leadsInPeriod);
-  const conversionPrevious = period.mode === "month" ? conversionRate(leadsPrevious) : null;
+
+  const conversionLeadsInPeriod = leads.filter((l) => inPeriod(period, leadCohortDate(l)));
+  const conversionLeadsPrevious = leads.filter((l) => inPreviousMonth(period, leadCohortDate(l)));
+  const conversion = conversionRate(conversionLeadsInPeriod);
+  const conversionPrevious = period.mode === "month" ? conversionRate(conversionLeadsPrevious) : null;
 
   const royaltyAmount = Math.round((revenue * ROYALTY_PERCENT) / 100);
 
@@ -412,14 +473,14 @@ export type DecliningClub = { id: string; name: string; delta: number };
  */
 export function findDecliningClubs(
   partners: { id: string; name: string }[],
-  payments: { partner_id: string; amount: number; status: string | null; paid_date: string }[]
+  payments: (PaymentContext & { partner_id: string; amount: number; status: string | null })[]
 ): DecliningClub[] {
   const paid = payments.filter((p) => p.status === "paid");
   const thisMonth = currentMonthKey();
   const prevMonth = previousMonthKey();
   const revenueFor = (partnerId: string, monthKey: string) =>
     paid
-      .filter((p) => p.partner_id === partnerId && monthKeyOf(p.paid_date) === monthKey)
+      .filter((p) => p.partner_id === partnerId && monthKeyOf(paymentAttributionDate(p)) === monthKey)
       .reduce((sum, p) => sum + Number(p.amount), 0);
 
   return partners

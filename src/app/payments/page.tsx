@@ -20,7 +20,7 @@ export default async function PaymentsPage() {
   // RLS scopes this to the caller's partner_id (or every partner for hq).
   const { data: payments, error } = await supabase
     .from("payments")
-    .select("*, partners(name), members(name), products(name)")
+    .select("*, partners(name), members(name), products(name), leads(name)")
     .order("paid_date", { ascending: false });
 
   const canEdit = !!profile.partner_id;
@@ -81,6 +81,10 @@ export default async function PaymentsPage() {
             partner_name: (p as { partners?: { name: string } | null }).partners?.name ?? null,
             member_name: (p as { members?: { name: string } | null }).members?.name ?? null,
             product_name: (p as { products?: { name: string } | null }).products?.name ?? null,
+            // Set when this payment came from a lead reaching "Оплата"
+            // before she's been converted to a member yet — see
+            // updateLeadStage in app/leads/actions.
+            lead_name: (p as { leads?: { name: string } | null }).leads?.name ?? null,
           }))}
           memberOptions={memberOptions}
           canEdit={canEdit}

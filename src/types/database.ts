@@ -398,6 +398,7 @@ export type Database = {
           created_at: string
           enrollment_id: string | null
           id: string
+          lead_id: string | null
           member_id: string | null
           paid_date: string
           partner_id: string
@@ -410,6 +411,7 @@ export type Database = {
           created_at?: string
           enrollment_id?: string | null
           id?: string
+          lead_id?: string | null
           member_id?: string | null
           paid_date?: string
           partner_id: string
@@ -422,6 +424,7 @@ export type Database = {
           created_at?: string
           enrollment_id?: string | null
           id?: string
+          lead_id?: string | null
           member_id?: string | null
           paid_date?: string
           partner_id?: string
@@ -435,6 +438,13 @@ export type Database = {
             columns: ["enrollment_id"]
             isOneToOne: false
             referencedRelation: "member_enrollments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payments_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "leads"
             referencedColumns: ["id"]
           },
           {

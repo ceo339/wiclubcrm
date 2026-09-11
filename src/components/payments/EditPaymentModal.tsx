@@ -45,7 +45,7 @@ export default function EditPaymentModal({
         className="w-full max-w-sm rounded-2xl border border-border bg-background p-6 shadow-lg"
         onClick={(e) => e.stopPropagation()}
       >
-        <h3 className="text-base font-semibold text-foreground">{payment.member_name ?? t("fallbackPaymentTitle")}</h3>
+        <h3 className="text-base font-semibold text-foreground">{payment.member_name ?? payment.lead_name ?? t("fallbackPaymentTitle")}</h3>
         {payment.product_name && <p className="mt-1 text-sm text-muted">{payment.product_name}</p>}
 
         {canEdit ? (

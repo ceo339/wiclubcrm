@@ -52,6 +52,54 @@ async function resolvePaymentTarget(
 }
 
 /**
+ * "Если добавляется оплата вручную — тогда создается новый лид, если нет
+ * существующего. Это тоже связанные процессы по лид id" (Anastasiia, 11
+ * сен 2026) — a payment should always trace back to a lead/contact thread,
+ * same as a lead-converted member already does via members.lead_id. A
+ * member created directly (the "Добавить участницу" button, never through
+ * a lead) has none yet; the first time a payment is recorded for her, one
+ * is backfilled from her own contact details and linked both ways. Returns
+ * the (existing or newly created) lead id, or null if the member itself
+ * couldn't be found.
+ */
+async function ensureLeadForMember(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  partnerId: string,
+  memberId: string,
+  productId: string | null,
+  amount: number
+): Promise<string | null> {
+  const { data: member } = await supabase
+    .from("members")
+    .select("id, lead_id, name, phone, email, city, birthday")
+    .eq("id", memberId)
+    .maybeSingle();
+  if (!member) return null;
+  if (member.lead_id) return member.lead_id;
+
+  const { data: newLead, error } = await supabase
+    .from("leads")
+    .insert({
+      partner_id: partnerId,
+      name: member.name,
+      phone: member.phone,
+      email: member.email,
+      city: member.city,
+      birthday: member.birthday,
+      product_id: productId,
+      stage: "paid",
+      value: amount,
+      added_date: todayIso(),
+    })
+    .select("id")
+    .single();
+  if (error || !newLead) return null;
+
+  await supabase.from("members").update({ lead_id: newLead.id }).eq("id", memberId);
+  return newLead.id;
+}
+
+/**
  * Records a payment against an existing member (and, usually, a specific
  * course of theirs). This is a manual ledger entry — "this payment happened
  * / is expected" — not a card-processing integration, so there's no
@@ -78,11 +126,14 @@ export async function createPayment(formData: FormData): Promise<ActionResult> {
   const resolved = await resolvePaymentTarget(supabase, profile.partner_id, target);
   if (!resolved) return { error: "errMemberNotFound" };
 
+  const leadId = await ensureLeadForMember(supabase, profile.partner_id, resolved.memberId, resolved.productId, amount);
+
   const { error } = await supabase.from("payments").insert({
     partner_id: profile.partner_id,
     member_id: resolved.memberId,
     enrollment_id: resolved.enrollmentId,
     product_id: resolved.productId,
+    lead_id: leadId,
     amount,
     status,
     paid_date: paidDate,
@@ -91,6 +142,7 @@ export async function createPayment(formData: FormData): Promise<ActionResult> {
   if (error) return { error: error.message };
 
   revalidatePath("/payments");
+  revalidatePath("/leads");
   return { error: null };
 }
 
@@ -171,11 +223,14 @@ export async function createPaymentLink(formData: FormData): Promise<PaymentLink
   if (!member) return { error: "errMemberNotFound" };
   const productName = product?.name ?? null;
 
+  const leadId = await ensureLeadForMember(supabase, profile.partner_id, resolved.memberId, resolved.productId, amount);
+
   const { data: payment, error: insertError } = await supabase
     .from("payments")
     .insert({
       partner_id: profile.partner_id,
       member_id: resolved.memberId,
+      lead_id: leadId,
       enrollment_id: resolved.enrollmentId,
       product_id: resolved.productId,
       amount,

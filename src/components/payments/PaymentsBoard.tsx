@@ -167,8 +167,13 @@ export default function PaymentsBoard({
                 >
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-3">
-                      <Avatar name={p.member_name ?? "?"} size={28} />
-                      <span className="font-medium text-foreground">{p.member_name ?? "—"}</span>
+                      <Avatar name={p.member_name ?? p.lead_name ?? "?"} size={28} />
+                      <div className="min-w-0">
+                        <div className="font-medium text-foreground">{p.member_name ?? p.lead_name ?? "—"}</div>
+                        {!p.member_name && p.lead_name && (
+                          <div className="text-xs text-muted">{t("paymentFromLeadOnly")}</div>
+                        )}
+                      </div>
                     </div>
                   </td>
                   {isHq && <td className="px-4 py-3 text-muted">{p.partner_name ?? "—"}</td>}

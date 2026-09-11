@@ -7,7 +7,9 @@ import { sortOpenTasks, type OpenTask } from "@/lib/tasks";
 import {
   computeCoreMetrics,
   countByProduct,
+  enrollmentAttributionDate,
   findDecliningClubs,
+  paymentAttributionDate,
   findStaleLeads,
   inPeriod,
   monthlyConversion,
@@ -112,17 +114,29 @@ export default async function Home({
     const [{ data: partners }, { data: leads }, { data: members }, { data: enrollments }, { data: payments }, { data: products }] =
       await Promise.all([
         supabase.from("partners").select("id, name").order("name"),
-        supabase.from("leads").select("id, name, partner_id, stage, source, added_date, updated_at"),
+        supabase.from("leads").select("id, name, partner_id, stage, source, added_date, cohort_start_date, updated_at"),
         supabase.from("members").select("partner_id, created_at"),
-        supabase.from("member_enrollments").select("product_id, created_at"),
-        supabase.from("payments").select("partner_id, amount, status, paid_date"),
+        supabase.from("member_enrollments").select("partner_id, product_id, created_at, start_date"),
+        supabase
+          .from("payments")
+          .select("partner_id, amount, status, paid_date, member_enrollments(start_date, created_at), leads(cohort_start_date, added_date)"),
         supabase.from("products").select("id, name"),
       ]);
 
     const allLeads = leads ?? [];
     const allMembers = members ?? [];
     const allEnrollments = enrollments ?? [];
-    const allPayments = payments ?? [];
+    // "выручка считается по предоставленной услуге (старту курса)"
+    // (Anastasiia, 11 сен 2026) — each payment carries its course's start
+    // date (via its enrollment, or the originating lead's chosen stream
+    // before she's a member yet) so every revenue figure below can be
+    // attributed to when the course actually happens, not paid_date.
+    const allPayments = (payments ?? []).map((p) => ({
+      ...p,
+      enrollment: (p as { member_enrollments?: { start_date: string | null; created_at: string } | null })
+        .member_enrollments ?? null,
+      lead: (p as { leads?: { cohort_start_date: string | null; added_date: string } | null }).leads ?? null,
+    }));
     const productNamesById = new Map((products ?? []).map((p) => [p.id, p.name]));
     const partnerNamesById = new Map((partners ?? []).map((p) => [p.id, p.name]));
 
@@ -130,25 +144,29 @@ export default async function Home({
     const decliningClubs = findDecliningClubs(partners ?? [], allPayments);
 
     const period = parsePeriodParams(params);
-    const monthOptions = monthsWithActivity(allLeads, allMembers, allPayments);
-    const metrics = computeCoreMetrics({ leads: allLeads, members: allMembers, payments: allPayments, period });
+    const monthOptions = monthsWithActivity(allLeads, allEnrollments, allPayments);
+    const metrics = computeCoreMetrics({ leads: allLeads, enrollments: allEnrollments, payments: allPayments, period });
 
-    // "Участницы по продуктам" counts ENROLLMENTS, not members — a member
-    // with two courses shows up in both buckets, which is the honest answer
-    // to "how many are signed up for this course".
-    const enrollmentsInPeriod = allEnrollments.filter((e) => inPeriod(period, e.created_at));
+    // "Участницы по продуктам" — same start-date attribution as everywhere
+    // else on this page (see enrollmentAttributionDate), counting
+    // ENROLLMENTS, not members — a member with two courses shows up in
+    // both buckets, which is the honest answer to "how many are signed up
+    // for this course".
+    const enrollmentsInPeriod = allEnrollments.filter((e) => inPeriod(period, enrollmentAttributionDate(e)));
 
     const clubs: ClubRow[] = (partners ?? []).map((p) => {
       const clubLeads = allLeads.filter((l) => l.partner_id === p.id && inPeriod(period, l.added_date));
-      const clubMembers = allMembers.filter((m) => m.partner_id === p.id && inPeriod(period, m.created_at));
+      const clubEnrollmentsInPeriod = allEnrollments.filter(
+        (e) => e.partner_id === p.id && inPeriod(period, enrollmentAttributionDate(e))
+      );
       const clubPayments = allPayments.filter(
-        (pay) => pay.partner_id === p.id && inPeriod(period, pay.paid_date)
+        (pay) => pay.partner_id === p.id && inPeriod(period, paymentAttributionDate(pay))
       );
       return {
         id: p.id,
         name: p.name,
         leadsCount: clubLeads.length,
-        membersCount: clubMembers.length,
+        membersCount: clubEnrollmentsInPeriod.length,
         collected: clubPayments
           .filter((pay) => pay.status === "paid")
           .reduce((sum, pay) => sum + Number(pay.amount), 0),
@@ -198,7 +216,7 @@ export default async function Home({
           basePath="/"
           revenue={metrics.revenue}
           revenueTrend={monthlyRevenue(allPayments)}
-          memberTrend={monthlyMemberTotal(allMembers)}
+          memberTrend={monthlyMemberTotal(allEnrollments)}
           conversionTrend={monthlyConversion(allLeads)}
           membersAdded={metrics.membersAdded}
           conversion={metrics.conversion}
@@ -245,24 +263,33 @@ export default async function Home({
 
   const [{ data: leads }, { data: members }, { data: enrollments }, { data: payments }, { data: products }] =
     await Promise.all([
-      supabase.from("leads").select("stage, source, added_date").eq("partner_id", partnerId),
+      supabase.from("leads").select("stage, source, added_date, cohort_start_date").eq("partner_id", partnerId),
       supabase.from("members").select("created_at").eq("partner_id", partnerId),
-      supabase.from("member_enrollments").select("product_id, created_at").eq("partner_id", partnerId),
-      supabase.from("payments").select("amount, status, paid_date").eq("partner_id", partnerId),
+      supabase.from("member_enrollments").select("product_id, created_at, start_date").eq("partner_id", partnerId),
+      supabase
+        .from("payments")
+        .select("amount, status, paid_date, member_enrollments(start_date, created_at), leads(cohort_start_date, added_date)")
+        .eq("partner_id", partnerId),
       supabase.from("products").select("id, name").eq("partner_id", partnerId),
     ]);
 
   const clubLeads = leads ?? [];
   const clubMembers = members ?? [];
   const clubEnrollments = enrollments ?? [];
-  const clubPayments = payments ?? [];
+  // See the HQ branch above — same start-date attribution for revenue.
+  const clubPayments = (payments ?? []).map((p) => ({
+    ...p,
+    enrollment: (p as { member_enrollments?: { start_date: string | null; created_at: string } | null })
+      .member_enrollments ?? null,
+    lead: (p as { leads?: { cohort_start_date: string | null; added_date: string } | null }).leads ?? null,
+  }));
   const productNamesById = new Map((products ?? []).map((p) => [p.id, p.name]));
 
   const period = parsePeriodParams(params);
-  const monthOptions = monthsWithActivity(clubLeads, clubMembers, clubPayments);
-  const metrics = computeCoreMetrics({ leads: clubLeads, members: clubMembers, payments: clubPayments, period });
+  const monthOptions = monthsWithActivity(clubLeads, clubEnrollments, clubPayments);
+  const metrics = computeCoreMetrics({ leads: clubLeads, enrollments: clubEnrollments, payments: clubPayments, period });
 
-  const enrollmentsInPeriod = clubEnrollments.filter((e) => inPeriod(period, e.created_at));
+  const enrollmentsInPeriod = clubEnrollments.filter((e) => inPeriod(period, enrollmentAttributionDate(e)));
 
   const totals = {
     leads: clubLeads.length,
@@ -301,7 +328,7 @@ export default async function Home({
         basePath="/"
         revenue={metrics.revenue}
         revenueTrend={monthlyRevenue(clubPayments)}
-        memberTrend={monthlyMemberTotal(clubMembers)}
+        memberTrend={monthlyMemberTotal(clubEnrollments)}
         conversionTrend={monthlyConversion(clubLeads)}
         membersAdded={metrics.membersAdded}
         conversion={metrics.conversion}

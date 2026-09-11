@@ -4,6 +4,9 @@ export type Payment = Tables<"payments"> & {
   partner_name: string | null;
   member_name: string | null;
   product_name: string | null;
+  /** Set only when this payment has no member yet (a lead that reached
+   * "Оплата" before being converted) — display falls back to this name. */
+  lead_name: string | null;
 };
 
 /**
