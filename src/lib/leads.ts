@@ -110,3 +110,42 @@ export const GENERIC_PLANS: { id: string; price: number }[] = [
 ];
 
 export const genericPlanLabel = (id: string, locale: Locale) => t(locale, id);
+
+// ---- duplicate detection ----
+// Anastasiia's rule, verbatim: check by email first, then by phone number.
+// Read as a single-key lookup (not "check both and OR the results") — if a
+// lead has an email, that email is its identity for matching purposes;
+// phone is only consulted when there's no email to go on. Used identically
+// by createLead/importLeads (server/leads/actions.ts) and the HQ duplicate
+// finder, so all three agree on what counts as "the same lead".
+
+/** Trimmed + lowercased, or null if empty — so two blank emails never
+ * "match" each other. */
+export function normalizeEmail(email: string | null | undefined): string | null {
+  const trimmed = (email ?? "").trim().toLowerCase();
+  return trimmed || null;
+}
+
+/** Digits only (a leading "+", spaces, dashes and parentheses are just
+ * formatting, not part of the number's identity). Requires at least 5
+ * digits so short/garbage input never collides with another short value. */
+export function normalizePhone(phone: string | null | undefined): string | null {
+  const digits = (phone ?? "").replace(/\D/g, "");
+  return digits.length >= 5 ? digits : null;
+}
+
+export type DuplicateField = "email" | "phone";
+
+/** The single key used to decide whether two leads are "the same lead" —
+ * email if present, otherwise phone, otherwise no key at all (nothing to
+ * compare, never treated as a duplicate). */
+export function duplicateKey(
+  email: string | null | undefined,
+  phone: string | null | undefined
+): { field: DuplicateField; value: string } | null {
+  const normEmail = normalizeEmail(email);
+  if (normEmail) return { field: "email", value: normEmail };
+  const normPhone = normalizePhone(phone);
+  if (normPhone) return { field: "phone", value: normPhone };
+  return null;
+}

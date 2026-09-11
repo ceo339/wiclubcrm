@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentProfile } from "@/lib/auth";
-import { SOURCES, type StageId } from "@/lib/leads";
+import { SOURCES, duplicateKey, normalizeEmail, normalizePhone, type DuplicateField, type StageId } from "@/lib/leads";
 import { currentMonthYear } from "@/lib/members";
 import type { Tables } from "@/types/database";
 
@@ -13,6 +13,43 @@ function normalizeSource(raw: string | undefined | null): string | null {
   if (!raw) return null;
   const match = SOURCES.find((s) => s.toLowerCase() === raw.trim().toLowerCase());
   return match ?? null;
+}
+
+export type DuplicateMatch = { id: string; name: string; stage: string; field: DuplicateField };
+
+/**
+ * Looks for an existing lead of this partner matching the given email/phone
+ * by the shared duplicateKey() rule (email first, then phone — see
+ * lib/leads.ts). Fetches the partner's leads and compares client-side
+ * rather than pushing the match into SQL, since phone numbers are
+ * free-typed text (formatting varies) and need the same normalizePhone()
+ * comparison used everywhere else in this feature — fine at the lead
+ * volumes a single club has.
+ */
+async function findDuplicateInPartner(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  partnerId: string,
+  email: string | null,
+  phone: string | null,
+  excludeLeadId?: string
+): Promise<DuplicateMatch | null> {
+  const key = duplicateKey(email, phone);
+  if (!key) return null;
+
+  let query = supabase
+    .from("leads")
+    .select("id, name, stage, email, phone")
+    .eq("partner_id", partnerId);
+  if (excludeLeadId) query = query.neq("id", excludeLeadId);
+  const { data } = await query;
+  if (!data) return null;
+
+  if (key.field === "email") {
+    const match = data.find((l) => normalizeEmail(l.email) === key.value);
+    return match ? { id: match.id, name: match.name, stage: match.stage, field: "email" } : null;
+  }
+  const match = data.find((l) => normalizePhone(l.phone) === key.value);
+  return match ? { id: match.id, name: match.name, stage: match.stage, field: "phone" } : null;
 }
 
 /**
@@ -45,7 +82,9 @@ export async function updateLeadStage(
   return { error: null };
 }
 
-export async function createLead(formData: FormData): Promise<ActionResult> {
+export type CreateLeadResult = ActionResult & { duplicate?: DuplicateMatch };
+
+export async function createLead(formData: FormData): Promise<CreateLeadResult> {
   const profile = await getCurrentProfile();
   if (!profile) return { error: "errNotAuthorized" };
   if (!profile.partner_id) {
@@ -67,8 +106,20 @@ export async function createLead(formData: FormData): Promise<ActionResult> {
   let productId = String(formData.get("product_id") || "").trim() || null;
   let cohortStartDate = String(formData.get("cohort_start_date") || "").trim() || null;
   const plan = String(formData.get("plan") || "").trim() || null;
+  const force = String(formData.get("force") || "") === "true";
 
   const supabase = await createClient();
+
+  // "Не давать создавать новые дубли" — block by default (email first, then
+  // phone — see duplicateKey), but let the form resubmit with force=true
+  // once the partner has seen the existing match and still wants to add it
+  // (e.g. a genuine repeat enquiry from the same person).
+  if (!force) {
+    const duplicate = await findDuplicateInPartner(supabase, profile.partner_id, email, phone);
+    if (duplicate) {
+      return { error: duplicate.field === "email" ? "errDuplicateEmail" : "errDuplicatePhone", duplicate };
+    }
+  }
 
   // The product id/cohort date arrive via a hidden form field, so re-verify
   // the product actually belongs to this partner before trusting it.
@@ -120,6 +171,9 @@ export type ImportResult = {
   imported: number;
   /** Only set when error === "errImportPartial" — see importLeads below. */
   partialFailure?: { total: number; message: string };
+  /** Rows skipped because they matched an existing lead (email first, then
+   * phone) or another row earlier in the same file. */
+  duplicatesSkipped?: number;
 };
 
 const MAX_IMPORT_ROWS = 1000;
@@ -155,22 +209,62 @@ export async function importLeads(rows: ImportRow[]): Promise<ImportResult> {
   if (clean.length === 0) return { error: "errNoRowsWithName", imported: 0 };
 
   const supabase = await createClient();
+
+  // Same email-first-then-phone rule as createLead, checked against both
+  // this partner's existing leads and rows earlier in this same file (a
+  // big CSV export can easily contain its own repeats).
+  const { data: existing } = await supabase
+    .from("leads")
+    .select("email, phone")
+    .eq("partner_id", profile.partner_id as string);
+  const existingEmails = new Set(
+    (existing ?? []).map((l) => normalizeEmail(l.email)).filter((v): v is string => v !== null)
+  );
+  const existingPhones = new Set(
+    (existing ?? []).map((l) => normalizePhone(l.phone)).filter((v): v is string => v !== null)
+  );
+
+  const seenEmails = new Set<string>();
+  const seenPhones = new Set<string>();
+  let duplicatesSkipped = 0;
+  const deduped = clean.filter((row) => {
+    const key = duplicateKey(row.email, row.phone);
+    if (!key) return true;
+    const seen = key.field === "email" ? seenEmails : seenPhones;
+    const existingSet = key.field === "email" ? existingEmails : existingPhones;
+    if (seen.has(key.value) || existingSet.has(key.value)) {
+      duplicatesSkipped++;
+      return false;
+    }
+    seen.add(key.value);
+    return true;
+  });
+
+  if (deduped.length === 0) {
+    return {
+      error: duplicatesSkipped > 0 ? "errImportAllDuplicates" : "errNoRowsWithName",
+      imported: 0,
+      duplicatesSkipped,
+    };
+  }
+
   let imported = 0;
-  for (let i = 0; i < clean.length; i += IMPORT_CHUNK_SIZE) {
-    const chunk = clean.slice(i, i + IMPORT_CHUNK_SIZE);
+  for (let i = 0; i < deduped.length; i += IMPORT_CHUNK_SIZE) {
+    const chunk = deduped.slice(i, i + IMPORT_CHUNK_SIZE);
     const { error, count } = await supabase.from("leads").insert(chunk, { count: "exact" });
     if (error) {
       return {
         error: "errImportPartial",
         imported,
-        partialFailure: { total: clean.length, message: error.message },
+        partialFailure: { total: deduped.length, message: error.message },
+        duplicatesSkipped,
       };
     }
     imported += count ?? chunk.length;
   }
 
   revalidatePath("/leads");
-  return { error: null, imported };
+  return { error: null, imported, duplicatesSkipped };
 }
 
 /**
@@ -350,4 +444,65 @@ export async function convertLeadToMember(leadId: string): Promise<ActionResult>
   revalidatePath("/leads");
   revalidatePath("/members");
   return { error: null };
+}
+
+/**
+ * Deletes a lead outright — deliberately hq-only (Anastasiia's own
+ * decision: partner/club logins never get a delete button, only the
+ * "Управляющая компания" login does). The `leads_delete_hq` RLS policy is
+ * the real backstop; this check just fails fast with a translated message
+ * instead of surfacing a raw Postgres permission error.
+ */
+export async function deleteLead(leadId: string): Promise<ActionResult> {
+  const profile = await getCurrentProfile();
+  if (!profile) return { error: "errNotAuthorized" };
+  if (profile.role !== "hq") return { error: "errOnlyHqCanDelete" };
+
+  const supabase = await createClient();
+  const { error } = await supabase.from("leads").delete().eq("id", leadId);
+  if (error) return { error: error.message };
+
+  revalidatePath("/leads");
+  return { error: null };
+}
+
+export type DuplicateLeadRow = Tables<"leads"> & { partner_name: string | null };
+export type DuplicateGroup = {
+  key: string;
+  field: DuplicateField;
+  partnerName: string | null;
+  leads: DuplicateLeadRow[];
+};
+
+/**
+ * Scans every club's leads for duplicates, grouped per club — a lead at
+ * Sofia and one at Batumi sharing an email isn't a duplicate, they're two
+ * different clubs' bookings. Matched by the same email-first-then-phone
+ * rule as createLead/importLeads (duplicateKey). HQ-only, since the only
+ * thing you can do with a match (deleteLead) is HQ-only too.
+ */
+export async function findDuplicateLeads(): Promise<DuplicateGroup[]> {
+  const profile = await getCurrentProfile();
+  if (!profile || profile.role !== "hq") return [];
+
+  const supabase = await createClient();
+  const { data: leads } = await supabase
+    .from("leads")
+    .select("*, partners(name)")
+    .order("added_date", { ascending: true });
+  if (!leads) return [];
+
+  const groups = new Map<string, DuplicateGroup>();
+  for (const lead of leads) {
+    const key = duplicateKey(lead.email, lead.phone);
+    if (!key) continue;
+    const partnerName = (lead as { partners?: { name: string } | null }).partners?.name ?? null;
+    const groupKey = `${lead.partner_id}:${key.field}:${key.value}`;
+    const row: DuplicateLeadRow = { ...lead, partner_name: partnerName };
+    const existing = groups.get(groupKey);
+    if (existing) existing.leads.push(row);
+    else groups.set(groupKey, { key: groupKey, field: key.field, partnerName, leads: [row] });
+  }
+
+  return Array.from(groups.values()).filter((g) => g.leads.length > 1);
 }

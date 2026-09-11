@@ -14,6 +14,7 @@ import LeadsList from "./LeadsList";
 import NewLeadModal from "./NewLeadModal";
 import ImportModal from "./ImportModal";
 import LeadDetailModal from "./LeadDetailModal";
+import DuplicatesModal from "./DuplicatesModal";
 import SourceDonut from "./SourceDonut";
 
 function daysSince(dateStr: string, now: Date): number {
@@ -57,6 +58,7 @@ export default function LeadsBoard({
   const [smartFilters, setSmartFilters] = useState<Set<SmartFilter>>(new Set());
   const [showNewLead, setShowNewLead] = useState(false);
   const [showImport, setShowImport] = useState(false);
+  const [showDuplicates, setShowDuplicates] = useState(false);
   // "?open=<id>" — how a link from outside this page (the home page's
   // "Мои задачи" widget) opens a specific lead's card directly, instead of
   // landing on the board and making you search for it.
@@ -212,6 +214,14 @@ export default function LeadsBoard({
               </button>
             </>
           )}
+          {isHq && (
+            <button
+              onClick={() => setShowDuplicates(true)}
+              className="rounded-lg border border-border px-4 py-2 text-sm font-medium text-ink-2 hover:bg-surface-2"
+            >
+              {t("btnFindDuplicates")}
+            </button>
+          )}
         </div>
       </div>
 
@@ -244,11 +254,13 @@ export default function LeadsBoard({
         />
       )}
       {showImport && <ImportModal onClose={() => setShowImport(false)} />}
+      {showDuplicates && <DuplicatesModal onClose={() => setShowDuplicates(false)} />}
       {selectedLead && (
         <LeadDetailModal
           key={selectedLead.id}
           lead={selectedLead}
           canEdit={canEdit}
+          isHq={isHq}
           onClose={() => setSelectedLeadId(null)}
         />
       )}
