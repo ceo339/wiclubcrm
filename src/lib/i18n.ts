@@ -313,10 +313,15 @@ export const DICT: Record<string, Entry> = {
   // ---- login page ----
   authSubtitleSignIn: { ru: "Вход в систему", bg: "Влизане в системата" },
   authSubtitleSignUp: { ru: "Регистрация", bg: "Регистрация" },
-  loginTagline: {
-    ru: "Ты можешь замедлиться. Здесь тебя никто не торопит.",
-    bg: "Можеш да забавиш темпото. Тук никой не те бърза.",
+  loginHeadline: {
+    ru: "Создано для партнёров, которые закрывают сделки.",
+    bg: "Създадено за партньори, които затварят сделки.",
   },
+  loginSubtitle: {
+    ru: "Войдите в свой кабинет партнёра WI Club CRM.",
+    bg: "Влезте в своя партньорски профил на WI Club CRM.",
+  },
+  loginCardTitle: { ru: "С возвращением", bg: "Добре дошли отново" },
   authTabSignIn: { ru: "Вход", bg: "Вход" },
   fieldEmail: { ru: "Email", bg: "Email" },
   fieldPassword: { ru: "Пароль", bg: "Парола" },
