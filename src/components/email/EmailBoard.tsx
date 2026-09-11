@@ -5,6 +5,7 @@ import type { Tables } from "@/types/database";
 import { audienceLabelKey, computeCampaignStats } from "@/lib/email";
 import { useLocale } from "@/components/i18n/LocaleProvider";
 import NewCampaignModal from "./NewCampaignModal";
+import CampaignRecipientsModal from "./CampaignRecipientsModal";
 
 type Campaign = Tables<"email_campaigns"> & {
   email_campaign_recipients: { status: string }[];
@@ -26,6 +27,7 @@ export default function EmailBoard({
 }) {
   const { locale, t } = useLocale();
   const [showNew, setShowNew] = useState(false);
+  const [openCampaign, setOpenCampaign] = useState<{ id: string; subject: string } | null>(null);
   const dateLocale = locale === "bg" ? "bg-BG" : "ru-RU";
 
   return (
@@ -77,7 +79,11 @@ export default function EmailBoard({
                 {campaigns.map((c) => {
                   const stats = computeCampaignStats(c.email_campaign_recipients);
                   return (
-                    <tr key={c.id} className="border-b border-border last:border-0 hover:bg-surface-2">
+                    <tr
+                      key={c.id}
+                      onClick={() => setOpenCampaign({ id: c.id, subject: c.subject })}
+                      className="cursor-pointer border-b border-border last:border-0 hover:bg-surface-2"
+                    >
                       <td className="px-5 py-3 font-medium text-foreground">{c.subject}</td>
                       <td className="px-5 py-3">
                         <span className="rounded-full bg-surface-2 px-2 py-0.5 text-xs text-ink-2">
@@ -118,6 +124,13 @@ export default function EmailBoard({
       </div>
 
       {showNew && <NewCampaignModal onClose={() => setShowNew(false)} />}
+      {openCampaign && (
+        <CampaignRecipientsModal
+          campaignId={openCampaign.id}
+          subject={openCampaign.subject}
+          onClose={() => setOpenCampaign(null)}
+        />
+      )}
     </div>
   );
 }

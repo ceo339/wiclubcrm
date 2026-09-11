@@ -8,6 +8,66 @@ import { isAudience, textToSimpleHtml, type CampaignAudience } from "@/lib/email
 
 export type ActionResult = { error: string | null; campaignId?: string };
 
+export type RecipientDetail = { id: string; name: string; email: string; status: string };
+
+/**
+ * Who a campaign actually went to, by real name — the gap Anastasia
+ * flagged: the list only ever showed an audience label ("Активные лиды…"),
+ * never the real people inside it. Reads straight from the frozen
+ * email_campaign_recipients snapshot (see resolveAudience above), so this
+ * is exactly who the email was sent to, not who currently matches the
+ * audience filter. RLS on email_campaigns/email_campaign_recipients already
+ * limits this to the caller's own club (or any club, read-only, for HQ) —
+ * reaching a row here means the viewer was already allowed to see it.
+ */
+export async function getCampaignRecipients(
+  campaignId: string
+): Promise<{ recipients: RecipientDetail[] } | { error: string }> {
+  const profile = await getCurrentProfile();
+  if (!profile) return { error: "errNotAuthorized" };
+
+  const supabase = await createClient();
+  const { data: campaign } = await supabase
+    .from("email_campaigns")
+    .select("id")
+    .eq("id", campaignId)
+    .maybeSingle();
+  if (!campaign) return { error: "errNotAuthorized" };
+
+  const { data: recipientRows, error } = await supabase
+    .from("email_campaign_recipients")
+    .select("id, entity_type, entity_id, email, status")
+    .eq("campaign_id", campaignId)
+    .order("email");
+  if (error || !recipientRows) return { error: error?.message ?? "errGeneric" };
+
+  const leadIds = recipientRows.filter((r) => r.entity_type === "lead").map((r) => r.entity_id);
+  const memberIds = recipientRows.filter((r) => r.entity_type === "member").map((r) => r.entity_id);
+
+  const [leadsRes, membersRes] = await Promise.all([
+    leadIds.length ? supabase.from("leads").select("id, name").in("id", leadIds) : Promise.resolve({ data: [] }),
+    memberIds.length
+      ? supabase.from("members").select("id, name").in("id", memberIds)
+      : Promise.resolve({ data: [] }),
+  ]);
+
+  const nameById = new Map<string, string>();
+  for (const l of (leadsRes.data ?? []) as { id: string; name: string }[]) nameById.set(l.id, l.name);
+  for (const m of (membersRes.data ?? []) as { id: string; name: string }[]) nameById.set(m.id, m.name);
+
+  const recipients: RecipientDetail[] = recipientRows.map((r) => ({
+    id: r.id,
+    // Falls back to the email itself if the lead/member card was deleted
+    // after the campaign was sent — the recipient row (and its real
+    // history) still exists, it just has no name to show anymore.
+    name: nameById.get(r.entity_id) ?? r.email,
+    email: r.email,
+    status: r.status,
+  }));
+
+  return { recipients };
+}
+
 type AudienceRecipient = { entityType: "lead" | "member"; entityId: string; email: string };
 
 type SupabaseServerClient = Awaited<ReturnType<typeof createClient>>;

@@ -63,6 +63,43 @@ const STATUS_RANK: Record<RecipientStatus, number> = {
   failed: 5,
 };
 
+const RECIPIENT_STATUS_LABEL_KEYS: Record<RecipientStatus, string> = {
+  queued: "recipientStatusQueued",
+  sent: "recipientStatusSent",
+  delivered: "recipientStatusDelivered",
+  opened: "recipientStatusOpened",
+  clicked: "recipientStatusClicked",
+  bounced: "recipientStatusBounced",
+  complained: "recipientStatusComplained",
+  failed: "recipientStatusFailed",
+};
+
+export function recipientStatusLabelKey(status: string): string {
+  return RECIPIENT_STATUS_LABEL_KEYS[status as RecipientStatus] ?? status;
+}
+
+/** Same good/warn/critical/mute vocabulary as statusPillClasses in
+ * members.ts/payments.ts — opened/clicked is the best real outcome (dark),
+ * queued/sent is still in flight (warn), bounced/complained/failed is a
+ * real negative outcome (accent), delivered sits neutrally between. */
+export function recipientStatusPillClasses(status: string): string {
+  switch (status) {
+    case "opened":
+    case "clicked":
+      return "bg-surface-3 text-ink-2";
+    case "bounced":
+    case "complained":
+    case "failed":
+      return "bg-accent-soft text-accent-strong";
+    case "delivered":
+      return "bg-surface-2 text-muted";
+    case "sent":
+    case "queued":
+    default:
+      return "bg-warn-soft text-warn";
+  }
+}
+
 export function isForwardStatusMove(current: string, next: RecipientStatus): boolean {
   const currentRank = STATUS_RANK[current as RecipientStatus] ?? 0;
   const nextRank = STATUS_RANK[next];
