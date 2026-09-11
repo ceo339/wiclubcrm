@@ -8,7 +8,6 @@ import T from "@/components/i18n/T";
 import { signOut } from "@/app/login/actions";
 import {
   IconHome,
-  IconChart,
   IconFunnel,
   IconUsers,
   IconCalendar,
@@ -34,23 +33,11 @@ type NavItem = {
 };
 
 function navItemsForProfile(profile: Profile): NavItem[] {
+  // Главная now covers what used to be a separate "Сводка"/"Моя сводка"
+  // nav entry — HQ's network dashboard and a partner's own club dashboard
+  // both render on "/" itself (see src/app/page.tsx), so there's nothing
+  // left for a second nav item to point to.
   const items: NavItem[] = [{ href: "/", labelKey: "navHome", icon: <IconHome /> }];
-
-  if (profile.role === "hq") {
-    items.push({
-      href: "/dashboard",
-      labelKey: "headingNetworkSummary",
-      icon: <IconChart />,
-      matchPrefix: true,
-    });
-  } else if (profile.partner_id) {
-    items.push({
-      href: `/dashboard/${profile.partner_id}`,
-      labelKey: "navMySummary",
-      icon: <IconChart />,
-      matchPrefix: true,
-    });
-  }
 
   items.push(
     { href: "/leads", labelKey: "navLeads", icon: <IconFunnel /> },

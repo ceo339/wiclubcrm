@@ -5,6 +5,8 @@ import {
   computeCoreMetrics,
   countByProduct,
   inPeriod,
+  monthlyConversion,
+  monthlyMemberTotal,
   monthlyRevenue,
   monthsWithActivity,
   parsePeriodParams,
@@ -31,14 +33,11 @@ export default async function ClubDashboardPage({
 
   const { partnerId } = await params;
 
-  // HQ can open any club's own dashboard (read-only, same as everywhere
-  // else). A partner/staff account can only ever land on its own club —
-  // RLS would return empty rows for someone else's anyway, but redirecting
-  // is more honest than showing a blank dashboard for the wrong URL.
-  if (profile.role !== "hq") {
-    if (!profile.partner_id) redirect("/");
-    if (profile.partner_id !== partnerId) redirect(`/dashboard/${profile.partner_id}`);
-  }
+  // This route is now an HQ-only drill-down into one specific OTHER club
+  // (reached by clicking a club row on Главная) — a partner/staff account's
+  // own club dashboard lives on Главная itself since the merge, so there's
+  // nothing left for a non-HQ visitor to see here, own club or not.
+  if (profile.role !== "hq") redirect("/");
 
   const searchParamsResolved = await searchParams;
   const supabase = await createClient();
@@ -84,8 +83,8 @@ export default async function ClubDashboardPage({
     <AppShell
       profile={profile}
       title={partner.name}
-      backHref={profile.role === "hq" ? "/dashboard" : undefined}
-      backLabel={<T k="headingNetworkSummary" />}
+      backHref="/"
+      backLabel={<T k="headingHome" />}
       headerExtra={
         <>
           <CurrencyScope scope={`club:${partnerId}`} fallback={currencyForCountry(partner.country)} />
@@ -106,6 +105,8 @@ export default async function ClubDashboardPage({
         basePath={`/dashboard/${partnerId}`}
         revenue={metrics.revenue}
         revenueTrend={monthlyRevenue(clubPayments)}
+        memberTrend={monthlyMemberTotal(clubMembers)}
+        conversionTrend={monthlyConversion(clubLeads)}
         membersAdded={metrics.membersAdded}
         conversion={metrics.conversion}
         royalty={metrics.royalty}

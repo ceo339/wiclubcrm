@@ -22,6 +22,12 @@
   --surface-3: #e7e2dc;
   --border: #e7e2dc;
   --border-strong: #d3ccc0;
+  /* Prototype's --warn / --warn-soft, verbatim — a distinct status color
+   * from --accent (used for "declined"/negative-revenue) so a merely
+   * time-based flag like "stuck 5+ days" doesn't read as harshly as an
+   * actual loss. */
+  --warn: #e2515f;
+  --warn-soft: #fceef0;
 
   /* Prototype's --shadow-sm / --shadow-md / --shadow-lg, verbatim. Named
    * distinctly from the --shadow-* theme tokens below so neither is a
@@ -43,6 +49,8 @@
   --color-surface-3: var(--surface-3);
   --color-border: var(--border);
   --color-border-strong: var(--border-strong);
+  --color-warn: var(--warn);
+  --color-warn-soft: var(--warn-soft);
   --font-sans: "Manrope Variable", ui-sans-serif, system-ui, sans-serif;
   --font-display: "Lora Variable", Georgia, serif;
   --shadow-card: var(--card-shadow-value);

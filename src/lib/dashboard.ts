@@ -162,23 +162,58 @@ export type MonthlyRevenue = { monthKey: string; amount: number };
  * yet, and Anastasiia chose to leave it out (10 сен 2026) rather than show
  * an estimate dressed up as a chart.
  */
-export function monthlyRevenue(
-  payments: { amount: number; status: string | null; paid_date: string }[],
-  months = 6
-): MonthlyRevenue[] {
-  const paid = payments.filter((p) => p.status === "paid");
+/** The last `months` "YYYY-MM" keys, oldest first, ending on the current
+ * (in-progress) month — the shared month scaffold behind every trend below,
+ * so they can never quietly disagree on which months to show. */
+export function lastNMonthKeys(months: number): string[] {
   const keys: string[] = [];
   let key = currentMonthKey();
   for (let i = 0; i < months; i++) {
     keys.unshift(key);
     key = shiftMonthKey(key, -1);
   }
-  return keys.map((monthKey) => ({
+  return keys;
+}
+
+export function monthlyRevenue(
+  payments: { amount: number; status: string | null; paid_date: string }[],
+  months = 6
+): MonthlyRevenue[] {
+  const paid = payments.filter((p) => p.status === "paid");
+  return lastNMonthKeys(months).map((monthKey) => ({
     monthKey,
     amount: paid
       .filter((p) => monthKeyOf(p.paid_date) === monthKey)
       .reduce((sum, p) => sum + Number(p.amount), 0),
   }));
+}
+
+export type MonthlyCount = { monthKey: string; value: number };
+
+/**
+ * Real running total membership count at the end of each of the last
+ * `months` months — how the member base actually grew, not "added this
+ * month". Powers the KPI tile's sparkline the same honest way
+ * monthlyRevenue powers the revenue chart: real rows, no smoothing.
+ */
+export function monthlyMemberTotal(members: { created_at: string }[], months = 6): MonthlyCount[] {
+  return lastNMonthKeys(months).map((monthKey) => ({
+    monthKey,
+    value: members.filter((m) => monthKeyOf(m.created_at) <= monthKey).length,
+  }));
+}
+
+/**
+ * Real conversion rate (% of that month's new leads that reached "Оплата")
+ * for each of the last `months` months. A month with no leads added shows
+ * 0 in the sparkline rather than breaking the line — there's no "no data"
+ * gap to render in a tiny trend line, unlike the KPI tile's own delta text.
+ */
+export function monthlyConversion(leads: { added_date: string; stage: string }[], months = 6): MonthlyCount[] {
+  return lastNMonthKeys(months).map((monthKey) => {
+    const inMonth = leads.filter((l) => monthKeyOf(l.added_date) === monthKey);
+    return { monthKey, value: conversionRate(inMonth) ?? 0 };
+  });
 }
 
 export function conversionRate(rows: { stage: string }[]): number | null {

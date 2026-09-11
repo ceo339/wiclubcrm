@@ -45,6 +45,27 @@ export const sourceLabel = (source: string, locale: Locale) => {
   return key ? t(locale, key) : source;
 };
 
+// One fixed color per source, reused everywhere a source needs a swatch —
+// the kanban card dot, the "Откуда приходят лиды" donut, and the channel
+// bar list on Home — so a given source always reads the same color across
+// the app. Not a real brand color per platform, just a stable mapping onto
+// the app's own accent/ink palette (no new colors introduced).
+const SOURCE_COLORS: Record<string, string> = {
+  Instagram: "var(--accent)",
+  Referral: "var(--accent-strong)",
+  Website: "var(--ink-2)",
+};
+
+export const sourceColor = (source: string | null) =>
+  (source && SOURCE_COLORS[source]) || "var(--muted)";
+
+/** The real, disclosed number behind the Leads page's "Высокая ценность"
+ * filter — a plain threshold on the lead's own value field, not a hidden
+ * score. Chosen to sit between the app's own generic plan prices (see
+ * GENERIC_PLANS above): above the course/monthly plans, at/below annual
+ * membership and coaching. */
+export const HIGH_VALUE_THRESHOLD = 1000;
+
 // Decline-reason ids double as their own dictionary keys — already
 // distinctive enough (declineNoMoney, declineExpensive, …) not to need a
 // separate labelKey field.
