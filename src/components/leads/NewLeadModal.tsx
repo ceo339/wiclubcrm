@@ -2,7 +2,7 @@
 
 import { useMemo, useRef, useState, useTransition } from "react";
 import { createLead, type CreateLeadResult } from "@/app/leads/actions";
-import { COUNTRIES, GENERIC_PLANS, SOURCES, sourceLabel, stageLabel } from "@/lib/leads";
+import { COUNTRIES, GENERIC_PLANS, SOURCES, countryDefaultCity, sourceLabel, stageLabel } from "@/lib/leads";
 import Money from "@/components/currency/Money";
 import { useLocale } from "@/components/i18n/LocaleProvider";
 import type { Tables } from "@/types/database";
@@ -20,10 +20,16 @@ type Interested = { kind: "none" } | { kind: "generic"; id: string } | { kind: "
 export default function NewLeadModal({
   products,
   cohorts,
+  partnerCountry,
   onClose,
 }: {
   products: Product[];
   cohorts: Cohort[];
+  /** The signed-in club's own country (profile.partner_country) — used to
+   * default a new lead's country/city to the club's own location (e.g. the
+   * Sofia club's leads default to Bulgaria/Sofia) instead of leaving them
+   * blank until someone remembers to pick a country by hand. */
+  partnerCountry: string | null;
   onClose: () => void;
 }) {
   const { locale, t } = useLocale();
@@ -49,8 +55,8 @@ export default function NewLeadModal({
     });
   }
 
-  const [country, setCountry] = useState("");
-  const [city, setCity] = useState("");
+  const [country, setCountry] = useState(() => partnerCountry ?? "");
+  const [city, setCity] = useState(() => countryDefaultCity(partnerCountry) ?? "");
   const [courseId, setCourseId] = useState("");
   const [cohortDate, setCohortDate] = useState("");
   const [interested, setInterested] = useState<Interested>({ kind: "none" });
@@ -65,8 +71,8 @@ export default function NewLeadModal({
 
   function handleCountryChange(name: string) {
     setCountry(name);
-    const match = COUNTRIES.find((c) => c.name === name);
-    if (match?.city) setCity(match.city);
+    const city = countryDefaultCity(name);
+    if (city) setCity(city);
   }
 
   function handleCourseChange(id: string) {

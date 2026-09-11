@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import {
   addComment,
   addTask,
@@ -15,7 +15,9 @@ import {
 import {
   COUNTRIES,
   GENERIC_PLANS,
+  SOURCES,
   STAGES,
+  countryDefaultCity,
   declineReasonLabel,
   sourceLabel,
   stageLabel,
@@ -27,16 +29,30 @@ import T from "@/components/i18n/T";
 import SendEmailButton from "@/components/email/SendEmailButton";
 import DeclineModal from "./DeclineModal";
 import type { Lead } from "./types";
+import type { Tables } from "@/types/database";
+
+type Product = Tables<"products">;
+type Cohort = Tables<"product_cohorts">;
 
 export default function LeadDetailModal({
   lead,
   canEdit,
   isHq,
+  products,
+  cohorts,
+  partnerCountry,
   onClose,
 }: {
   lead: Lead;
   canEdit: boolean;
   isHq: boolean;
+  products: Product[];
+  cohorts: Cohort[];
+  /** The signed-in club's own country — used the same way as in
+   * NewLeadModal, to default an existing lead's country/city when editing
+   * one that was saved before that field was set (e.g. an older Sofia-club
+   * lead with no country recorded). */
+  partnerCountry: string | null;
   onClose: () => void;
 }) {
   const { locale, t } = useLocale();
@@ -130,9 +146,22 @@ export default function LeadDetailModal({
         )}
 
         {editing ? (
-          <EditForm lead={lead} onCancel={() => setEditing(false)} onSaved={() => setEditing(false)} />
+          <EditForm
+            lead={lead}
+            partnerCountry={partnerCountry}
+            onCancel={() => setEditing(false)}
+            onSaved={() => setEditing(false)}
+          />
         ) : (
-          <ReadView lead={lead} canEdit={canEdit} isHq={isHq} onEdit={() => setEditing(true)} onDeleted={onClose} />
+          <ReadView
+            lead={lead}
+            canEdit={canEdit}
+            isHq={isHq}
+            products={products}
+            cohorts={cohorts}
+            onEdit={() => setEditing(true)}
+            onDeleted={onClose}
+          />
         )}
 
         <CommentsSection leadId={lead.id} detail={detail} canEdit={canEdit} onChanged={refreshDetail} />
@@ -154,12 +183,16 @@ function ReadView({
   lead,
   canEdit,
   isHq,
+  products,
+  cohorts,
   onEdit,
   onDeleted,
 }: {
   lead: Lead;
   canEdit: boolean;
   isHq: boolean;
+  products: Product[];
+  cohorts: Cohort[];
   onEdit: () => void;
   onDeleted: () => void;
 }) {
@@ -224,7 +257,9 @@ function ReadView({
           >
             {t("edit")}
           </button>
-          {lead.stage === "paid" && <ConvertToMemberButton leadId={lead.id} />}
+          {lead.stage === "paid" && (
+            <ConvertToMemberButton lead={lead} products={products} cohorts={cohorts} />
+          )}
           <SendEmailButton entityType="lead" entityId={lead.id} email={lead.email} />
         </div>
       )}
@@ -293,33 +328,147 @@ function DeleteLeadButton({ leadId, onDeleted }: { leadId: string; onDeleted: ()
   );
 }
 
-function ConvertToMemberButton({ leadId }: { leadId: string }) {
+/**
+ * Turns a paid lead into a member. When the club has real courses set up,
+ * this opens an inline picker first — Anastasiia's request (11 сен 2026):
+ * she wants to choose (or change) the course right here as part of the
+ * conversion, not just have whatever course/cohort happened to already be
+ * on the lead copied over silently. Defaults to the lead's own
+ * course/cohort/amount when it has one, but she can pick a different course
+ * or leave it unset. Clubs with no courses yet skip straight to a single
+ * confirm button (same as before this change).
+ */
+function ConvertToMemberButton({
+  lead,
+  products,
+  cohorts,
+}: {
+  lead: Lead;
+  products: Product[];
+  cohorts: Cohort[];
+}) {
   const t = useT();
+  const [open, setOpen] = useState(false);
   const [pending, startTransition] = useTransition();
   const [done, setDone] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [productId, setProductId] = useState(lead.product_id ?? "");
+  const [cohortDate, setCohortDate] = useState(lead.cohort_start_date ?? "");
+  const [price, setPrice] = useState(String(lead.value ?? 0));
+
+  const productCohorts = useMemo(
+    () => cohorts.filter((c) => c.product_id === productId),
+    [cohorts, productId]
+  );
+
+  function handleProductChange(id: string) {
+    setProductId(id);
+    setCohortDate("");
+    const product = products.find((p) => p.id === id);
+    if (product) setPrice(String(product.price));
+  }
+
+  function confirm() {
+    startTransition(async () => {
+      const res = await convertLeadToMember(lead.id, {
+        productId: productId || null,
+        cohortStartDate: cohortDate || null,
+        price: Number(String(price).replace(",", ".")) || 0,
+      });
+      if (res.error) setError(res.error);
+      else setDone(true);
+    });
+  }
 
   if (done) {
     return <p className="text-xs text-muted">{t("convertedToMember")}</p>;
   }
 
-  return (
-    <div className="flex flex-col gap-1">
+  // No courses configured at all — nothing to pick, keep the old one-click flow.
+  if (products.length === 0) {
+    return (
+      <div className="flex flex-col gap-1">
+        <button
+          type="button"
+          disabled={pending}
+          onClick={confirm}
+          className="rounded-lg bg-foreground px-3 py-1.5 text-xs font-medium text-background disabled:opacity-50"
+        >
+          {pending ? "..." : t("btnConvertToMember")}
+        </button>
+        {error && <p className="text-xs text-accent-strong">{t(error)}</p>}
+      </div>
+    );
+  }
+
+  if (!open) {
+    return (
       <button
         type="button"
-        disabled={pending}
-        onClick={() =>
-          startTransition(async () => {
-            const res = await convertLeadToMember(leadId);
-            if (res.error) setError(res.error);
-            else setDone(true);
-          })
-        }
-        className="rounded-lg bg-foreground px-3 py-1.5 text-xs font-medium text-background disabled:opacity-50"
+        onClick={() => setOpen(true)}
+        className="rounded-lg bg-foreground px-3 py-1.5 text-xs font-medium text-background"
       >
-        {pending ? "..." : t("btnConvertToMember")}
+        {t("btnConvertToMember")}
       </button>
+    );
+  }
+
+  return (
+    <div className="flex w-full flex-col gap-2 rounded-lg border border-border bg-surface-2/50 p-3">
+      <p className="text-xs font-medium text-ink-2">{t("chooseCourseOnConvert")}</p>
+      <select
+        value={productId}
+        onChange={(e) => handleProductChange(e.target.value)}
+        className="rounded-lg border border-border bg-background px-2 py-1.5 text-xs outline-none focus:border-accent focus:ring-1 focus:ring-accent"
+      >
+        <option value="">{t("optionCourseNotChosen")}</option>
+        {products.map((p) => (
+          <option key={p.id} value={p.id}>
+            {p.name}
+          </option>
+        ))}
+      </select>
+      {productId && (
+        <select
+          value={cohortDate}
+          onChange={(e) => setCohortDate(e.target.value)}
+          className="rounded-lg border border-border bg-background px-2 py-1.5 text-xs outline-none focus:border-accent focus:ring-1 focus:ring-accent"
+        >
+          <option value="">{t("optionNotChosen")}</option>
+          {productCohorts.map((c) => (
+            <option key={c.id} value={c.start_date}>
+              {c.start_date}
+            </option>
+          ))}
+        </select>
+      )}
+      <label className="flex items-center gap-2 text-xs">
+        <span className="text-muted">{t("fieldValueEur")}</span>
+        <input
+          type="number"
+          value={price}
+          onChange={(e) => setPrice(e.target.value)}
+          className="w-24 rounded-lg border border-border bg-background px-2 py-1.5 text-xs outline-none focus:border-accent focus:ring-1 focus:ring-accent"
+        />
+      </label>
       {error && <p className="text-xs text-accent-strong">{t(error)}</p>}
+      <div className="flex gap-2">
+        <button
+          type="button"
+          disabled={pending}
+          onClick={confirm}
+          className="rounded-lg bg-foreground px-3 py-1.5 text-xs font-medium text-background disabled:opacity-50"
+        >
+          {pending ? "..." : t("btnConfirmConvert")}
+        </button>
+        <button
+          type="button"
+          onClick={() => setOpen(false)}
+          className="rounded-lg border border-border px-3 py-1.5 text-xs font-medium text-ink-2 hover:bg-surface-2"
+        >
+          {t("cancel")}
+        </button>
+      </div>
     </div>
   );
 }
@@ -336,16 +485,31 @@ function Row({ label, value }: { label: string; value: string | number | null })
 
 function EditForm({
   lead,
+  partnerCountry,
   onCancel,
   onSaved,
 }: {
   lead: Lead;
+  partnerCountry: string | null;
   onCancel: () => void;
   onSaved: () => void;
 }) {
-  const t = useT();
+  const { locale, t } = useLocale();
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
+  // A lead saved before country/city was set (or before this club's own
+  // country was known) defaults to the signed-in club's own location here —
+  // e.g. a Sofia-club lead with no country recorded shows Bulgaria/Sofia
+  // rather than "— не указано —" — matching the same default NewLeadModal
+  // gives a brand-new lead. Anastasiia's request, 11 сен 2026.
+  const [country, setCountry] = useState(() => lead.country || partnerCountry || "");
+  const [city, setCity] = useState(() => lead.city || countryDefaultCity(lead.country || partnerCountry) || "");
+
+  function handleCountryChange(name: string) {
+    setCountry(name);
+    const defaultCity = countryDefaultCity(name);
+    if (defaultCity) setCity(defaultCity);
+  }
 
   function handleSubmit(formData: FormData) {
     setError(null);
@@ -363,10 +527,27 @@ function EditForm({
       <Field label={t("fieldPhone")} name="phone" type="tel" defaultValue={lead.phone ?? ""} />
 
       <label className="flex flex-col gap-1.5 text-sm">
+        <span className="font-medium text-ink-2">{t("fieldSource")}</span>
+        <select
+          name="source"
+          defaultValue={lead.source ?? ""}
+          className="rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-accent focus:ring-1 focus:ring-accent"
+        >
+          <option value="">{t("optionNotSpecified")}</option>
+          {SOURCES.map((s) => (
+            <option key={s} value={s}>
+              {sourceLabel(s, locale)}
+            </option>
+          ))}
+        </select>
+      </label>
+
+      <label className="flex flex-col gap-1.5 text-sm">
         <span className="font-medium text-ink-2">{t("fieldCountry")}</span>
         <select
           name="country"
-          defaultValue={lead.country ?? ""}
+          value={country}
+          onChange={(e) => handleCountryChange(e.target.value)}
           className="rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-accent focus:ring-1 focus:ring-accent"
         >
           <option value="">{t("optionNotSpecified")}</option>
@@ -378,7 +559,16 @@ function EditForm({
         </select>
       </label>
 
-      <Field label={t("fieldCity")} name="city" defaultValue={lead.city ?? ""} />
+      <label className="flex flex-col gap-1.5 text-sm">
+        <span className="font-medium text-ink-2">{t("fieldCity")}</span>
+        <input
+          name="city"
+          value={city}
+          onChange={(e) => setCity(e.target.value)}
+          className="rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-accent focus:ring-1 focus:ring-accent"
+        />
+      </label>
+
       <Field label={t("fieldBirthday")} name="birthday" type="date" defaultValue={lead.birthday ?? ""} />
       <Field label={t("fieldValueEur")} name="value" type="number" defaultValue={String(lead.value ?? 0)} />
 

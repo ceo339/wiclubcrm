@@ -61,6 +61,7 @@ export default async function LeadsPage() {
           canEdit={canEdit}
           products={products ?? []}
           cohorts={cohorts ?? []}
+          partnerCountry={profile.partner_country}
         />
       )}
     </AppShell>

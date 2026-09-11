@@ -44,12 +44,14 @@ export default function LeadsBoard({
   canEdit,
   products,
   cohorts,
+  partnerCountry,
 }: {
   initialLeads: Lead[];
   isHq: boolean;
   canEdit: boolean;
   products: Tables<"products">[];
   cohorts: Tables<"product_cohorts">[];
+  partnerCountry: string | null;
 }) {
   const { locale, t } = useLocale();
   const [view, setView] = useState<"board" | "list">("board");
@@ -250,6 +252,7 @@ export default function LeadsBoard({
         <NewLeadModal
           products={products}
           cohorts={cohorts}
+          partnerCountry={partnerCountry}
           onClose={() => setShowNewLead(false)}
         />
       )}
@@ -261,6 +264,9 @@ export default function LeadsBoard({
           lead={selectedLead}
           canEdit={canEdit}
           isHq={isHq}
+          products={products}
+          cohorts={cohorts}
+          partnerCountry={partnerCountry}
           onClose={() => setSelectedLeadId(null)}
         />
       )}

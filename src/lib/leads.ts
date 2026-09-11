@@ -99,6 +99,17 @@ export const COUNTRIES: { name: string; city?: string }[] = [
   { name: "Bulgaria", city: "Sofia" },
 ];
 
+/** Looks up a country's default city from COUNTRIES (e.g. Bulgaria ->
+ * Sofia, Georgia -> Batumi) — shared by the country <select>'s own
+ * on-change handler and by whatever pre-fills country/city for a lead
+ * before the person has touched the field (new-lead default from the
+ * signed-in club's own country; falling back to it on an existing lead
+ * that has neither set — see NewLeadModal/LeadDetailModal). */
+export function countryDefaultCity(name: string | null | undefined): string | null {
+  if (!name) return null;
+  return COUNTRIES.find((c) => c.name === name)?.city ?? null;
+}
+
 // Generic membership/course plans offered when a lead isn't tied to a real
 // product yet — mirrors the prototype's "Интересует" fallback dropdown.
 // Ids double as their own dictionary keys, same reasoning as decline reasons.

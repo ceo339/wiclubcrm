@@ -285,6 +285,10 @@ export async function updateLead(leadId: string, formData: FormData): Promise<Ac
 
   const phone = String(formData.get("phone") || "").trim() || null;
   const email = String(formData.get("email") || "").trim() || null;
+  // Unlike createLead, an unrecognised/empty source here is saved as null
+  // (not defaulted to "Website") — this is an edit, and a lead that had no
+  // source before shouldn't gain a fabricated one just for being saved.
+  const source = normalizeSource(String(formData.get("source") || ""));
   const country = String(formData.get("country") || "").trim() || null;
   const city = String(formData.get("city") || "").trim() || null;
   const birthday = String(formData.get("birthday") || "").trim() || null;
@@ -295,7 +299,7 @@ export async function updateLead(leadId: string, formData: FormData): Promise<Ac
   const supabase = await createClient();
   const { error } = await supabase
     .from("leads")
-    .update({ name, phone, email, country, city, birthday, note, value })
+    .update({ name, phone, email, source, country, city, birthday, note, value })
     .eq("id", leadId);
 
   if (error) return { error: error.message };
@@ -405,17 +409,30 @@ export async function setTaskDone(taskId: string, done: boolean): Promise<Action
   return { error: null };
 }
 
+export type ConvertCourseChoice = {
+  productId: string | null;
+  cohortStartDate: string | null;
+  price: number | null;
+};
+
 /**
  * Turns a won lead into a member record — a one-way copy (name, city,
  * email), not a foreign-key link, matching how the prototype kept leads and
- * members as separate lists. If the lead had a course/cohort chosen, that
- * becomes her first course enrollment (see member_enrollments) — she isn't
- * limited to just this one course afterward: more can be added from her
- * member card, since a member can now be enrolled in several at once
- * (11 сен 2026, in response to Anastasiia's real workflow: one lead often
- * becomes a participant in 2+ courses, not always exactly one).
+ * members as separate lists. `choice` is whatever course/cohort/price the
+ * person picked in the convert dialog (LeadDetailModal) — she can pick a
+ * different course than whatever was on the lead, change the cohort date,
+ * or leave it unset entirely; omitting `choice` falls back to copying the
+ * lead's own product_id/cohort_start_date/value, same as before this could
+ * be chosen (11 сен 2026, Anastasiia: "чтоб в карточке лида можно было
+ * сразу сделать участницей и выбрать курс"). That becomes her first course
+ * enrollment (see member_enrollments) — she isn't limited to just this one
+ * course afterward: more can be added from her member card, since a member
+ * can be enrolled in several at once.
  */
-export async function convertLeadToMember(leadId: string): Promise<ActionResult> {
+export async function convertLeadToMember(
+  leadId: string,
+  choice?: ConvertCourseChoice
+): Promise<ActionResult> {
   const profile = await getCurrentProfile();
   if (!profile) return { error: "errNotAuthorized" };
   if (!profile.partner_id) return { error: "errHqNoClubGeneric" };
@@ -429,6 +446,23 @@ export async function convertLeadToMember(leadId: string): Promise<ActionResult>
 
   if (fetchError) return { error: fetchError.message };
   if (!lead) return { error: "errLeadNotFound" };
+
+  const productId = choice ? choice.productId : lead.product_id;
+  const cohortStartDate = choice ? choice.cohortStartDate : lead.cohort_start_date;
+  const price = (choice ? choice.price : lead.value) ?? 0;
+
+  // The chosen product id arrives from client state, so re-verify it
+  // actually belongs to this partner before trusting it (same check as
+  // createLead's product_id).
+  if (productId) {
+    const { data: product } = await supabase
+      .from("products")
+      .select("id")
+      .eq("id", productId)
+      .eq("partner_id", profile.partner_id)
+      .maybeSingle();
+    if (!product) return { error: "errCourseNotFound" };
+  }
 
   const { data: member, error } = await supabase
     .from("members")
@@ -444,13 +478,13 @@ export async function convertLeadToMember(leadId: string): Promise<ActionResult>
 
   if (error || !member) return { error: error?.message ?? "errGeneric" };
 
-  if (lead.product_id) {
+  if (productId) {
     const { error: enrollError } = await supabase.from("member_enrollments").insert({
       partner_id: profile.partner_id,
       member_id: member.id,
-      product_id: lead.product_id,
-      start_date: lead.cohort_start_date,
-      price: lead.value ?? 0,
+      product_id: productId,
+      start_date: cohortStartDate,
+      price,
       status: "sPaid",
       paid: true,
       attended: [],
