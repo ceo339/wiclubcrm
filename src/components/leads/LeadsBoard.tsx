@@ -87,9 +87,28 @@ export default function LeadsBoard({
     color: sourceColor(s),
     count: initialLeads.filter((l) => l.source === s).length,
   }));
-  const otherSourceCount = initialLeads.filter((l) => !l.source || !(SOURCES as readonly string[]).includes(l.source)).length;
-  if (otherSourceCount > 0) {
-    sourceRows.push({ label: t("sourceUnknown"), color: sourceColor(null), count: otherSourceCount });
+  // Import can now bring in a source value that isn't one of the app's five
+  // built-in ones (see normalizeSource in leads/actions.ts — a CSV channel
+  // name like "Юду" or "Авито" is kept as-is instead of being dropped).
+  // That's a real, specified source, so it gets its own named row here —
+  // "Источник не указан" stays reserved for leads with no source at all.
+  const customSourceValues = Array.from(
+    new Set(
+      initialLeads
+        .map((l) => l.source)
+        .filter((s): s is string => !!s && !(SOURCES as readonly string[]).includes(s))
+    )
+  ).sort();
+  customSourceValues.forEach((value) => {
+    sourceRows.push({
+      label: value,
+      color: sourceColor(value),
+      count: initialLeads.filter((l) => l.source === value).length,
+    });
+  });
+  const unspecifiedSourceCount = initialLeads.filter((l) => !l.source).length;
+  if (unspecifiedSourceCount > 0) {
+    sourceRows.push({ label: t("sourceUnknown"), color: sourceColor(null), count: unspecifiedSourceCount });
   }
 
   function toggleSmart(id: SmartFilter) {
@@ -189,6 +208,15 @@ export default function LeadsBoard({
               {sourceLabel(s, locale)}
             </option>
           ))}
+          {customSourceValues.length > 0 && (
+            <optgroup label={t("otherSourcesGroupLabel")}>
+              {customSourceValues.map((v) => (
+                <option key={v} value={v}>
+                  {v}
+                </option>
+              ))}
+            </optgroup>
+          )}
         </select>
 
         <div className="ml-auto flex items-center gap-2">

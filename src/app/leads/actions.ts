@@ -12,9 +12,17 @@ import type { Tables } from "@/types/database";
 export type ActionResult = { error: string | null };
 
 function normalizeSource(raw: string | undefined | null): string | null {
-  if (!raw) return null;
-  const match = SOURCES.find((s) => s.toLowerCase() === raw.trim().toLowerCase());
-  return match ?? null;
+  const trimmed = (raw ?? "").trim();
+  if (!trimmed) return null;
+  const match = SOURCES.find((s) => s.toLowerCase() === trimmed.toLowerCase());
+  // A CSV column that doesn't match one of the app's five built-in sources
+  // used to be dropped to null on import ("Юду", "Авито", a partner's own
+  // channel name — anything outside Instagram/Facebook/Referral/Website/
+  // Event just vanished). `leads.source` has no DB constraint and
+  // sourceLabel/sourceColor (lib/leads.ts) already render an arbitrary
+  // string gracefully, so there's no reason to discard real data — keep it
+  // as-is instead (capped defensively in case a CSV cell is huge/garbled).
+  return match ?? trimmed.slice(0, 60);
 }
 
 /**

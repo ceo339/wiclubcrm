@@ -343,6 +343,7 @@ export const DICT: Record<string, Entry> = {
   // ---- leads board ----
   searchLeadsPlaceholder: { ru: "Поиск по имени, телефону, email…", bg: "Търсене по име, телефон, имейл…" },
   allSources: { ru: "Все источники", bg: "Всички източници" },
+  otherSourcesGroupLabel: { ru: "Другие источники (из импорта)", bg: "Други източници (от импорт)" },
   viewKanban: { ru: "Канбан", bg: "Канбан" },
   viewList: { ru: "Список", bg: "Списък" },
   btnImport: { ru: "Импорт", bg: "Импорт" },
