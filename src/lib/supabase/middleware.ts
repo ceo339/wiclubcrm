@@ -37,8 +37,17 @@ export async function updateSession(request: NextRequest) {
 
   const isAuthRoute = request.nextUrl.pathname.startsWith("/login");
   const isPublicAsset = request.nextUrl.pathname.startsWith("/_next");
+  // /api/* is never a signed-in browser page — it's server-to-server
+  // webhooks (Stripe, Resend, and now the landing-page lead intake route)
+  // that authenticate themselves their own way (Stripe's signature header,
+  // the intake route's own per-club key) and always use the service_role
+  // admin client, not the visitor's session. Redirecting them to /login
+  // would silently swallow every webhook call — found 12 сен 2026 while
+  // wiring up the intake route, since none of these routes were ever
+  // actually exercised through this proxy before.
+  const isApiRoute = request.nextUrl.pathname.startsWith("/api/");
 
-  if (!user && !isAuthRoute && !isPublicAsset) {
+  if (!user && !isAuthRoute && !isPublicAsset && !isApiRoute) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";
     return NextResponse.redirect(url);

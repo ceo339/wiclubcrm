@@ -91,6 +91,17 @@ export default function EditPartnerModal({
               />
               <span className="text-xs text-muted">{t("fieldReplyToEmailHint")}</span>
             </label>
+
+            <div className="flex flex-col gap-1.5 text-sm">
+              <span className="font-medium text-ink-2">{t("fieldLeadIntakeUrl")}</span>
+              <input
+                readOnly
+                value={`${typeof window !== "undefined" ? window.location.origin : ""}/api/leads/intake/${partner.intake_key}`}
+                onFocus={(e) => e.currentTarget.select()}
+                className="rounded-lg border border-border bg-surface-2 px-3 py-2 text-xs text-ink-2 outline-none"
+              />
+              <span className="text-xs text-muted">{t("fieldLeadIntakeUrlHint")}</span>
+            </div>
           </div>
 
           {state.error && (

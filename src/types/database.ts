@@ -224,6 +224,7 @@ export type Database = {
           decline_reason: string | null
           email: string | null
           id: string
+          landing_url: string | null
           name: string
           note: string | null
           partner_id: string
@@ -233,6 +234,11 @@ export type Database = {
           source: string | null
           stage: string
           updated_at: string
+          utm_campaign: string | null
+          utm_content: string | null
+          utm_medium: string | null
+          utm_source: string | null
+          utm_term: string | null
           value: number
         }
         Insert: {
@@ -248,6 +254,7 @@ export type Database = {
           decline_reason?: string | null
           email?: string | null
           id?: string
+          landing_url?: string | null
           name: string
           note?: string | null
           partner_id: string
@@ -257,6 +264,11 @@ export type Database = {
           source?: string | null
           stage?: string
           updated_at?: string
+          utm_campaign?: string | null
+          utm_content?: string | null
+          utm_medium?: string | null
+          utm_source?: string | null
+          utm_term?: string | null
           value?: number
         }
         Update: {
@@ -272,6 +284,7 @@ export type Database = {
           decline_reason?: string | null
           email?: string | null
           id?: string
+          landing_url?: string | null
           name?: string
           note?: string | null
           partner_id?: string
@@ -281,6 +294,11 @@ export type Database = {
           source?: string | null
           stage?: string
           updated_at?: string
+          utm_campaign?: string | null
+          utm_content?: string | null
+          utm_medium?: string | null
+          utm_source?: string | null
+          utm_term?: string | null
           value?: number
         }
         Relationships: [
@@ -438,6 +456,7 @@ export type Database = {
           country: string | null
           created_at: string
           id: string
+          intake_key: string
           name: string
           reply_to_email: string | null
         }
@@ -446,6 +465,7 @@ export type Database = {
           country?: string | null
           created_at?: string
           id?: string
+          intake_key?: string
           name: string
           reply_to_email?: string | null
         }
@@ -454,6 +474,7 @@ export type Database = {
           country?: string | null
           created_at?: string
           id?: string
+          intake_key?: string
           name?: string
           reply_to_email?: string | null
         }

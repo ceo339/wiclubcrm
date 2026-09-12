@@ -30,11 +30,17 @@ export const stageLabel = (id: string, locale: Locale) => {
   return key ? t(locale, key) : id;
 };
 
-export const SOURCES = ["Instagram", "Referral", "Website", "Event"] as const;
+// "Facebook" added 12 сен 2026 for the landing-page intake module (see
+// src/app/api/leads/intake/[key]/route.ts) — her Meta ad campaigns run on
+// both Instagram and Facebook placements, and utm_source on a Facebook
+// click needs a real bucket to land in instead of falling back to
+// "Website".
+export const SOURCES = ["Instagram", "Facebook", "Referral", "Website", "Event"] as const;
 export type Source = (typeof SOURCES)[number];
 
 const SOURCE_LABEL_KEYS: Record<string, string> = {
   Instagram: "sourceInstagram",
+  Facebook: "sourceFacebook",
   Referral: "sourceReferral",
   Website: "sourceWebsite",
   Event: "sourceEvent",
@@ -52,6 +58,7 @@ export const sourceLabel = (source: string, locale: Locale) => {
 // the app's own accent/ink palette (no new colors introduced).
 const SOURCE_COLORS: Record<string, string> = {
   Instagram: "var(--accent)",
+  Facebook: "var(--warn)",
   Referral: "var(--accent-strong)",
   Website: "var(--ink-2)",
 };

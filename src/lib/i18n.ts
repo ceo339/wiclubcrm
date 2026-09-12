@@ -97,6 +97,7 @@ export const DICT: Record<string, Entry> = {
 
   // ---- lead sources ----
   sourceInstagram: { ru: "Instagram", bg: "Instagram" },
+  sourceFacebook: { ru: "Facebook", bg: "Facebook" },
   sourceReferral: { ru: "Рекомендация", bg: "Препоръка" },
   sourceWebsite: { ru: "Сайт", bg: "Сайт" },
   sourceEvent: { ru: "Мероприятие", bg: "Събитие" },
@@ -682,6 +683,11 @@ export const DICT: Record<string, Entry> = {
   fieldReplyToEmailHint: {
     ru: "Настоящий почтовый ящик, который клуб реально читает — на него будут приходить ответы клиентов на письма. Необязательно.",
     bg: "Истинска пощенска кутия, която клубът реално чете — на нея ще пристигат отговорите на клиентите. Незадължително.",
+  },
+  fieldLeadIntakeUrl: { ru: "URL для приёма заявок с лендинга", bg: "URL за приемане на запитвания от лендинг" },
+  fieldLeadIntakeUrlHint: {
+    ru: "Вставьте этот адрес в вебхук формы на лендинге этого клуба (Tilda или свой код) — заявки будут падать в CRM автоматически.",
+    bg: "Поставете този адрес в webhook на формата на лендинга на този клуб (Tilda или собствен код) — запитванията ще пристигат автоматично в CRM.",
   },
 
   // ---- edit partner modal ----
