@@ -2,12 +2,14 @@
 
 import { useOptimistic, useState, useTransition } from "react";
 import { STAGES, declineReasonLabel, sourceColor, sourceLabel, type StageId } from "@/lib/leads";
-import { updateLeadStage } from "@/app/leads/actions";
+import { assignLeadProduct, updateLeadStage } from "@/app/leads/actions";
 import { computeFunnel, STALE_LEAD_DAYS } from "@/lib/dashboard";
 import Money from "@/components/currency/Money";
 import { useLocale } from "@/components/i18n/LocaleProvider";
+import type { Tables } from "@/types/database";
 import type { Lead } from "./types";
 import DeclineModal from "./DeclineModal";
+import CourseModal from "./CourseModal";
 
 function daysSince(dateStr: string, now: Date): number {
   return Math.floor((now.getTime() - new Date(dateStr).getTime()) / (24 * 60 * 60 * 1000));
@@ -19,11 +21,15 @@ export default function KanbanBoard({
   leads,
   canEdit,
   showPartner,
+  products,
+  cohorts,
   onSelect,
 }: {
   leads: Lead[];
   canEdit: boolean;
   showPartner: boolean;
+  products: Tables<"products">[];
+  cohorts: Tables<"product_cohorts">[];
   onSelect: (id: string) => void;
 }) {
   const { locale, t } = useLocale();
@@ -36,6 +42,7 @@ export default function KanbanBoard({
   );
   const [dragId, setDragId] = useState<string | null>(null);
   const [declineTarget, setDeclineTarget] = useState<Lead | null>(null);
+  const [courseTarget, setCourseTarget] = useState<Lead | null>(null);
   const [, startTransition] = useTransition();
 
   function applyStage(id: string, stage: StageId, decline?: { reason: string; note: string | null }) {
@@ -47,6 +54,22 @@ export default function KanbanBoard({
     });
   }
 
+  // "куда записалась я выбрать не могу" (Anastasiia, 13 сен 2026) — dragging
+  // a card straight to "Записалась" is the everyday path here (the modal's
+  // own dropdown is the other one, see LeadDetailModal), so it gets the same
+  // course/поток prompt when the lead doesn't have one yet — otherwise
+  // round 8's auto-reserve has nothing to attach to Участницы.
+  function handleCourseConfirm(productId: string | null, cohortDate: string | null) {
+    const lead = courseTarget;
+    setCourseTarget(null);
+    if (!lead) return;
+    startTransition(async () => {
+      if (productId) await assignLeadProduct(lead.id, productId, cohortDate);
+      applyOptimistic({ id: lead.id, stage: "presented", reason: null, note: null });
+      await updateLeadStage(lead.id, "presented");
+    });
+  }
+
   function handleDrop(stage: StageId) {
     if (!canEdit || !dragId) return;
     const lead = items.find((l) => l.id === dragId);
@@ -55,6 +78,10 @@ export default function KanbanBoard({
 
     if (stage === "declined") {
       setDeclineTarget(lead);
+      return;
+    }
+    if (stage === "presented" && !lead.product_id) {
+      setCourseTarget(lead);
       return;
     }
     applyStage(lead.id, stage);
@@ -162,6 +189,16 @@ export default function KanbanBoard({
             applyStage(declineTarget.id, "declined", { reason, note });
             setDeclineTarget(null);
           }}
+        />
+      )}
+
+      {courseTarget && (
+        <CourseModal
+          leadName={courseTarget.name}
+          products={products}
+          cohorts={cohorts}
+          onCancel={() => setCourseTarget(null)}
+          onConfirm={handleCourseConfirm}
         />
       )}
     </>

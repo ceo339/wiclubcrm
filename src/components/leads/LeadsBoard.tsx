@@ -266,6 +266,8 @@ export default function LeadsBoard({
           leads={filtered}
           canEdit={canEdit}
           showPartner={isHq}
+          products={products}
+          cohorts={cohorts}
           onSelect={setSelectedLeadId}
         />
       ) : (

@@ -362,6 +362,11 @@ export const DICT: Record<string, Entry> = {
   chipHighValue: { ru: "Высокая ценность", bg: "Висока стойност" },
   declineModalTitle: { ru: "Причина отказа", bg: "Причина за отказ" },
   declineModalSubtitle: { ru: "Почему {name} отказывается?", bg: "Защо {name} отказва?" },
+  courseModalTitle: { ru: "Куда записалась?", bg: "Къде се записа?" },
+  courseModalSubtitle: {
+    ru: "Выберите курс и поток для {name} — так она сразу появится в «Участницах» со статусом «Ожидание».",
+    bg: "Изберете курс и поток за {name} — така веднага ще се появи в «Участнички» със статус «Изчакване».",
+  },
   fieldReason: { ru: "Причина", bg: "Причина" },
   fieldDescribeReason: { ru: "Описать причину", bg: "Опишете причината" },
   placeholderDescribeReason: { ru: "Опиши причину", bg: "Опишете причината" },
@@ -544,6 +549,8 @@ export const DICT: Record<string, Entry> = {
   countTotalContacts: { ru: "Всего контактов: {count}", bg: "Общо контакти: {count}" },
   countInCourse: { ru: "На курсе «{course}»: {count}", bg: "В курс „{course}“: {count}" },
   countInStream: { ru: "На курсе «{course}», поток {date}: {count}", bg: "В курс „{course}“, поток {date}: {count}" },
+  streamPaidCount: { ru: "Оплатили: {paid} из {total}", bg: "Платили: {paid} от {total}" },
+  streamTotalSum: { ru: "Сумма", bg: "Сума" },
   btnResetFilter: { ru: "Сбросить фильтр", bg: "Изчисти филтъра" },
   btnAddMemberShort: { ru: "+ Участница", bg: "+ Участничка" },
   hqReadOnlyMembersBanner: {

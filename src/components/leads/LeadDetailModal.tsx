@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState, useTransition } from "react";
 import {
   addComment,
   addTask,
+  assignLeadProduct,
   convertLeadToMember,
   deleteLead,
   getLeadDetail,
@@ -29,6 +30,7 @@ import { useLocale, useT } from "@/components/i18n/LocaleProvider";
 import T from "@/components/i18n/T";
 import SendEmailButton from "@/components/email/SendEmailButton";
 import DeclineModal from "./DeclineModal";
+import CourseModal from "./CourseModal";
 import type { Lead } from "./types";
 import type { Tables } from "@/types/database";
 
@@ -60,6 +62,7 @@ export default function LeadDetailModal({
   const [detail, setDetail] = useState<LeadDetail | null>(null);
   const [editing, setEditing] = useState(false);
   const [showDeclineModal, setShowDeclineModal] = useState(false);
+  const [showCourseModal, setShowCourseModal] = useState(false);
   const [stageError, setStageError] = useState<string | null>(null);
   const [, startStageTransition] = useTransition();
 
@@ -85,6 +88,14 @@ export default function LeadDetailModal({
       setShowDeclineModal(true);
       return;
     }
+    // "куда записалась я выбрать не могу" (Anastasiia, 13 сен 2026) —
+    // without a course, round 8's auto-reserve in updateLeadStage has
+    // nothing to attach to Участницы, so ask right here instead of leaving
+    // her to discover the course field is only in "Редактировать".
+    if (next === "presented" && !lead.product_id) {
+      setShowCourseModal(true);
+      return;
+    }
     startStageTransition(async () => {
       const res = await updateLeadStage(lead.id, next);
       if (res.error) setStageError(res.error);
@@ -95,6 +106,21 @@ export default function LeadDetailModal({
     setShowDeclineModal(false);
     startStageTransition(async () => {
       const res = await updateLeadStage(lead.id, "declined", { reason, note });
+      if (res.error) setStageError(res.error);
+    });
+  }
+
+  function handleCourseConfirm(productId: string | null, cohortDate: string | null) {
+    setShowCourseModal(false);
+    startStageTransition(async () => {
+      if (productId) {
+        const assignRes = await assignLeadProduct(lead.id, productId, cohortDate);
+        if (assignRes.error) {
+          setStageError(assignRes.error);
+          return;
+        }
+      }
+      const res = await updateLeadStage(lead.id, "presented");
       if (res.error) setStageError(res.error);
     });
   }
@@ -177,6 +203,16 @@ export default function LeadDetailModal({
           leadName={lead.name}
           onCancel={() => setShowDeclineModal(false)}
           onConfirm={handleDeclineConfirm}
+        />
+      )}
+
+      {showCourseModal && (
+        <CourseModal
+          leadName={lead.name}
+          products={products}
+          cohorts={cohorts}
+          onCancel={() => setShowCourseModal(false)}
+          onConfirm={handleCourseConfirm}
         />
       )}
     </div>

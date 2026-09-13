@@ -126,6 +126,29 @@ export default function MembersBoard({
     return t("countTotalMembers", { count: String(filtered.length) });
   }, [productId, startDate, filtered.length, productOptions, t]);
 
+  // "сверху писать сколько чел. столько оплачено, какая итого сумма"
+  // (Anastasiia, 13 сен 2026) — once a specific course is selected, add the
+  // three numbers she actually wants at a glance: how many people are in
+  // this course/поток, how many of them have actually paid (sPaid or
+  // sCompleted — a finished course was paid for first), and the real money
+  // collected from them. Deliberately scoped to the SAME matching
+  // enrollment as the table rows below (see matchingEnrollments), not the
+  // member's whole history, for the same reason as that fix.
+  const streamStats = useMemo(() => {
+    if (productId === "all") return null;
+    let paidCount = 0;
+    let totalSum = 0;
+    filtered.forEach((m) => {
+      const paidEnrollments = matchingEnrollments(m).filter(
+        (e) => e.status === "sPaid" || e.status === "sCompleted"
+      );
+      if (paidEnrollments.length > 0) paidCount += 1;
+      totalSum += paidEnrollments.reduce((sum, e) => sum + Number(e.price), 0);
+    });
+    return { paidCount, totalSum };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filtered, productId, startDate, status]);
+
   const selected = initialMembers.find((m) => m.id === selectedId) ?? null;
 
   return (
@@ -206,7 +229,16 @@ export default function MembersBoard({
         </p>
       )}
 
-      <p className="text-sm font-medium text-ink-2">{countLabel}</p>
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+        <p className="text-sm font-medium text-ink-2">{countLabel}</p>
+        {streamStats && (
+          <p className="text-sm text-muted">
+            {t("streamPaidCount", { paid: String(streamStats.paidCount), total: String(filtered.length) })}
+            {" · "}
+            {t("streamTotalSum")}: <Money amountEur={streamStats.totalSum} />
+          </p>
+        )}
+      </div>
 
       {filtered.length === 0 ? (
         <p className="rounded-lg border border-dashed border-border p-8 text-center text-sm text-muted">

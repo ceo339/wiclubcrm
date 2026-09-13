@@ -113,12 +113,29 @@ export async function updateLeadStage(
         .maybeSingle();
 
       if (!existingEnrollment) {
+        // "15 участниц с ценой 0" (Anastasiia, 13 сен 2026) — this used to
+        // reserve the seat at the lead's own `value`, which is very often
+        // still 0/unset at the exact moment a lead reaches "Записалась"
+        // (she fills in "Сумма" later, or not at all if the course card
+        // already has a list price). A reserved enrollment permanently
+        // stuck at price 0 can never generate a payment later, no matter
+        // what round 9 fixed — so fall back to the course's own list price
+        // instead of silently reserving for free.
+        let price = Number(updated.value) || 0;
+        if (!price) {
+          const { data: product } = await supabase
+            .from("products")
+            .select("price")
+            .eq("id", updated.product_id)
+            .maybeSingle();
+          price = Number(product?.price ?? 0);
+        }
         await supabase.from("member_enrollments").insert({
           partner_id: updated.partner_id,
           member_id: reserveMemberId,
           product_id: updated.product_id,
           start_date: updated.cohort_start_date,
-          price: updated.value,
+          price,
           status: "sAwaiting",
           paid: false,
           attended: [],
@@ -773,19 +790,23 @@ export async function convertLeadToMember(
 
   const productId = choice ? choice.productId : lead.product_id;
   const cohortStartDate = choice ? choice.cohortStartDate : lead.cohort_start_date;
-  const price = (choice ? choice.price : lead.value) ?? 0;
+  let price = (choice ? choice.price : lead.value) ?? 0;
 
   // The chosen product id arrives from client state, so re-verify it
   // actually belongs to this partner before trusting it (same check as
-  // createLead's product_id).
+  // createLead's product_id). Same fallback as updateLeadStage's
+  // "Записалась" reserve (13 сен 2026): a lead can reach this button
+  // without ever having a "Сумма" set, so fall back to the course's own
+  // list price rather than converting for free.
   if (productId) {
     const { data: product } = await supabase
       .from("products")
-      .select("id")
+      .select("id, price")
       .eq("id", productId)
       .eq("partner_id", profile.partner_id)
       .maybeSingle();
     if (!product) return { error: "errCourseNotFound" };
+    if (!price) price = Number(product.price ?? 0);
   }
 
   const { data: existingMember } = await supabase
