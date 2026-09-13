@@ -48,10 +48,83 @@ export async function updateLeadStage(
       decline_note: stage === "declined" ? decline?.note ?? null : null,
     })
     .eq("id", leadId)
-    .select("id, partner_id, value, product_id")
+    .select(
+      "id, partner_id, value, product_id, cohort_start_date, name, phone, email, city, birthday, country, contact_id"
+    )
     .maybeSingle();
 
   if (error) return { error: error.message };
+
+  // "Записалась" — reserve a pending course spot on Участницы (Anastasiia,
+  // 13 сен 2026): a lead that has a course/поток chosen and has signed up,
+  // but hasn't paid yet, should already show up there with status
+  // "Ожидание" (sAwaiting) — that's the whole point, so she can tell who's
+  // paid from who still needs chasing to pay, in one place instead of only
+  // in Лиды. Only fires when the lead actually has a product — nothing to
+  // reserve otherwise. Idempotent: does nothing if this member+course
+  // enrollment already exists (repeated stage toggling, or a lead pulled
+  // back from "Оплата").
+  if (stage === "presented" && updated && updated.partner_id && updated.product_id) {
+    const { data: existingMemberForReserve } = await supabase
+      .from("members")
+      .select("id")
+      .eq("lead_id", leadId)
+      .maybeSingle();
+
+    let reserveMemberId = existingMemberForReserve?.id ?? null;
+    if (!reserveMemberId) {
+      let contactId = updated.contact_id;
+      if (!contactId) {
+        contactId = await findOrCreateContact(supabase, updated.partner_id, {
+          name: updated.name,
+          phone: updated.phone,
+          email: updated.email,
+          city: updated.city,
+          birthday: updated.birthday,
+          country: updated.country,
+        });
+        if (contactId) await supabase.from("leads").update({ contact_id: contactId }).eq("id", leadId);
+      }
+      const { data: member } = await supabase
+        .from("members")
+        .insert({
+          partner_id: updated.partner_id,
+          lead_id: leadId,
+          contact_id: contactId,
+          name: updated.name,
+          city: updated.city,
+          email: updated.email,
+          phone: updated.phone,
+          birthday: updated.birthday,
+          member_since: currentMonthYear(),
+        })
+        .select("id")
+        .single();
+      reserveMemberId = member?.id ?? null;
+    }
+
+    if (reserveMemberId) {
+      const { data: existingEnrollment } = await supabase
+        .from("member_enrollments")
+        .select("id")
+        .eq("member_id", reserveMemberId)
+        .eq("product_id", updated.product_id)
+        .maybeSingle();
+
+      if (!existingEnrollment) {
+        await supabase.from("member_enrollments").insert({
+          partner_id: updated.partner_id,
+          member_id: reserveMemberId,
+          product_id: updated.product_id,
+          start_date: updated.cohort_start_date,
+          price: updated.value,
+          status: "sAwaiting",
+          paid: false,
+          attended: [],
+        });
+      }
+    }
+  }
 
   // "Оплата в лидах создаёт запись в Платежах автоматически" (Anastasiia,
   // 11 сен 2026) — the moment a lead reaches "Оплата", it should show up
@@ -59,34 +132,58 @@ export async function updateLeadStage(
   // if this lead already has a payment — e.g. dragged back and forth on the
   // board) and skipped when there's no partner (hq can't write payments
   // anyway) or nothing to record (value is 0/unset).
-  if (stage === "paid" && updated && updated.partner_id && Number(updated.value) > 0) {
-    const { data: existingPayment } = await supabase
-      .from("payments")
+  if (stage === "paid" && updated && updated.partner_id) {
+    const { data: existingMember } = await supabase
+      .from("members")
       .select("id")
       .eq("lead_id", leadId)
       .maybeSingle();
 
-    if (!existingPayment) {
-      const { data: existingMember } = await supabase
-        .from("members")
+    if (Number(updated.value) > 0) {
+      const { data: existingPayment } = await supabase
+        .from("payments")
         .select("id")
         .eq("lead_id", leadId)
         .maybeSingle();
 
-      await supabase.from("payments").insert({
-        partner_id: updated.partner_id,
-        lead_id: leadId,
-        member_id: existingMember?.id ?? null,
-        product_id: updated.product_id,
-        amount: updated.value,
-        status: "paid",
-        paid_date: todayIso(),
-      });
+      if (!existingPayment) {
+        await supabase.from("payments").insert({
+          partner_id: updated.partner_id,
+          lead_id: leadId,
+          member_id: existingMember?.id ?? null,
+          product_id: updated.product_id,
+          amount: updated.value,
+          status: "paid",
+          paid_date: todayIso(),
+        });
+      }
+    }
+
+    // A pending "Ожидание" enrollment created when this lead reached
+    // "Записалась" (see above) becomes "Оплачено" the moment the lead
+    // itself reaches "Оплата" — forward-only, only ever moves an
+    // sAwaiting row, so a status she already changed by hand (declined,
+    // refunded, completed…) is never touched by this.
+    if (existingMember && updated.product_id) {
+      const { data: pendingEnrollment } = await supabase
+        .from("member_enrollments")
+        .select("id, status")
+        .eq("member_id", existingMember.id)
+        .eq("product_id", updated.product_id)
+        .maybeSingle();
+
+      if (pendingEnrollment && pendingEnrollment.status === "sAwaiting") {
+        await supabase
+          .from("member_enrollments")
+          .update({ status: "sPaid", paid: true })
+          .eq("id", pendingEnrollment.id);
+      }
     }
   }
 
   revalidatePath("/leads");
   revalidatePath("/payments");
+  revalidatePath("/members");
   revalidatePath("/");
   return { error: null };
 }
@@ -422,11 +519,45 @@ export async function updateLead(leadId: string, formData: FormData): Promise<Ac
   const note = String(formData.get("note") || "").trim() || null;
   const valueRaw = String(formData.get("value") || "0").replace(",", ".");
   const value = Number.isFinite(Number(valueRaw)) ? Number(valueRaw) : 0;
+  let productId = String(formData.get("product_id") || "").trim() || null;
+  let cohortStartDate = String(formData.get("cohort_start_date") || "").trim() || null;
 
   const supabase = await createClient();
+
+  // Which course this заявка is actually for (Anastasiia, 13 сен 2026 —
+  // needed on the lead card itself, not just at conversion time, since a
+  // lead from an ad campaign should already say which product it's an
+  // inquiry for). Re-verified against this partner the same way
+  // createLead/assignLeadProduct do, since it's a client-supplied id.
+  if (productId) {
+    const { data: product } = await supabase
+      .from("products")
+      .select("id")
+      .eq("id", productId)
+      .eq("partner_id", profile.partner_id)
+      .maybeSingle();
+    if (!product) {
+      productId = null;
+      cohortStartDate = null;
+    }
+  }
+  if (!productId) cohortStartDate = null;
+
   const { data: updated, error } = await supabase
     .from("leads")
-    .update({ name, phone, email, source, country, city, birthday, note, value })
+    .update({
+      name,
+      phone,
+      email,
+      source,
+      country,
+      city,
+      birthday,
+      note,
+      value,
+      product_id: productId,
+      cohort_start_date: cohortStartDate,
+    })
     .eq("id", leadId)
     .select("contact_id")
     .maybeSingle();
@@ -667,16 +798,39 @@ export async function convertLeadToMember(
   }
 
   if (productId) {
-    const { error: enrollError } = await supabase.from("member_enrollments").insert({
-      partner_id: profile.partner_id,
-      member_id: memberId,
-      product_id: productId,
-      start_date: cohortStartDate,
-      price,
-      status: "sPaid",
-      paid: true,
-      attended: [],
-    });
+    // A "Записалась" stage change (see updateLeadStage) may already have
+    // reserved this exact member+course as a pending "Ожидание" enrollment
+    // before she ever clicks this button — round 8, 13 сен 2026. Upgrade
+    // that row to paid instead of inserting a second one for the same
+    // course, which would otherwise leave one "Ожидание" and one
+    // "Оплачено" enrollment sitting side by side for the same person.
+    const { data: existingEnrollment } = await supabase
+      .from("member_enrollments")
+      .select("id")
+      .eq("member_id", memberId)
+      .eq("product_id", productId)
+      .maybeSingle();
+
+    const enrollError = existingEnrollment
+      ? (
+          await supabase
+            .from("member_enrollments")
+            .update({ start_date: cohortStartDate, price, status: "sPaid", paid: true })
+            .eq("id", existingEnrollment.id)
+        ).error
+      : (
+          await supabase.from("member_enrollments").insert({
+            partner_id: profile.partner_id,
+            member_id: memberId,
+            product_id: productId,
+            start_date: cohortStartDate,
+            price,
+            status: "sPaid",
+            paid: true,
+            attended: [],
+          })
+        ).error;
+
     if (enrollError) {
       revalidatePath("/leads");
       revalidatePath("/members");

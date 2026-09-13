@@ -149,6 +149,8 @@ export default function LeadDetailModal({
         {editing ? (
           <EditForm
             lead={lead}
+            products={products}
+            cohorts={cohorts}
             partnerCountry={partnerCountry}
             onCancel={() => setEditing(false)}
             onSaved={() => setEditing(false)}
@@ -231,6 +233,12 @@ function ReadView({
               )}
             </dd>
           </>
+        )}
+        {lead.product_id && (
+          <Row
+            label={t("colCourse")}
+            value={products.find((p) => p.id === lead.product_id)?.name ?? null}
+          />
         )}
         {lead.cohort_start_date && <Row label={t("fieldCohortStart")} value={lead.cohort_start_date} />}
         {lead.stage === "declined" && lead.decline_reason && (
@@ -547,11 +555,15 @@ function Row({ label, value }: { label: string; value: string | number | null })
 
 function EditForm({
   lead,
+  products,
+  cohorts,
   partnerCountry,
   onCancel,
   onSaved,
 }: {
   lead: Lead;
+  products: Product[];
+  cohorts: Cohort[];
   partnerCountry: string | null;
   onCancel: () => void;
   onSaved: () => void;
@@ -566,11 +578,26 @@ function EditForm({
   // gives a brand-new lead. Anastasiia's request, 11 сен 2026.
   const [country, setCountry] = useState(() => lead.country || partnerCountry || "");
   const [city, setCity] = useState(() => lead.city || countryDefaultCity(lead.country || partnerCountry) || "");
+  // Which course this заявка is for — editable here now, not just at
+  // creation/conversion (Anastasiia, 13 сен 2026: a lead can come in from
+  // an ad already tied to a specific product, and needs that visible and
+  // settable on the card itself).
+  const [productId, setProductId] = useState(lead.product_id ?? "");
+  const [cohortDate, setCohortDate] = useState(lead.cohort_start_date ?? "");
+  const productCohorts = useMemo(
+    () => cohorts.filter((c) => c.product_id === productId),
+    [cohorts, productId]
+  );
 
   function handleCountryChange(name: string) {
     setCountry(name);
     const defaultCity = countryDefaultCity(name);
     if (defaultCity) setCity(defaultCity);
+  }
+
+  function handleProductChange(id: string) {
+    setProductId(id);
+    setCohortDate("");
   }
 
   function handleSubmit(formData: FormData) {
@@ -611,6 +638,48 @@ function EditForm({
           )}
         </select>
       </label>
+
+      {products.length > 0 && (
+        <label className="flex flex-col gap-1.5 text-sm">
+          <span className="font-medium text-ink-2">{t("fieldCourseOptional")}</span>
+          <select
+            name="product_id"
+            value={productId}
+            onChange={(e) => handleProductChange(e.target.value)}
+            className="rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-accent focus:ring-1 focus:ring-accent"
+          >
+            <option value="">{t("optionCourseNotChosen")}</option>
+            {products.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.name}
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
+
+      {productId && (
+        <label className="flex flex-col gap-1.5 text-sm">
+          <span className="font-medium text-ink-2">{t("fieldCohortStart")}</span>
+          {productCohorts.length > 0 ? (
+            <select
+              name="cohort_start_date"
+              value={cohortDate}
+              onChange={(e) => setCohortDate(e.target.value)}
+              className="rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-accent focus:ring-1 focus:ring-accent"
+            >
+              <option value="">{t("optionNotChosen")}</option>
+              {productCohorts.map((c) => (
+                <option key={c.id} value={c.start_date}>
+                  {c.start_date}
+                </option>
+              ))}
+            </select>
+          ) : (
+            <p className="text-xs text-muted">{t("emptyNoCohorts")}</p>
+          )}
+        </label>
+      )}
 
       <label className="flex flex-col gap-1.5 text-sm">
         <span className="font-medium text-ink-2">{t("fieldCountry")}</span>
