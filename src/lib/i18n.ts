@@ -489,6 +489,18 @@ export const DICT: Record<string, Entry> = {
   btnImporting: { ru: "Импортирую…", bg: "Импортиране…" },
   btnImportCount: { ru: "Импортировать {n}", bg: "Импортирай {n}" },
 
+  // ---- import contacts modal (Anastasiia, 13 сен 2026 — a plain list of
+  // people should go straight into Контакты with no Лид/заявка created) ----
+  headingImportContacts: { ru: "Импорт контактов из CSV", bg: "Импорт на контакти от CSV" },
+  importContactsSubtitle: {
+    ru: "Загрузите файл со списком людей — лид или заявка не создаются, только контакты.",
+    bg: "Качете файл със списък с хора — не се създава запитване, само контакти.",
+  },
+  importContactsSummary: {
+    ru: "Добавлено новых контактов: {created}, объединено с существующими: {matched}",
+    bg: "Добавени нови контакти: {created}, обединени със съществуващи: {matched}",
+  },
+
   // ---- import leads modal: what to do with skipped duplicates
   // (Anastasiia, 13 сен 2026 — the count alone wasn't enough, she needs to
   // see who was skipped and either move their stage or attach a course) ----
@@ -517,6 +529,10 @@ export const DICT: Record<string, Entry> = {
   errHqNoClubImportLeads: {
     ru: "У аккаунта HQ нет своего клуба — импортировать лиды может только партнёр.",
     bg: "Акаунтът на централния офис няма собствен клуб — запитвания може да импортира само партньор.",
+  },
+  errHqNoClubImportContacts: {
+    ru: "У аккаунта HQ нет своего клуба — импортировать контакты может только партнёр.",
+    bg: "Акаунтът на централния офис няма собствен клуб — контакти може да импортира само партньор.",
   },
   errHqNoClubEdit: {
     ru: "У аккаунта HQ нет своего клуба — редактировать может только партнёр.",

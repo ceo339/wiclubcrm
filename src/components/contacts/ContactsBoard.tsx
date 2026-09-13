@@ -7,6 +7,7 @@ import Avatar from "@/components/ui/Avatar";
 import { useLocale } from "@/components/i18n/LocaleProvider";
 import type { Contact } from "./types";
 import ContactDetailModal from "./ContactDetailModal";
+import ImportContactsModal from "./ImportContactsModal";
 
 export default function ContactsBoard({
   initialContacts,
@@ -22,6 +23,7 @@ export default function ContactsBoard({
   const [productId, setProductId] = useState<string>("all");
   const [startDate, setStartDate] = useState<string>("all");
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [showImport, setShowImport] = useState(false);
 
   // "в контактах нужны фильтры по курсам и потокам" (Anastasiia, 11 сен
   // 2026) — a contact's course can come either from an actual course
@@ -143,6 +145,21 @@ export default function ContactsBoard({
             {t("btnResetFilter")}
           </button>
         )}
+
+        {/* "нужно добавить функцию импорта контактов, тогда не будет
+            путаницы, я буду импортировать контакты, а не лиды" (Anastasiia,
+            13 сен 2026) — same canEdit gate LeadsBoard's own Импорт button
+            uses (canEdit is already false for hq, which has no partner_id
+            to import into). */}
+        {canEdit && (
+          <button
+            type="button"
+            onClick={() => setShowImport(true)}
+            className="ml-auto rounded-lg border border-border-strong px-3 py-2 text-sm font-medium text-ink-2 hover:bg-surface-2"
+          >
+            {t("btnImport")}
+          </button>
+        )}
       </div>
 
       {isHq && (
@@ -224,6 +241,8 @@ export default function ContactsBoard({
       {selected && (
         <ContactDetailModal contact={selected} canEdit={canEdit} onClose={() => setSelectedId(null)} />
       )}
+
+      {showImport && <ImportContactsModal onClose={() => setShowImport(false)} />}
     </div>
   );
 }

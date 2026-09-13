@@ -3,9 +3,87 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentProfile } from "@/lib/auth";
+import { findOrCreateContact } from "@/lib/server/contacts";
 import type { Tables } from "@/types/database";
 
 export type ActionResult = { error: string | null };
+
+export type ContactImportRow = {
+  name: string;
+  phone?: string | null;
+  email?: string | null;
+  city?: string | null;
+  country?: string | null;
+  birthday?: string | null;
+};
+
+export type ContactImportResult = {
+  error: string | null;
+  /** New Контакт rows actually created. */
+  created: number;
+  /** Rows that matched (by email, then phone — same rule as everywhere
+   * else) a contact already on file, and so were merged into it instead of
+   * duplicating it. */
+  matchedExisting: number;
+  /** Rows with no name at all — nothing to import. */
+  skippedEmpty: number;
+};
+
+/**
+ * "нужно добавить функцию импорта контактов, тогда не будет путаницы, я
+ * буду импортировать контакты, а не лиды" (Anastasiia, 13 сен 2026) —
+ * confirmed scope (she chose this over the alternative): a plain list of
+ * people — an old client list, a purchased list, anything that isn't itself
+ * an ad-sourced inquiry — should be importable straight into Контакты, with
+ * NO Лид/заявка created at all, so it never shows up on the Лиды board
+ * looking like an active funnel entry. This is deliberately a much smaller
+ * cousin of importLeads: no source/value/stage, no duplicate-skip UI — a
+ * repeat row just finds and merges into the same Контакт (findOrCreateContact
+ * already does this everywhere else), which is exactly what she wants here.
+ */
+export async function importContacts(rows: ContactImportRow[]): Promise<ContactImportResult> {
+  const profile = await getCurrentProfile();
+  if (!profile) return { error: "errNotAuthorized", created: 0, matchedExisting: 0, skippedEmpty: 0 };
+  if (!profile.partner_id) {
+    return { error: "errHqNoClubImportContacts", created: 0, matchedExisting: 0, skippedEmpty: 0 };
+  }
+
+  const supabase = await createClient();
+  const { data: existingBefore } = await supabase
+    .from("contacts")
+    .select("id")
+    .eq("partner_id", profile.partner_id);
+  const existingIds = new Set((existingBefore ?? []).map((c) => c.id));
+
+  let created = 0;
+  let matchedExisting = 0;
+  let skippedEmpty = 0;
+
+  for (const row of rows) {
+    const name = (row.name || "").trim();
+    if (!name) {
+      skippedEmpty += 1;
+      continue;
+    }
+    const contactId = await findOrCreateContact(supabase, profile.partner_id, {
+      name,
+      phone: row.phone?.trim() || null,
+      email: row.email?.trim() || null,
+      city: row.city?.trim() || null,
+      birthday: row.birthday?.trim() || null,
+      country: row.country?.trim() || null,
+    });
+    if (!contactId) continue;
+    if (existingIds.has(contactId)) matchedExisting += 1;
+    else {
+      created += 1;
+      existingIds.add(contactId);
+    }
+  }
+
+  revalidatePath("/contacts");
+  return { error: null, created, matchedExisting, skippedEmpty };
+}
 
 /**
  * "контакты нужно редактировать должна быть вся информация в карточке
