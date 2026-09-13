@@ -601,6 +601,14 @@ function EditForm({
               {sourceLabel(s, locale)}
             </option>
           ))}
+          {/* A source from CSV import (see normalizeSource, round 8) can be
+           * any string, not just the five built-in ones below — without
+           * this option, a lead like this would silently show "— не
+           * указано —" here (nothing in the list matches lead.source) and
+           * saving the form as-is would blank it out for good. */}
+          {lead.source && !(SOURCES as readonly string[]).includes(lead.source) && (
+            <option value={lead.source}>{lead.source}</option>
+          )}
         </select>
       </label>
 
