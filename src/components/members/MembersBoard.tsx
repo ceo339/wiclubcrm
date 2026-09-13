@@ -81,15 +81,34 @@ export default function MembersBoard({
     setStartDate("all");
   }
 
+  // "показаны оплаты за другие курсы, хотя я выбрала 1 поток" (Anastasiia,
+  // 13 сен 2026) — status/course/поток used to be matched independently,
+  // so a member could pass the filter with e.g. one enrollment matching the
+  // chosen course and a completely different enrollment matching the
+  // chosen поток date — a false match for a member who isn't actually in
+  // that course+поток combination at all. `matchingEnrollments` requires
+  // ONE AND THE SAME enrollment to satisfy every active filter at once —
+  // this is also what the table below now renders instead of the member's
+  // full course history, so a filtered view only ever shows the course
+  // that was actually filtered for.
+  const hasEnrollmentFilter = status !== "all" || productId !== "all" || startDate !== "all";
+  function matchingEnrollments(m: Member) {
+    return m.enrollments.filter((e) => {
+      if (status !== "all" && e.status !== status) return false;
+      if (productId !== "all" && e.product_id !== productId) return false;
+      if (startDate !== "all" && e.start_date !== startDate) return false;
+      return true;
+    });
+  }
+
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     return initialMembers.filter((m) => {
-      if (status !== "all" && !m.enrollments.some((e) => e.status === status)) return false;
-      if (productId !== "all" && !m.enrollments.some((e) => e.product_id === productId)) return false;
-      if (startDate !== "all" && !m.enrollments.some((e) => e.start_date === startDate)) return false;
+      if (hasEnrollmentFilter && matchingEnrollments(m).length === 0) return false;
       if (!q) return true;
       return m.name.toLowerCase().includes(q) || (m.city ?? "").toLowerCase().includes(q);
     });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialMembers, search, status, productId, startDate]);
 
   // "нужен виджет кол-во участниц на выбранный курс, поток" (Anastasiia,
@@ -207,7 +226,13 @@ export default function MembersBoard({
             </thead>
             <tbody>
               {filtered.map((m, index) => {
-                const totalPrice = m.enrollments.reduce((sum, e) => sum + Number(e.price), 0);
+                // When a status/course/поток filter is active, this row
+                // shows (and totals) only the enrollment(s) that actually
+                // matched it — not the member's whole course history — so
+                // a member on several courses doesn't show payments/status
+                // for a course that isn't the one being filtered for.
+                const rowEnrollments = hasEnrollmentFilter ? matchingEnrollments(m) : m.enrollments;
+                const totalPrice = rowEnrollments.reduce((sum, e) => sum + Number(e.price), 0);
                 return (
                   <tr
                     key={m.id}
@@ -229,11 +254,11 @@ export default function MembersBoard({
                     </td>
                     {isHq && <td className="px-4 py-3 text-muted">{m.partner_name ?? "—"}</td>}
                     <td className="px-4 py-3">
-                      {m.enrollments.length === 0 ? (
+                      {rowEnrollments.length === 0 ? (
                         <span className="text-muted">—</span>
                       ) : (
                         <div className="flex flex-col gap-1">
-                          {m.enrollments.map((e) => (
+                          {rowEnrollments.map((e) => (
                             <div key={e.id} className="flex items-center gap-2">
                               <span className="text-ink-2">{e.product_name ?? t("optionCourseNotChosen")}</span>
                               <span

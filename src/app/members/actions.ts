@@ -33,7 +33,7 @@ type SupabaseServerClient = Awaited<ReturnType<typeof createClient>>;
  * "Оплата": skip when there's nothing to record (no price) or a payment for
  * this exact enrollment already exists, otherwise insert one dated today.
  */
-async function syncEnrollmentPayment(
+export async function syncEnrollmentPayment(
   supabase: SupabaseServerClient,
   params: {
     partnerId: string;

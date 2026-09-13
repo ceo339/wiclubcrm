@@ -7,6 +7,7 @@ import { SOURCES, duplicateKey, normalizeEmail, normalizePhone, type DuplicateFi
 import { currentMonthYear } from "@/lib/members";
 import { todayIso } from "@/lib/payments";
 import { findOrCreateContact, loadContactHistory, type ContactHistory } from "@/lib/server/contacts";
+import { syncEnrollmentPayment } from "@/app/members/actions";
 import type { Tables } from "@/types/database";
 
 export type ActionResult = { error: string | null };
@@ -128,10 +129,8 @@ export async function updateLeadStage(
 
   // "Оплата в лидах создаёт запись в Платежах автоматически" (Anastasiia,
   // 11 сен 2026) — the moment a lead reaches "Оплата", it should show up
-  // in the Платежи ledger without a separate manual step. Idempotent (skips
-  // if this lead already has a payment — e.g. dragged back and forth on the
-  // board) and skipped when there's no partner (hq can't write payments
-  // anyway) or nothing to record (value is 0/unset).
+  // in the Платежи ledger without a separate manual step. Skipped when
+  // there's no partner (hq can't write payments anyway).
   if (stage === "paid" && updated && updated.partner_id) {
     const { data: existingMember } = await supabase
       .from("members")
@@ -139,7 +138,65 @@ export async function updateLeadStage(
       .eq("lead_id", leadId)
       .maybeSingle();
 
-    if (Number(updated.value) > 0) {
+    // A pending "Ожидание" enrollment created when this lead reached
+    // "Записалась" (see above) becomes "Оплачено" the moment the lead
+    // itself reaches "Оплата" — forward-only, only ever moves an
+    // sAwaiting row, so a status she already changed by hand (declined,
+    // refunded, completed…) is never touched by this.
+    let matchedEnrollment: { id: string; status: string; price: number; memberId: string } | null = null;
+    if (existingMember && updated.product_id) {
+      const { data: pendingEnrollment } = await supabase
+        .from("member_enrollments")
+        .select("id, status, price")
+        .eq("member_id", existingMember.id)
+        .eq("product_id", updated.product_id)
+        .maybeSingle();
+
+      if (pendingEnrollment) {
+        let status = pendingEnrollment.status;
+        if (status === "sAwaiting") {
+          await supabase
+            .from("member_enrollments")
+            .update({ status: "sPaid", paid: true })
+            .eq("id", pendingEnrollment.id);
+          status = "sPaid";
+        }
+        matchedEnrollment = {
+          id: pendingEnrollment.id,
+          status,
+          price: Number(pendingEnrollment.price),
+          memberId: existingMember.id,
+        };
+      }
+    }
+
+    // "нет данных по оплатам за июль, хотя были они" (Anastasiia, 13 сен
+    // 2026) — this used to stop at flipping the enrollment's status; it
+    // never created the matching `payments` row, so the block below (kept
+    // only as a fallback now) wrote a payment keyed by lead_id, gated on
+    // the LEAD's own `value` — which can be 0 even though the enrollment
+    // itself has a real price (e.g. the price was only ever set via
+    // "Сделать участницей"/the member card, not on the lead itself). When
+    // this lead has a real course enrollment, that enrollment — not the
+    // lead's `value` — is now the one source of truth for its payment,
+    // recorded through the same idempotent-by-enrollment_id helper the
+    // member card already uses (`syncEnrollmentPayment`), so a lead with a
+    // course never also creates a second, duplicate lead_id-keyed payment
+    // for the same money. This also quietly backfills a payment for an
+    // enrollment that was already sPaid/sCompleted from an earlier stage
+    // change, if one was somehow still missing.
+    if (matchedEnrollment) {
+      await syncEnrollmentPayment(supabase, {
+        partnerId: updated.partner_id,
+        memberId: matchedEnrollment.memberId,
+        enrollmentId: matchedEnrollment.id,
+        productId: updated.product_id,
+        price: matchedEnrollment.price,
+        status: matchedEnrollment.status,
+      });
+    } else if (Number(updated.value) > 0) {
+      // No course chosen on this lead at all — the pre-round-8 fallback:
+      // one payment per lead, keyed by lead_id, using the lead's own value.
       const { data: existingPayment } = await supabase
         .from("payments")
         .select("id")
@@ -156,27 +213,6 @@ export async function updateLeadStage(
           status: "paid",
           paid_date: todayIso(),
         });
-      }
-    }
-
-    // A pending "Ожидание" enrollment created when this lead reached
-    // "Записалась" (see above) becomes "Оплачено" the moment the lead
-    // itself reaches "Оплата" — forward-only, only ever moves an
-    // sAwaiting row, so a status she already changed by hand (declined,
-    // refunded, completed…) is never touched by this.
-    if (existingMember && updated.product_id) {
-      const { data: pendingEnrollment } = await supabase
-        .from("member_enrollments")
-        .select("id, status")
-        .eq("member_id", existingMember.id)
-        .eq("product_id", updated.product_id)
-        .maybeSingle();
-
-      if (pendingEnrollment && pendingEnrollment.status === "sAwaiting") {
-        await supabase
-          .from("member_enrollments")
-          .update({ status: "sPaid", paid: true })
-          .eq("id", pendingEnrollment.id);
       }
     }
   }
@@ -811,6 +847,7 @@ export async function convertLeadToMember(
       .eq("product_id", productId)
       .maybeSingle();
 
+    let enrollmentId = existingEnrollment?.id ?? null;
     const enrollError = existingEnrollment
       ? (
           await supabase
@@ -818,23 +855,43 @@ export async function convertLeadToMember(
             .update({ start_date: cohortStartDate, price, status: "sPaid", paid: true })
             .eq("id", existingEnrollment.id)
         ).error
-      : (
-          await supabase.from("member_enrollments").insert({
-            partner_id: profile.partner_id,
-            member_id: memberId,
-            product_id: productId,
-            start_date: cohortStartDate,
-            price,
-            status: "sPaid",
-            paid: true,
-            attended: [],
-          })
-        ).error;
+      : await (async () => {
+          const { data: inserted, error } = await supabase
+            .from("member_enrollments")
+            .insert({
+              partner_id: profile.partner_id,
+              member_id: memberId,
+              product_id: productId,
+              start_date: cohortStartDate,
+              price,
+              status: "sPaid",
+              paid: true,
+              attended: [],
+            })
+            .select("id")
+            .single();
+          enrollmentId = inserted?.id ?? null;
+          return error;
+        })();
 
     if (enrollError) {
       revalidatePath("/leads");
       revalidatePath("/members");
       return { error: enrollError.message };
+    }
+
+    // "Сделать участницей" never created a `payments` row either (this bug
+    // predates round 8 — round 6 only fixed the member-card entry points,
+    // see syncEnrollmentPayment) — same idempotent-by-enrollment_id fix.
+    if (enrollmentId) {
+      await syncEnrollmentPayment(supabase, {
+        partnerId: profile.partner_id,
+        memberId,
+        enrollmentId,
+        productId,
+        price: Number(price),
+        status: "sPaid",
+      });
     }
   }
 
