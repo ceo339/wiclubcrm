@@ -199,7 +199,28 @@ export type ImportResult = {
   /** Rows skipped because they matched an existing lead (email first, then
    * phone) or another row earlier in the same file. */
   duplicatesSkipped?: number;
+  /** One entry per skipped row, so the partner can actually see *who* got
+   * skipped and decide what to do with them (Anastasiia, 13 сен 2026: the
+   * count alone wasn't enough — she needed to move the existing lead's
+   * stage or attach a course herself). `existingLeadId` is null when the
+   * row only repeated an earlier row in this same file — there's no
+   * standalone lead to act on in that case, the first occurrence already
+   * covers it. Capped defensively for a huge file. */
+  duplicates?: ImportDuplicate[];
 };
+
+export type ImportDuplicate = {
+  existingLeadId: string | null;
+  existingName: string | null;
+  existingStage: StageId | null;
+  matchedField: DuplicateField;
+  matchedValue: string;
+  incomingName: string;
+  incomingSource: string | null;
+  incomingValue: number;
+};
+
+const MAX_REPORTED_DUPLICATES = 200;
 
 const MAX_IMPORT_ROWS = 1000;
 const IMPORT_CHUNK_SIZE = 200;
@@ -240,25 +261,42 @@ export async function importLeads(rows: ImportRow[]): Promise<ImportResult> {
   // big CSV export can easily contain its own repeats).
   const { data: existing } = await supabase
     .from("leads")
-    .select("email, phone")
+    .select("id, name, stage, email, phone")
     .eq("partner_id", profile.partner_id as string);
-  const existingEmails = new Set(
-    (existing ?? []).map((l) => normalizeEmail(l.email)).filter((v): v is string => v !== null)
-  );
-  const existingPhones = new Set(
-    (existing ?? []).map((l) => normalizePhone(l.phone)).filter((v): v is string => v !== null)
-  );
+  const existingByEmail = new Map<string, { id: string; name: string; stage: StageId }>();
+  const existingByPhone = new Map<string, { id: string; name: string; stage: StageId }>();
+  for (const l of existing ?? []) {
+    const info = { id: l.id, name: l.name, stage: l.stage as StageId };
+    const email = normalizeEmail(l.email);
+    if (email && !existingByEmail.has(email)) existingByEmail.set(email, info);
+    const phone = normalizePhone(l.phone);
+    if (phone && !existingByPhone.has(phone)) existingByPhone.set(phone, info);
+  }
 
   const seenEmails = new Set<string>();
   const seenPhones = new Set<string>();
   let duplicatesSkipped = 0;
+  const duplicates: ImportDuplicate[] = [];
   const deduped = clean.filter((row) => {
     const key = duplicateKey(row.email, row.phone);
     if (!key) return true;
     const seen = key.field === "email" ? seenEmails : seenPhones;
-    const existingSet = key.field === "email" ? existingEmails : existingPhones;
-    if (seen.has(key.value) || existingSet.has(key.value)) {
+    const existingMap = key.field === "email" ? existingByEmail : existingByPhone;
+    if (seen.has(key.value) || existingMap.has(key.value)) {
       duplicatesSkipped++;
+      if (duplicates.length < MAX_REPORTED_DUPLICATES) {
+        const match = existingMap.get(key.value) ?? null;
+        duplicates.push({
+          existingLeadId: match?.id ?? null,
+          existingName: match?.name ?? null,
+          existingStage: match?.stage ?? null,
+          matchedField: key.field,
+          matchedValue: key.value,
+          incomingName: row.name,
+          incomingSource: row.source,
+          incomingValue: row.value,
+        });
+      }
       return false;
     }
     seen.add(key.value);
@@ -270,6 +308,7 @@ export async function importLeads(rows: ImportRow[]): Promise<ImportResult> {
       error: duplicatesSkipped > 0 ? "errImportAllDuplicates" : "errNoRowsWithName",
       imported: 0,
       duplicatesSkipped,
+      duplicates,
     };
   }
 
@@ -286,6 +325,7 @@ export async function importLeads(rows: ImportRow[]): Promise<ImportResult> {
         imported,
         partialFailure: { total: deduped.length, message: error.message },
         duplicatesSkipped,
+        duplicates,
       };
     }
     imported += count ?? chunk.length;
@@ -306,7 +346,52 @@ export async function importLeads(rows: ImportRow[]): Promise<ImportResult> {
 
   revalidatePath("/leads");
   revalidatePath("/contacts");
-  return { error: null, imported, duplicatesSkipped };
+  return { error: null, imported, duplicatesSkipped, duplicates };
+}
+
+/**
+ * Lightweight partner-scoped patch used from the import duplicates list
+ * (ImportModal) — she matches a skipped CSV row to an existing lead and
+ * either moves its stage (see updateLeadStage) or attaches the course the
+ * new submission was for, without re-opening the full lead card. Only
+ * touches product_id/cohort_start_date; everything else about the lead is
+ * left as-is. The product is re-verified against this partner the same way
+ * createLead does, since it ultimately comes from a client-supplied id.
+ */
+export async function assignLeadProduct(
+  leadId: string,
+  productId: string | null,
+  cohortStartDate: string | null
+): Promise<ActionResult> {
+  const profile = await getCurrentProfile();
+  if (!profile) return { error: "errNotAuthorized" };
+  if (!profile.partner_id) return { error: "errHqNoClubEdit" };
+
+  const supabase = await createClient();
+
+  let verifiedProductId = productId;
+  if (verifiedProductId) {
+    const { data: product } = await supabase
+      .from("products")
+      .select("id")
+      .eq("id", verifiedProductId)
+      .eq("partner_id", profile.partner_id)
+      .maybeSingle();
+    if (!product) verifiedProductId = null;
+  }
+
+  const { error } = await supabase
+    .from("leads")
+    .update({
+      product_id: verifiedProductId,
+      cohort_start_date: verifiedProductId ? cohortStartDate : null,
+    })
+    .eq("id", leadId);
+
+  if (error) return { error: error.message };
+
+  revalidatePath("/leads");
+  return { error: null };
 }
 
 /**

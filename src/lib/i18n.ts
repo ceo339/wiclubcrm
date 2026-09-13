@@ -484,6 +484,24 @@ export const DICT: Record<string, Entry> = {
   btnImporting: { ru: "Импортирую…", bg: "Импортиране…" },
   btnImportCount: { ru: "Импортировать {n}", bg: "Импортирай {n}" },
 
+  // ---- import leads modal: what to do with skipped duplicates
+  // (Anastasiia, 13 сен 2026 — the count alone wasn't enough, she needs to
+  // see who was skipped and either move their stage or attach a course) ----
+  headingImportDuplicates: { ru: "Пропущенные дубли", bg: "Пропуснати дубликати" },
+  importDuplicatesSubtitle: {
+    ru: "Эти строки совпали с уже существующими лидами и не были добавлены заново. Можно сразу обновить существующий лид.",
+    bg: "Тези редове съвпадат със съществуващи запитвания и не бяха добавени отново. Можете веднага да обновите съществуващото запитване.",
+  },
+  duplicateRepeatedInFile: {
+    ru: "повторяется в этом же файле — оставлена только первая строка",
+    bg: "повтаря се в същия файл — запазен е само първият ред",
+  },
+  duplicateAlreadyExists: { ru: "уже в базе: {name}", bg: "вече в базата: {name}" },
+  duplicateChangeStage: { ru: "Изменить статус…", bg: "Промени статус…" },
+  duplicateAssignCourse: { ru: "Привязать курс…", bg: "Прикачи курс…" },
+  btnApply: { ru: "Применить", bg: "Приложи" },
+  appliedDone: { ru: "Готово", bg: "Готово" },
+
   // ---- server action errors (shared across leads/members/payments/products/partners) ----
   errNotAuthorized: { ru: "Не авторизовано", bg: "Няма оторизация" },
   errHqNoClubGeneric: { ru: "У аккаунта HQ нет своего клуба.", bg: "Акаунтът на централния офис няма собствен клуб." },

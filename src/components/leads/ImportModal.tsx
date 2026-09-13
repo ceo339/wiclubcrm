@@ -1,9 +1,18 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useTransition } from "react";
 import Papa from "papaparse";
-import { importLeads, type ImportResult, type ImportRow } from "@/app/leads/actions";
-import { useT } from "@/components/i18n/LocaleProvider";
+import {
+  assignLeadProduct,
+  importLeads,
+  updateLeadStage,
+  type ImportDuplicate,
+  type ImportResult,
+  type ImportRow,
+} from "@/app/leads/actions";
+import { STAGES, stageLabel, type StageId } from "@/lib/leads";
+import { useLocale } from "@/components/i18n/LocaleProvider";
+import type { Tables } from "@/types/database";
 
 type TargetField = "name" | "phone" | "email" | "source" | "value";
 
@@ -21,8 +30,16 @@ function guessColumn(headers: string[], field: TargetField): string {
   return found ?? "";
 }
 
-export default function ImportModal({ onClose }: { onClose: () => void }) {
-  const t = useT();
+export default function ImportModal({
+  onClose,
+  products,
+  cohorts,
+}: {
+  onClose: () => void;
+  products: Tables<"products">[];
+  cohorts: Tables<"product_cohorts">[];
+}) {
+  const { t } = useLocale();
   const FIELD_LABELS: Record<TargetField, string> = useMemo(
     () => ({
       name: t("colName"),
@@ -94,7 +111,11 @@ export default function ImportModal({ onClose }: { onClose: () => void }) {
     const res = await importLeads(payload);
     setPending(false);
     setResult(res);
-    if (!res.error) {
+    // Auto-close only when there's nothing left to look at — a duplicate
+    // matched against a real existing lead is something she asked to be
+    // able to act on right here, so the modal stays open for that.
+    const actionableDuplicates = (res.duplicates ?? []).some((d) => d.existingLeadId);
+    if (!res.error && !actionableDuplicates) {
       setTimeout(onClose, 1200);
     }
   }
@@ -206,6 +227,18 @@ export default function ImportModal({ onClose }: { onClose: () => void }) {
           </p>
         )}
 
+        {result && result.duplicates && result.duplicates.length > 0 && (
+          <div className="mt-4">
+            <h4 className="text-sm font-semibold text-foreground">{t("headingImportDuplicates")}</h4>
+            <p className="mt-1 text-xs text-muted">{t("importDuplicatesSubtitle")}</p>
+            <div className="mt-2 flex flex-col gap-2">
+              {result.duplicates.map((dup, i) => (
+                <DuplicateRow key={dup.existingLeadId ?? `file-${i}`} dup={dup} products={products} cohorts={cohorts} />
+              ))}
+            </div>
+          </div>
+        )}
+
         <div className="mt-5 flex justify-end gap-2">
           <button
             onClick={onClose}
@@ -222,6 +255,139 @@ export default function ImportModal({ onClose }: { onClose: () => void }) {
           </button>
         </div>
       </div>
+    </div>
+  );
+}
+
+/**
+ * One skipped-during-import row (see importLeads' `duplicates`). When it
+ * matched a real existing lead, offers the two things Anastasiia asked for
+ * instead of the row just vanishing (13 сен 2026): move that lead's stage,
+ * or attach the course the new submission was actually for. A row that only
+ * repeated an earlier line in the same file has no lead of its own to act
+ * on — the first occurrence already covers it — so it's shown as a plain
+ * note.
+ */
+function DuplicateRow({
+  dup,
+  products,
+  cohorts,
+}: {
+  dup: ImportDuplicate;
+  products: Tables<"products">[];
+  cohorts: Tables<"product_cohorts">[];
+}) {
+  const { locale, t } = useLocale();
+  const [stage, setStage] = useState<StageId | "">("");
+  const [stagePending, startStageTransition] = useTransition();
+  const [stageDone, setStageDone] = useState(false);
+
+  const [productId, setProductId] = useState("");
+  const [cohortDate, setCohortDate] = useState("");
+  const [productPending, startProductTransition] = useTransition();
+  const [productDone, setProductDone] = useState(false);
+
+  const productCohorts = useMemo(
+    () => cohorts.filter((c) => c.product_id === productId),
+    [cohorts, productId]
+  );
+
+  if (!dup.existingLeadId) {
+    return (
+      <div className="rounded-lg border border-border bg-surface-2 p-3 text-xs text-muted">
+        <span className="font-medium text-ink-2">{dup.incomingName}</span> — {t("duplicateRepeatedInFile")}
+      </div>
+    );
+  }
+
+  const existingLeadId = dup.existingLeadId;
+
+  return (
+    <div className="flex flex-col gap-2 rounded-lg border border-border bg-background p-3 text-xs">
+      <div>
+        <span className="font-medium text-foreground">{dup.incomingName}</span>{" "}
+        <span className="text-muted">
+          {t("duplicateAlreadyExists", { name: dup.existingName ?? "" })}
+          {dup.existingStage ? ` · ${stageLabel(dup.existingStage, locale)}` : ""}
+        </span>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-2">
+        <select
+          value={stage}
+          onChange={(e) => setStage(e.target.value as StageId)}
+          className="rounded-lg border border-border bg-background px-2 py-1.5 text-xs outline-none focus:border-accent focus:ring-1 focus:ring-accent"
+        >
+          <option value="">{t("duplicateChangeStage")}</option>
+          {STAGES.map((s) => (
+            <option key={s.id} value={s.id}>
+              {stageLabel(s.id, locale)}
+            </option>
+          ))}
+        </select>
+        <button
+          type="button"
+          disabled={!stage || stagePending}
+          onClick={() =>
+            startStageTransition(async () => {
+              await updateLeadStage(existingLeadId, stage as StageId);
+              setStageDone(true);
+            })
+          }
+          className="rounded-lg border border-border-strong px-3 py-1.5 text-xs font-medium text-ink-2 hover:bg-surface-2 disabled:opacity-50"
+        >
+          {stagePending ? "…" : t("btnApply")}
+        </button>
+        {stageDone && <span className="text-ink-2">✓ {t("appliedDone")}</span>}
+      </div>
+
+      {products.length > 0 && (
+        <div className="flex flex-wrap items-center gap-2">
+          <select
+            value={productId}
+            onChange={(e) => {
+              setProductId(e.target.value);
+              setCohortDate("");
+            }}
+            className="rounded-lg border border-border bg-background px-2 py-1.5 text-xs outline-none focus:border-accent focus:ring-1 focus:ring-accent"
+          >
+            <option value="">{t("duplicateAssignCourse")}</option>
+            {products.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.name}
+              </option>
+            ))}
+          </select>
+          {productCohorts.length > 0 && (
+            <select
+              value={cohortDate}
+              onChange={(e) => setCohortDate(e.target.value)}
+              className="rounded-lg border border-border bg-background px-2 py-1.5 text-xs outline-none focus:border-accent focus:ring-1 focus:ring-accent"
+            >
+              <option value="">{t("optionNotChosen")}</option>
+              {productCohorts.map((c) => (
+                <option key={c.id} value={c.start_date}>
+                  {c.start_date}
+                </option>
+              ))}
+            </select>
+          )}
+          <button
+            type="button"
+            disabled={!productId || productPending}
+            onClick={() =>
+              startProductTransition(async () => {
+                await assignLeadProduct(existingLeadId, productId, cohortDate || null);
+                setProductDone(true);
+              })
+            }
+            className="rounded-lg border border-border-strong px-3 py-1.5 text-xs font-medium text-ink-2 hover:bg-surface-2 disabled:opacity-50"
+          >
+            {productPending ? "…" : t("btnApply")}
+          </button>
+          {productDone && <span className="text-ink-2">✓ {t("appliedDone")}</span>}
+        </div>
+      )}
     </div>
   );
 }

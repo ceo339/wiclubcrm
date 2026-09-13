@@ -284,7 +284,9 @@ export default function LeadsBoard({
           onClose={() => setShowNewLead(false)}
         />
       )}
-      {showImport && <ImportModal onClose={() => setShowImport(false)} />}
+      {showImport && (
+        <ImportModal onClose={() => setShowImport(false)} products={products} cohorts={cohorts} />
+      )}
       {showDuplicates && <DuplicatesModal onClose={() => setShowDuplicates(false)} />}
       {selectedLead && (
         <LeadDetailModal
