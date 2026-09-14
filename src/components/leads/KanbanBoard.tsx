@@ -167,6 +167,13 @@ export default function KanbanBoard({
                         )}
                         {showPartner && lead.partner_name && <span className="truncate">{lead.partner_name}</span>}
                       </div>
+                      {/* "добавить под источником комментарии (если они
+                          есть)" (Anastasiia, 14 сен 2026) — just the latest
+                          one, truncated to one line; the full thread is
+                          still only in the card itself. */}
+                      {lead.latest_comment && (
+                        <div className="mt-1 truncate text-xs italic text-muted">{lead.latest_comment}</div>
+                      )}
                       {stage.id === "declined" && lead.decline_reason && (
                         <div className="mt-1 text-xs text-accent-strong">
                           {lead.decline_note || declineReasonLabel(lead.decline_reason, locale)}

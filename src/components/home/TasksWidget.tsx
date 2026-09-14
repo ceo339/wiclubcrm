@@ -43,7 +43,13 @@ export default function TasksWidget({
       {visible.length === 0 ? (
         <p className="mt-2 text-xs text-muted">{t("emptyNoOpenTasks")}</p>
       ) : (
-        <ul className="mt-3 flex flex-col gap-2">
+        // "задачи показывать первые 3, а дальше скролить нужно" (Anastasiia,
+        // 14 сен 2026) — this list used to grow with the page instead of
+        // scrolling its own body, same "long column pushes everything else
+        // down" problem the Leads kanban columns already solved (see round
+        // 1, п. 3) — same fix here: a capped height with its own scrollbar.
+        // ~3 rows tall at this row's padding/line-height.
+        <ul className="mt-3 flex max-h-[228px] flex-col gap-2 overflow-y-auto pr-1">
           {visible.map((task) => {
             const urgency = taskUrgency(task.dueDate, today);
             const isUrgent = urgency === "overdue" || urgency === "today";

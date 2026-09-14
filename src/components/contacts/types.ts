@@ -18,6 +18,7 @@ export type ContactEnrollment = {
   product_name: string | null;
   status: string;
   start_date: string | null;
+  price: number;
 };
 
 /** One row per Контакт — the canonical person record a lead (заявка) and a

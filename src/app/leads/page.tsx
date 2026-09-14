@@ -25,6 +25,27 @@ export default async function LeadsPage() {
     .select("*, partners(name), members(id)")
     .order("added_date", { ascending: false });
 
+  // "добавить под источником комментарии (если они есть)" (Anastasiia, 14
+  // сен 2026) — комментарии live in their own table (entity_type/entity_id,
+  // see getLeadDetail), not joined onto leads normally since a card only
+  // needs them once opened. The board itself needs just the *latest* one
+  // per lead so a partner can tell at a glance which cards already have a
+  // note without opening each one — one extra query for every lead id on
+  // this page, kept newest-first so the first row seen per id wins below.
+  const leadIds = (leads ?? []).map((l) => l.id);
+  const { data: latestComments } = leadIds.length
+    ? await supabase
+        .from("comments")
+        .select("entity_id, text, created_at")
+        .eq("entity_type", "lead")
+        .in("entity_id", leadIds)
+        .order("created_at", { ascending: false })
+    : { data: [] };
+  const latestCommentByLead = new Map<string, string>();
+  for (const c of latestComments ?? []) {
+    if (!latestCommentByLead.has(c.entity_id)) latestCommentByLead.set(c.entity_id, c.text);
+  }
+
   const { scope, fallback } = scopeForProfile(profile);
   const localeScope = localeScopeForProfile(profile);
 
@@ -65,6 +86,7 @@ export default async function LeadsPage() {
               ...l,
               partner_name: raw.partners?.name ?? null,
               member_id: memberRow?.id ?? null,
+              latest_comment: latestCommentByLead.get(l.id) ?? null,
             };
           })}
           isHq={profile.role === "hq"}

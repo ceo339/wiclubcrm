@@ -371,6 +371,7 @@ export async function updateEnrollment(enrollmentId: string, formData: FormData)
   revalidatePath("/members");
   revalidatePath("/attendance", "layout");
   revalidatePath("/payments");
+  revalidatePath("/contacts");
   revalidatePath("/");
   return { error: null };
 }

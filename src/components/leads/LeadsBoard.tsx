@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import { useSearchParams } from "next/navigation";
 import { HIGH_VALUE_THRESHOLD, SOURCES, sourceColor, sourceLabel } from "@/lib/leads";
@@ -67,6 +67,20 @@ export default function LeadsBoard({
   // landing on the board and making you search for it.
   const searchParams = useSearchParams();
   const [selectedLeadId, setSelectedLeadId] = useState<string | null>(() => searchParams.get("open"));
+  // "нажимаю на задачу — просто перебрасывает на вкладку лидов, карточка не
+  // открывается" (Anastasiia, 14 сен 2026) — the lazy useState above only
+  // ever ran once, on the component's first mount. Next's App Router
+  // doesn't remount LeadsBoard on a search-param-only navigation (e.g. this
+  // page was already open in the background, or the router kept the
+  // segment alive), so a second "Мои задачи" click landed on the board with
+  // nothing auto-opened. Re-reading the param on every change of
+  // searchParams closes that gap without disturbing a manual close
+  // (setSelectedLeadId(null) from the modal's own onClose doesn't touch
+  // the URL, so this effect won't reopen it on its own).
+  useEffect(() => {
+    const openId = searchParams.get("open");
+    if (openId) setSelectedLeadId(openId);
+  }, [searchParams]);
   const selectedLead = initialLeads.find((l) => l.id === selectedLeadId) ?? null;
 
   const now = useMemo(() => new Date(), []);

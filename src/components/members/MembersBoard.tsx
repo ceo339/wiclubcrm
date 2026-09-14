@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { STATUSES, statusLabel, statusPillClasses } from "@/lib/members";
 import Money from "@/components/currency/Money";
@@ -34,6 +34,13 @@ export default function MembersBoard({
   // page's "Мои задачи" widget.
   const searchParams = useSearchParams();
   const [selectedId, setSelectedId] = useState<string | null>(() => searchParams.get("open"));
+  // Same fix as LeadsBoard — see the comment there. Without this, a second
+  // "Мои задачи" click on this page (participant tasks) landed on the board
+  // with nothing auto-opened whenever the component wasn't remounted fresh.
+  useEffect(() => {
+    const openId = searchParams.get("open");
+    if (openId) setSelectedId(openId);
+  }, [searchParams]);
 
   const productOptions = useMemo(() => {
     const seen = new Map<string, string>();

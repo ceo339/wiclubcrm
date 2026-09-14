@@ -27,7 +27,7 @@ export default async function ContactsPage() {
   const { data: contacts, error } = await supabase
     .from("contacts")
     .select(
-      "*, partners(name), leads(id, name, stage, added_date, product_id, cohort_start_date, products(name)), members(id, member_since, member_enrollments(id, status, start_date, product_id, products(name)))"
+      "*, partners(name), leads(id, name, stage, added_date, product_id, cohort_start_date, products(name)), members(id, member_since, member_enrollments(id, status, start_date, price, product_id, products(name)))"
     )
     .order("created_at", { ascending: false });
 
@@ -70,6 +70,7 @@ export default async function ContactsPage() {
                   id: string;
                   status: string;
                   start_date: string | null;
+                  price: number;
                   product_id: string | null;
                   products?: { name: string } | null;
                 }[];
@@ -83,6 +84,7 @@ export default async function ContactsPage() {
                 product_name: e.products?.name ?? null,
                 status: e.status,
                 start_date: e.start_date,
+                price: e.price,
               }))
             );
             return {

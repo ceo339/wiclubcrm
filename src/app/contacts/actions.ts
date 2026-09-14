@@ -104,13 +104,17 @@ export async function updateContact(contactId: string, formData: FormData): Prom
 
   const phone = String(formData.get("phone") || "").trim() || null;
   const city = String(formData.get("city") || "").trim() || null;
+  // "в контактах нет информации о городе и стране" (Anastasiia, 14 сен
+  // 2026) — country was already a real column on contacts/leads/members
+  // (see countryDefaultCity, round 2) but this form never read or saved it.
+  const country = String(formData.get("country") || "").trim() || null;
   const email = String(formData.get("email") || "").trim() || null;
   const birthday = String(formData.get("birthday") || "").trim() || null;
 
   const supabase = await createClient();
   const { data: contact, error } = await supabase
     .from("contacts")
-    .update({ name, phone, city, email, birthday })
+    .update({ name, phone, city, country, email, birthday })
     .eq("id", contactId)
     .eq("partner_id", profile.partner_id)
     .select("id")
@@ -120,8 +124,8 @@ export async function updateContact(contactId: string, formData: FormData): Prom
   if (!contact) return { error: "errGeneric" };
 
   await Promise.all([
-    supabase.from("leads").update({ name, phone, email, city, birthday }).eq("contact_id", contactId),
-    supabase.from("members").update({ name, phone, email, city, birthday }).eq("contact_id", contactId),
+    supabase.from("leads").update({ name, phone, email, city, country, birthday }).eq("contact_id", contactId),
+    supabase.from("members").update({ name, phone, email, city, country, birthday }).eq("contact_id", contactId),
   ]);
 
   revalidatePath("/contacts");
