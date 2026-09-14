@@ -391,6 +391,7 @@ export type Database = {
           birthday: string | null
           city: string | null
           contact_id: string | null
+          country: string | null
           created_at: string
           email: string | null
           id: string
@@ -404,6 +405,7 @@ export type Database = {
           birthday?: string | null
           city?: string | null
           contact_id?: string | null
+          country?: string | null
           created_at?: string
           email?: string | null
           id?: string
@@ -417,6 +419,7 @@ export type Database = {
           birthday?: string | null
           city?: string | null
           contact_id?: string | null
+          country?: string | null
           created_at?: string
           email?: string | null
           id?: string
