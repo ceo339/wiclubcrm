@@ -26,6 +26,128 @@ function normalizeSource(raw: string | undefined | null): string | null {
   return match ?? trimmed.slice(0, 60);
 }
 
+type SupabaseServerClient = Awaited<ReturnType<typeof createClient>>;
+
+type ReserveLeadRow = {
+  id: string;
+  partner_id: string | null;
+  value: number | string | null;
+  product_id: string | null;
+  cohort_start_date: string | null;
+  name: string;
+  phone: string | null;
+  email: string | null;
+  city: string | null;
+  birthday: string | null;
+  country: string | null;
+  contact_id: string | null;
+};
+
+/**
+ * "Записалась" — reserve a pending course spot on Участницы (Anastasiia,
+ * 13 сен 2026): a lead that has a course/поток chosen and has signed up,
+ * but hasn't paid yet, should already show up there with status "Ожидание"
+ * (sAwaiting). Only fires when the lead actually has a product — nothing to
+ * reserve otherwise. Idempotent per member+product+поток: does nothing if
+ * this exact enrollment already exists (repeated stage toggling, a lead
+ * pulled back from "Оплата", or this helper being called a second time from
+ * assignLeadProductAndReserve).
+ *
+ * Extracted as its own function (round 11, 13 сен 2026) so it can also run
+ * when a course is assigned *after* the lead already sits on "Записалась" —
+ * see assignLeadProductAndReserve below — not only at the moment of the
+ * stage transition itself.
+ *
+ * Looks up the existing member by **contact**, not by this lead's own
+ * `lead_id` — a repeat заявка from someone who is already a member
+ * elsewhere has to reuse her existing card. Looking her up only by this
+ * particular lead's `lead_id` (the pre-round-11 behaviour) never found her,
+ * so this used to silently create a second, disconnected member/enrollment
+ * for the same person every time she made a new заявка — the direct cause
+ * of the duplicated Оплаты Anastasiia reported same day (13 сен 2026).
+ */
+async function reserveAwaitingEnrollment(supabase: SupabaseServerClient, lead: ReserveLeadRow): Promise<void> {
+  if (!lead.partner_id || !lead.product_id) return;
+
+  let contactId = lead.contact_id;
+  let reserveMemberId: string | null = null;
+  if (contactId) {
+    const { data } = await supabase.from("members").select("id").eq("contact_id", contactId).maybeSingle();
+    reserveMemberId = data?.id ?? null;
+  }
+  if (!reserveMemberId) {
+    const { data } = await supabase.from("members").select("id").eq("lead_id", lead.id).maybeSingle();
+    reserveMemberId = data?.id ?? null;
+  }
+
+  if (!reserveMemberId) {
+    if (!contactId) {
+      contactId = await findOrCreateContact(supabase, lead.partner_id, {
+        name: lead.name,
+        phone: lead.phone,
+        email: lead.email,
+        city: lead.city,
+        birthday: lead.birthday,
+        country: lead.country,
+      });
+      if (contactId) await supabase.from("leads").update({ contact_id: contactId }).eq("id", lead.id);
+    }
+    const { data: member } = await supabase
+      .from("members")
+      .insert({
+        partner_id: lead.partner_id,
+        lead_id: lead.id,
+        contact_id: contactId,
+        name: lead.name,
+        city: lead.city,
+        email: lead.email,
+        phone: lead.phone,
+        birthday: lead.birthday,
+        member_since: currentMonthYear(),
+      })
+      .select("id")
+      .single();
+    reserveMemberId = member?.id ?? null;
+  }
+
+  if (!reserveMemberId) return;
+
+  // Matched by product **and** поток (start_date) — matching by product
+  // alone would conflate a genuinely new signup for a later поток of the
+  // same course with an old, already-completed one and silently skip
+  // creating a new enrollment/payment for it (round 11, 13 сен 2026).
+  let existingQuery = supabase
+    .from("member_enrollments")
+    .select("id")
+    .eq("member_id", reserveMemberId)
+    .eq("product_id", lead.product_id);
+  existingQuery = lead.cohort_start_date
+    ? existingQuery.eq("start_date", lead.cohort_start_date)
+    : existingQuery.is("start_date", null);
+  const { data: existingEnrollment } = await existingQuery.maybeSingle();
+
+  if (!existingEnrollment) {
+    // "бери за изначальные значения сумму, которую я прописываю в карточке
+    // лида" (Anastasiia, 13 сен 2026) — a reserved seat can be genuinely
+    // free, so this takes exactly what's on the lead's own "Сумма" right
+    // now, 0 included, rather than guessing at the course's list price. If
+    // she fills the sum in later, updateLead below refreshes this same
+    // enrollment's price, and updateLeadStage's "Оплата" branch refreshes
+    // it again at the moment of payment — so nothing ever gets stuck at a
+    // wrong default.
+    await supabase.from("member_enrollments").insert({
+      partner_id: lead.partner_id,
+      member_id: reserveMemberId,
+      product_id: lead.product_id,
+      start_date: lead.cohort_start_date,
+      price: Number(lead.value) || 0,
+      status: "sAwaiting",
+      paid: false,
+      attended: [],
+    });
+  }
+}
+
 /**
  * Moves a lead to a new stage. RLS enforces that only the owning partner
  * can write to a lead — an HQ account (no partner_id) will simply be
@@ -56,92 +178,8 @@ export async function updateLeadStage(
 
   if (error) return { error: error.message };
 
-  // "Записалась" — reserve a pending course spot on Участницы (Anastasiia,
-  // 13 сен 2026): a lead that has a course/поток chosen and has signed up,
-  // but hasn't paid yet, should already show up there with status
-  // "Ожидание" (sAwaiting) — that's the whole point, so she can tell who's
-  // paid from who still needs chasing to pay, in one place instead of only
-  // in Лиды. Only fires when the lead actually has a product — nothing to
-  // reserve otherwise. Idempotent: does nothing if this member+course
-  // enrollment already exists (repeated stage toggling, or a lead pulled
-  // back from "Оплата").
   if (stage === "presented" && updated && updated.partner_id && updated.product_id) {
-    const { data: existingMemberForReserve } = await supabase
-      .from("members")
-      .select("id")
-      .eq("lead_id", leadId)
-      .maybeSingle();
-
-    let reserveMemberId = existingMemberForReserve?.id ?? null;
-    if (!reserveMemberId) {
-      let contactId = updated.contact_id;
-      if (!contactId) {
-        contactId = await findOrCreateContact(supabase, updated.partner_id, {
-          name: updated.name,
-          phone: updated.phone,
-          email: updated.email,
-          city: updated.city,
-          birthday: updated.birthday,
-          country: updated.country,
-        });
-        if (contactId) await supabase.from("leads").update({ contact_id: contactId }).eq("id", leadId);
-      }
-      const { data: member } = await supabase
-        .from("members")
-        .insert({
-          partner_id: updated.partner_id,
-          lead_id: leadId,
-          contact_id: contactId,
-          name: updated.name,
-          city: updated.city,
-          email: updated.email,
-          phone: updated.phone,
-          birthday: updated.birthday,
-          member_since: currentMonthYear(),
-        })
-        .select("id")
-        .single();
-      reserveMemberId = member?.id ?? null;
-    }
-
-    if (reserveMemberId) {
-      const { data: existingEnrollment } = await supabase
-        .from("member_enrollments")
-        .select("id")
-        .eq("member_id", reserveMemberId)
-        .eq("product_id", updated.product_id)
-        .maybeSingle();
-
-      if (!existingEnrollment) {
-        // "15 участниц с ценой 0" (Anastasiia, 13 сен 2026) — this used to
-        // reserve the seat at the lead's own `value`, which is very often
-        // still 0/unset at the exact moment a lead reaches "Записалась"
-        // (she fills in "Сумма" later, or not at all if the course card
-        // already has a list price). A reserved enrollment permanently
-        // stuck at price 0 can never generate a payment later, no matter
-        // what round 9 fixed — so fall back to the course's own list price
-        // instead of silently reserving for free.
-        let price = Number(updated.value) || 0;
-        if (!price) {
-          const { data: product } = await supabase
-            .from("products")
-            .select("price")
-            .eq("id", updated.product_id)
-            .maybeSingle();
-          price = Number(product?.price ?? 0);
-        }
-        await supabase.from("member_enrollments").insert({
-          partner_id: updated.partner_id,
-          member_id: reserveMemberId,
-          product_id: updated.product_id,
-          start_date: updated.cohort_start_date,
-          price,
-          status: "sAwaiting",
-          paid: false,
-          attended: [],
-        });
-      }
-    }
+    await reserveAwaitingEnrollment(supabase, updated);
   }
 
   // "Оплата в лидах создаёт запись в Платежах автоматически" (Anastasiia,
@@ -149,39 +187,63 @@ export async function updateLeadStage(
   // in the Платежи ledger without a separate manual step. Skipped when
   // there's no partner (hq can't write payments anyway).
   if (stage === "paid" && updated && updated.partner_id) {
-    const { data: existingMember } = await supabase
-      .from("members")
-      .select("id")
-      .eq("lead_id", leadId)
-      .maybeSingle();
+    // Found by contact, not by this lead's own lead_id (round 11, 13 сен
+    // 2026) — same fix as reserveAwaitingEnrollment above, for the same
+    // reason: a repeat заявка from someone who already has a member card
+    // elsewhere needs to reuse it, or this falls through to the orphaned
+    // lead_id-keyed payment below and creates a visible duplicate.
+    let existingMember: { id: string } | null = null;
+    if (updated.contact_id) {
+      const { data } = await supabase.from("members").select("id").eq("contact_id", updated.contact_id).maybeSingle();
+      existingMember = data;
+    }
+    if (!existingMember) {
+      const { data } = await supabase.from("members").select("id").eq("lead_id", leadId).maybeSingle();
+      existingMember = data;
+    }
 
     // A pending "Ожидание" enrollment created when this lead reached
-    // "Записалась" (see above) becomes "Оплачено" the moment the lead
-    // itself reaches "Оплата" — forward-only, only ever moves an
-    // sAwaiting row, so a status she already changed by hand (declined,
-    // refunded, completed…) is never touched by this.
+    // "Записалась" (see reserveAwaitingEnrollment above) becomes "Оплачено"
+    // the moment the lead itself reaches "Оплата" — forward-only, only ever
+    // moves an sAwaiting row, so a status she already changed by hand
+    // (declined, refunded, completed…) is never touched by this. Matched by
+    // product **and** поток (start_date), same reasoning as
+    // reserveAwaitingEnrollment — otherwise a fresh signup for a later
+    // поток of the same course could get merged into an old, already-paid
+    // enrollment instead of getting its own payment.
     let matchedEnrollment: { id: string; status: string; price: number; memberId: string } | null = null;
     if (existingMember && updated.product_id) {
-      const { data: pendingEnrollment } = await supabase
+      let pendingQuery = supabase
         .from("member_enrollments")
         .select("id, status, price")
         .eq("member_id", existingMember.id)
-        .eq("product_id", updated.product_id)
-        .maybeSingle();
+        .eq("product_id", updated.product_id);
+      pendingQuery = updated.cohort_start_date
+        ? pendingQuery.eq("start_date", updated.cohort_start_date)
+        : pendingQuery.is("start_date", null);
+      const { data: pendingEnrollment } = await pendingQuery.maybeSingle();
 
       if (pendingEnrollment) {
         let status = pendingEnrollment.status;
+        let price = Number(pendingEnrollment.price);
         if (status === "sAwaiting") {
+          // "бери за изначальные значения сумму, которую я прописываю в
+          // карточке лида" (Anastasiia, 13 сен 2026) — the seat was very
+          // possibly reserved at 0/whatever "Сумма" was back then; refresh
+          // it from whatever's on the lead RIGHT NOW, at the moment it's
+          // actually marked paid, rather than trusting a stale number or
+          // guessing at the course's list price.
+          price = Number(updated.value) || 0;
           await supabase
             .from("member_enrollments")
-            .update({ status: "sPaid", paid: true })
+            .update({ status: "sPaid", paid: true, price })
             .eq("id", pendingEnrollment.id);
           status = "sPaid";
         }
         matchedEnrollment = {
           id: pendingEnrollment.id,
           status,
-          price: Number(pendingEnrollment.price),
+          price,
           memberId: existingMember.id,
         };
       }
@@ -545,6 +607,62 @@ export async function assignLeadProduct(
 }
 
 /**
+ * "и снова запись и выбрать курс не работает" (Anastasiia, 13 сен 2026) — a
+ * lead that already sits on "Записалась" without a course (created before
+ * this round's fix, or because the course prompt was skipped at the time)
+ * had no way back in: reselecting the very same stage in the dropdown is a
+ * no-op, so updateLeadStage's course prompt never got a second chance to
+ * fire. This lets the lead card assign the missing course after the fact
+ * and immediately reserves the seat on Участницы — exactly as if she'd
+ * picked it at the moment of the original stage change.
+ */
+export async function assignLeadProductAndReserve(
+  leadId: string,
+  productId: string | null,
+  cohortStartDate: string | null
+): Promise<ActionResult> {
+  const profile = await getCurrentProfile();
+  if (!profile) return { error: "errNotAuthorized" };
+  if (!profile.partner_id) return { error: "errHqNoClubEdit" };
+
+  const supabase = await createClient();
+
+  let verifiedProductId = productId;
+  if (verifiedProductId) {
+    const { data: product } = await supabase
+      .from("products")
+      .select("id")
+      .eq("id", verifiedProductId)
+      .eq("partner_id", profile.partner_id)
+      .maybeSingle();
+    if (!product) verifiedProductId = null;
+  }
+
+  const { data: updated, error } = await supabase
+    .from("leads")
+    .update({
+      product_id: verifiedProductId,
+      cohort_start_date: verifiedProductId ? cohortStartDate : null,
+    })
+    .eq("id", leadId)
+    .select(
+      "id, partner_id, stage, value, product_id, cohort_start_date, name, phone, email, city, birthday, country, contact_id"
+    )
+    .maybeSingle();
+
+  if (error) return { error: error.message };
+
+  if (updated && updated.partner_id && updated.stage === "presented" && updated.product_id) {
+    await reserveAwaitingEnrollment(supabase, updated);
+  }
+
+  revalidatePath("/leads");
+  revalidatePath("/members");
+  revalidatePath("/");
+  return { error: null };
+}
+
+/**
  * Updates the editable contact/detail fields on a lead from the detail
  * card. Stage changes still happen via the kanban drag (updateLeadStage) —
  * this only covers the fields the prototype's lead drawer let you see and
@@ -790,30 +908,38 @@ export async function convertLeadToMember(
 
   const productId = choice ? choice.productId : lead.product_id;
   const cohortStartDate = choice ? choice.cohortStartDate : lead.cohort_start_date;
-  let price = (choice ? choice.price : lead.value) ?? 0;
+  const price = (choice ? choice.price : lead.value) ?? 0;
 
   // The chosen product id arrives from client state, so re-verify it
   // actually belongs to this partner before trusting it (same check as
-  // createLead's product_id). Same fallback as updateLeadStage's
-  // "Записалась" reserve (13 сен 2026): a lead can reach this button
-  // without ever having a "Сумма" set, so fall back to the course's own
-  // list price rather than converting for free.
+  // createLead's product_id). No price fallback to the course's own list
+  // price here — "бери за изначальные значения сумму, которую я прописываю
+  // в карточке лида или контакта или участницы... участница могла и
+  // бесплатно пойти" (Anastasiia, 13 сен 2026): 0 is a legitimate price
+  // (a free seat), not something to silently override.
   if (productId) {
     const { data: product } = await supabase
       .from("products")
-      .select("id, price")
+      .select("id")
       .eq("id", productId)
       .eq("partner_id", profile.partner_id)
       .maybeSingle();
     if (!product) return { error: "errCourseNotFound" };
-    if (!price) price = Number(product.price ?? 0);
   }
 
-  const { data: existingMember } = await supabase
-    .from("members")
-    .select("id")
-    .eq("lead_id", leadId)
-    .maybeSingle();
+  // Found by contact, not by this lead's own lead_id (round 11, 13 сен
+  // 2026) — same fix as updateLeadStage/reserveAwaitingEnrollment: a repeat
+  // заявка from someone who already has a member card elsewhere needs to
+  // reuse it instead of spawning a disconnected second one.
+  let existingMember: { id: string } | null = null;
+  if (lead.contact_id) {
+    const { data } = await supabase.from("members").select("id").eq("contact_id", lead.contact_id).maybeSingle();
+    existingMember = data;
+  }
+  if (!existingMember) {
+    const { data } = await supabase.from("members").select("id").eq("lead_id", leadId).maybeSingle();
+    existingMember = data;
+  }
 
   let memberId = existingMember?.id ?? null;
 
@@ -861,6 +987,13 @@ export async function convertLeadToMember(
     // that row to paid instead of inserting a second one for the same
     // course, which would otherwise leave one "Ожидание" and one
     // "Оплачено" enrollment sitting side by side for the same person.
+    // Deliberately matched by product only (not поток/start_date, unlike
+    // updateLeadStage's own matching) — this dialog lets her correct the
+    // поток right here as part of converting, and that correction should
+    // land on the same pending row, not spawn a second one next to it. A
+    // genuinely new occurrence of the same course for someone who already
+    // completed it before should go through a new заявка instead of this
+    // button, so it gets its own enrollment via reserveAwaitingEnrollment.
     const { data: existingEnrollment } = await supabase
       .from("member_enrollments")
       .select("id")

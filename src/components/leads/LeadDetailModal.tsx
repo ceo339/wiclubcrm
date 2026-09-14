@@ -5,6 +5,7 @@ import {
   addComment,
   addTask,
   assignLeadProduct,
+  assignLeadProductAndReserve,
   convertLeadToMember,
   deleteLead,
   getLeadDetail,
@@ -63,6 +64,7 @@ export default function LeadDetailModal({
   const [editing, setEditing] = useState(false);
   const [showDeclineModal, setShowDeclineModal] = useState(false);
   const [showCourseModal, setShowCourseModal] = useState(false);
+  const [showAssignCourseModal, setShowAssignCourseModal] = useState(false);
   const [stageError, setStageError] = useState<string | null>(null);
   const [, startStageTransition] = useTransition();
 
@@ -121,6 +123,19 @@ export default function LeadDetailModal({
         }
       }
       const res = await updateLeadStage(lead.id, "presented");
+      if (res.error) setStageError(res.error);
+    });
+  }
+
+  // "и снова запись и выбрать курс не работает" (Anastasiia, 13 сен 2026) —
+  // for a lead that's already sitting on "Записалась" with no course (the
+  // stage dropdown above is a no-op when the value isn't actually
+  // changing, so it can't re-open the prompt above). This assigns the
+  // course and reserves the seat in one step, without touching the stage.
+  function handleAssignCourseConfirm(productId: string | null, cohortDate: string | null) {
+    setShowAssignCourseModal(false);
+    startStageTransition(async () => {
+      const res = await assignLeadProductAndReserve(lead.id, productId, cohortDate);
       if (res.error) setStageError(res.error);
     });
   }
@@ -190,6 +205,7 @@ export default function LeadDetailModal({
             cohorts={cohorts}
             onEdit={() => setEditing(true)}
             onDeleted={onClose}
+            onPickCourse={() => setShowAssignCourseModal(true)}
           />
         )}
 
@@ -215,6 +231,16 @@ export default function LeadDetailModal({
           onConfirm={handleCourseConfirm}
         />
       )}
+
+      {showAssignCourseModal && (
+        <CourseModal
+          leadName={lead.name}
+          products={products}
+          cohorts={cohorts}
+          onCancel={() => setShowAssignCourseModal(false)}
+          onConfirm={handleAssignCourseConfirm}
+        />
+      )}
     </div>
   );
 }
@@ -227,6 +253,7 @@ function ReadView({
   cohorts,
   onEdit,
   onDeleted,
+  onPickCourse,
 }: {
   lead: Lead;
   canEdit: boolean;
@@ -235,6 +262,7 @@ function ReadView({
   cohorts: Cohort[];
   onEdit: () => void;
   onDeleted: () => void;
+  onPickCourse: () => void;
 }) {
   const { locale, t } = useLocale();
   const plan = lead.plan ? GENERIC_PLANS.find((p) => p.id === lead.plan) : null;
@@ -286,6 +314,25 @@ function ReadView({
           />
         )}
       </dl>
+
+      {/* "и снова запись и выбрать курс не работает" (Anastasiia, 13 сен
+          2026) — a lead already sitting on "Записалась" with no course had
+          no way back to the picker (the stage dropdown above is a no-op
+          when its value isn't actually changing). This callout is that way
+          back in, and it's also what makes the missing seat visible at a
+          glance instead of a silent no-op. */}
+      {lead.stage === "presented" && !lead.product_id && canEdit && (
+        <div className="mt-4 flex flex-wrap items-center gap-2 rounded-lg bg-warn-soft px-3 py-2 text-xs text-warn">
+          <span className="font-medium">{t("noticeNoCourseYet")}</span>
+          <button
+            type="button"
+            onClick={onPickCourse}
+            className="rounded-md border border-warn px-2 py-1 font-medium hover:bg-warn/10"
+          >
+            {t("btnPickCourse")}
+          </button>
+        </div>
+      )}
 
       {lead.note && (
         <div className="mt-4">
