@@ -30,8 +30,15 @@ type SupabaseServerClient = Awaited<ReturnType<typeof createClient>>;
  * matching row in `payments` — the table the Оплаты tab and every revenue/
  * royalty figure on the dashboard actually reads from. This mirrors the
  * same idempotent insert updateLeadStage already does when a lead reaches
- * "Оплата": skip when there's nothing to record (no price) or a payment for
- * this exact enrollment already exists, otherwise insert one dated today.
+ * "Оплата": skip when there's nothing to record (no price), otherwise
+ * insert one dated today.
+ *
+ * "Я исправила суммы оплат в участницах, но в оплатах они не подтянулись"
+ * (Anastasiia, 14 сен 2026) — a corrected enrollment price used to just sit
+ * there once a payment already existed for it (the old code returned early
+ * on any existing payment, insert-only, never update). Now an existing
+ * payment's amount is kept in sync with the enrollment's current price
+ * instead of being frozen at whatever it was the first time this ran.
  */
 export async function syncEnrollmentPayment(
   supabase: SupabaseServerClient,
@@ -50,10 +57,16 @@ export async function syncEnrollmentPayment(
 
   const { data: existingPayment } = await supabase
     .from("payments")
-    .select("id")
+    .select("id, amount")
     .eq("enrollment_id", enrollmentId)
     .maybeSingle();
-  if (existingPayment) return;
+
+  if (existingPayment) {
+    if (existingPayment.amount !== price) {
+      await supabase.from("payments").update({ amount: price }).eq("id", existingPayment.id);
+    }
+    return;
+  }
 
   await supabase.from("payments").insert({
     partner_id: partnerId,

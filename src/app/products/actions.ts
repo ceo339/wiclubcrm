@@ -43,6 +43,44 @@ export async function createProduct(formData: FormData): Promise<ActionResult> {
   return { error: null };
 }
 
+/**
+ * "нужно в курсах редактировать карточку курса, стоимость и название"
+ * (Anastasiia, 14 сен 2026) — the catalog only ever supported add/delete;
+ * fixing a typo in a course name or its price meant deleting and
+ * recreating it (losing its cohorts/history along the way). Same
+ * partner-scoped write rule as everywhere else.
+ */
+export async function updateProduct(id: string, formData: FormData): Promise<ActionResult> {
+  const profile = await getCurrentProfile();
+  if (!profile) return { error: "errNotAuthorized" };
+  if (!profile.partner_id) return { error: "errHqNoClubGeneric" };
+
+  const name = String(formData.get("name") || "").trim();
+  if (!name) return { error: "errEnterCourseName" };
+
+  const priceRaw = String(formData.get("price") || "0").replace(",", ".");
+  const price = Number.isFinite(Number(priceRaw)) ? Number(priceRaw) : 0;
+
+  const sessionsRaw = String(formData.get("sessions") || "").trim();
+  const sessionsNum = sessionsRaw ? Number(sessionsRaw) : null;
+  const sessions = sessionsNum !== null && Number.isFinite(sessionsNum) ? sessionsNum : null;
+
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("products")
+    .update({ name, price, sessions })
+    .eq("id", id)
+    .eq("partner_id", profile.partner_id);
+
+  if (error) return { error: error.message };
+
+  revalidatePath("/products");
+  revalidatePath("/leads");
+  revalidatePath("/members");
+  revalidatePath("/contacts");
+  return { error: null };
+}
+
 export async function deleteProduct(id: string): Promise<ActionResult> {
   const profile = await getCurrentProfile();
   if (!profile) return { error: "errNotAuthorized" };

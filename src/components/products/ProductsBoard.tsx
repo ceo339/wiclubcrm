@@ -1,9 +1,10 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { addCohort, deleteCohort, deleteProduct } from "@/app/products/actions";
+import { addCohort, deleteCohort, deleteProduct, updateProduct } from "@/app/products/actions";
 import { todayIso } from "@/lib/payments";
 import Money from "@/components/currency/Money";
+import MoneyAmountField from "@/components/currency/MoneyAmountField";
 import { useT } from "@/components/i18n/LocaleProvider";
 import type { Cohort, Product } from "./types";
 import NewProductModal from "./NewProductModal";
@@ -92,6 +93,9 @@ function ProductCard({
   const [pending, startTransition] = useTransition();
   const [newDate, setNewDate] = useState("");
   const [error, setError] = useState<string | null>(null);
+  // "нужно в курсах редактировать карточку курса, стоимость и название"
+  // (Anastasiia, 14 сен 2026)
+  const [editing, setEditing] = useState(false);
 
   const sortedCohorts = [...cohorts].sort((a, b) => a.start_date.localeCompare(b.start_date));
 
@@ -125,30 +129,42 @@ function ProductCard({
 
   return (
     <div className="flex flex-col rounded-xl border border-border bg-background p-4 shadow-card">
-      <div className="flex items-start justify-between gap-2">
-        <div>
-          <div className="font-medium text-foreground">{product.name}</div>
-          <div className="mt-0.5 text-xs text-muted">
-            <Money amountEur={product.price} />
-            {product.sessions ? ` · ${t("sessionsSuffix", { n: product.sessions })}` : ""}
-            {showPartner && product.partner_name ? ` · ${product.partner_name}` : ""}
+      {editing ? (
+        <EditProductForm product={product} onCancel={() => setEditing(false)} onSaved={() => setEditing(false)} />
+      ) : (
+        <div className="flex items-start justify-between gap-2">
+          <div>
+            <div className="font-medium text-foreground">{product.name}</div>
+            <div className="mt-0.5 text-xs text-muted">
+              <Money amountEur={product.price} />
+              {product.sessions ? ` · ${t("sessionsSuffix", { n: product.sessions })}` : ""}
+              {showPartner && product.partner_name ? ` · ${product.partner_name}` : ""}
+            </div>
+          </div>
+          <div className="flex shrink-0 flex-col items-end gap-1.5">
+            <span className="rounded-full bg-surface-2 px-2 py-0.5 text-xs text-muted">
+              {t("prodEnrolled", { n: leadsInPipeline })}
+            </span>
+            {canEdit && (
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setEditing(true)}
+                  className="text-xs text-muted hover:text-ink-2"
+                >
+                  {t("edit")}
+                </button>
+                <button
+                  onClick={handleDeleteProduct}
+                  disabled={pending}
+                  className="text-xs text-muted hover:text-accent-strong"
+                >
+                  {t("delete")}
+                </button>
+              </div>
+            )}
           </div>
         </div>
-        <div className="flex shrink-0 flex-col items-end gap-1.5">
-          <span className="rounded-full bg-surface-2 px-2 py-0.5 text-xs text-muted">
-            {t("prodEnrolled", { n: leadsInPipeline })}
-          </span>
-          {canEdit && (
-            <button
-              onClick={handleDeleteProduct}
-              disabled={pending}
-              className="text-xs text-muted hover:text-accent-strong"
-            >
-              {t("delete")}
-            </button>
-          )}
-        </div>
-      </div>
+      )}
 
       <div className="mt-3 flex flex-col gap-1.5">
         <span className="text-xs font-medium text-ink-2">{t("headingCohorts")}</span>
@@ -203,5 +219,74 @@ function ProductCard({
       )}
       {error && <p className="mt-1 text-xs text-accent-strong">{t(error)}</p>}
     </div>
+  );
+}
+
+function EditProductForm({
+  product,
+  onCancel,
+  onSaved,
+}: {
+  product: Product;
+  onCancel: () => void;
+  onSaved: () => void;
+}) {
+  const t = useT();
+  const [pending, startTransition] = useTransition();
+  const [error, setError] = useState<string | null>(null);
+
+  function handleSubmit(formData: FormData) {
+    setError(null);
+    startTransition(async () => {
+      const res = await updateProduct(product.id, formData);
+      if (res.error) setError(res.error);
+      else onSaved();
+    });
+  }
+
+  return (
+    <form action={handleSubmit} className="flex flex-col gap-3">
+      <label className="flex flex-col gap-1.5 text-sm">
+        <span className="font-medium text-ink-2">{t("fieldName")}</span>
+        <input
+          name="name"
+          defaultValue={product.name}
+          required
+          className="rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-accent focus:ring-1 focus:ring-accent"
+        />
+      </label>
+
+      <MoneyAmountField label={t("fieldPrice")} name="price" defaultAmountEur={product.price} required />
+
+      <label className="flex flex-col gap-1.5 text-sm">
+        <span className="font-medium text-ink-2">{t("fieldSessionsOptional")}</span>
+        <input
+          name="sessions"
+          type="number"
+          min="0"
+          defaultValue={product.sessions ?? ""}
+          className="rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-accent focus:ring-1 focus:ring-accent"
+        />
+      </label>
+
+      {error && <p className="text-xs text-accent-strong">{t(error)}</p>}
+
+      <div className="flex justify-end gap-2">
+        <button
+          type="button"
+          onClick={onCancel}
+          className="rounded-lg border border-border px-3 py-1.5 text-xs font-medium text-ink-2 hover:bg-surface-2"
+        >
+          {t("cancel")}
+        </button>
+        <button
+          type="submit"
+          disabled={pending}
+          className="rounded-lg bg-foreground px-3 py-1.5 text-xs font-medium text-background disabled:opacity-50"
+        >
+          {pending ? "..." : t("save")}
+        </button>
+      </div>
+    </form>
   );
 }
