@@ -895,6 +895,17 @@ export async function convertLeadToMember(
   const profile = await getCurrentProfile();
   if (!profile) return { error: "errNotAuthorized" };
   if (!profile.partner_id) return { error: "errHqNoClubGeneric" };
+  // Extracted into its own binding — TypeScript's narrowing of
+  // `profile.partner_id` from the guard above doesn't reach into the
+  // nested `async () => {...}` closure further down (the member_enrollments
+  // insert branch), so that closure still sees `string | null` there and
+  // fails the build (`error TS2322`, caught by Vercel 14 сен 2026, not by
+  // this session's own manual review — this project has never had a
+  // compiler available, see "Не проверено локальной сборкой" in the round
+  // doc). A local `const` capturing the already-narrowed value sidesteps
+  // that closure-narrowing gap everywhere in this function, not just at
+  // the one spot that happened to fail the build.
+  const partnerId = profile.partner_id;
 
   const supabase = await createClient();
   const { data: lead, error: fetchError } = await supabase
@@ -922,7 +933,7 @@ export async function convertLeadToMember(
       .from("products")
       .select("id")
       .eq("id", productId)
-      .eq("partner_id", profile.partner_id)
+      .eq("partner_id", partnerId)
       .maybeSingle();
     if (!product) return { error: "errCourseNotFound" };
   }
@@ -948,7 +959,7 @@ export async function convertLeadToMember(
   // round's migration that the backfill missed).
   let contactId = lead.contact_id;
   if (!contactId) {
-    contactId = await findOrCreateContact(supabase, profile.partner_id, {
+    contactId = await findOrCreateContact(supabase, partnerId, {
       name: lead.name,
       phone: lead.phone,
       email: lead.email,
@@ -963,7 +974,7 @@ export async function convertLeadToMember(
     const { data: member, error } = await supabase
       .from("members")
       .insert({
-        partner_id: profile.partner_id,
+        partner_id: partnerId,
         lead_id: lead.id,
         contact_id: contactId,
         name: lead.name,
@@ -1013,7 +1024,7 @@ export async function convertLeadToMember(
           const { data: inserted, error } = await supabase
             .from("member_enrollments")
             .insert({
-              partner_id: profile.partner_id,
+              partner_id: partnerId,
               member_id: memberId,
               product_id: productId,
               start_date: cohortStartDate,
@@ -1039,7 +1050,7 @@ export async function convertLeadToMember(
     // see syncEnrollmentPayment) — same idempotent-by-enrollment_id fix.
     if (enrollmentId) {
       await syncEnrollmentPayment(supabase, {
-        partnerId: profile.partner_id,
+        partnerId,
         memberId,
         enrollmentId,
         productId,
