@@ -434,6 +434,11 @@ export const DICT: Record<string, Entry> = {
   fieldLandingUrl: { ru: "Страница", bg: "Страница" },
   fieldNote: { ru: "Заметка", bg: "Бележка" },
   fieldValueEur: { ru: "Сумма (€)", bg: "Сума (€)" },
+  // Bare, no baked-in currency — MoneyAmountField appends the currently
+  // selected currency's own symbol (round 13, "вводить сумму в выбранной
+  // валюте, а не всегда в евро").
+  fieldAmount: { ru: "Сумма", bg: "Сума" },
+  fieldPrice: { ru: "Цена", bg: "Цена" },
   btnConvertToMember: { ru: "Сделать участницей", bg: "Направи участничка" },
   convertedToMember: { ru: "Добавлена в «Участницы»", bg: "Добавена в „Участнички“" },
   chooseCourseOnConvert: { ru: "Выберите курс (необязательно)", bg: "Изберете курс (незадължително)" },

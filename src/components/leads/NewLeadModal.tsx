@@ -4,7 +4,9 @@ import { useMemo, useRef, useState, useTransition } from "react";
 import { createLead, type CreateLeadResult } from "@/app/leads/actions";
 import { COUNTRIES, GENERIC_PLANS, SOURCES, countryDefaultCity, sourceLabel, stageLabel } from "@/lib/leads";
 import { statusLabel } from "@/lib/members";
+import { convertFromEur, convertToEur, currencySymbol, roundMoney } from "@/lib/currency";
 import Money from "@/components/currency/Money";
+import { useCurrency } from "@/components/currency/CurrencyProvider";
 import { useLocale } from "@/components/i18n/LocaleProvider";
 import type { Tables } from "@/types/database";
 
@@ -34,6 +36,7 @@ export default function NewLeadModal({
   onClose: () => void;
 }) {
   const { locale, t } = useLocale();
+  const { currency, rates } = useCurrency();
   const formRef = useRef<HTMLFormElement>(null);
   const [state, setState] = useState<CreateLeadResult>(initialState);
   // The lead is always created — a repeat inquiry from a contact already on
@@ -77,13 +80,18 @@ export default function NewLeadModal({
     if (city) setCity(city);
   }
 
+  // "если я выбрала валюту Лари, то я и ввожу везде сумму в этой валюте"
+  // (Anastasiia, 14 сен 2026) — the field below now displays/edits in
+  // whatever currency is on screen; `value` here holds that currency-native
+  // string (product/plan prices are stored in EUR, so they're converted on
+  // the way in), and the hidden input converts back to EUR on submit.
   function handleCourseChange(id: string) {
     setCourseId(id);
     setCohortDate("");
     if (id) {
       setInterested({ kind: "none" });
       const product = products.find((p) => p.id === id);
-      if (product) setValue(String(product.price));
+      if (product) setValue(String(roundMoney(convertFromEur(product.price, currency, rates))));
     } else {
       setValue("");
     }
@@ -100,11 +108,11 @@ export default function NewLeadModal({
     if (kind === "generic") {
       setInterested({ kind: "generic", id });
       const plan = GENERIC_PLANS.find((p) => p.id === id);
-      setValue(plan ? String(plan.price) : "");
+      setValue(plan ? String(roundMoney(convertFromEur(plan.price, currency, rates))) : "");
     } else if (kind === "product") {
       setInterested({ kind: "product", id });
       const product = products.find((p) => p.id === id);
-      setValue(product ? String(product.price) : "");
+      setValue(product ? String(roundMoney(convertFromEur(product.price, currency, rates))) : "");
     }
   }
 
@@ -247,13 +255,19 @@ export default function NewLeadModal({
           )}
 
           <label className="flex flex-col gap-1.5 text-sm">
-            <span className="font-medium text-ink-2">{t("fieldValueEur")}</span>
+            <span className="font-medium text-ink-2">
+              {t("fieldAmount")} ({currencySymbol(currency)})
+            </span>
             <input
-              name="value"
               type="number"
               value={value}
               onChange={(e) => setValue(e.target.value)}
               className="rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-accent focus:ring-1 focus:ring-accent"
+            />
+            <input
+              type="hidden"
+              name="value"
+              value={String(convertToEur(parseFloat(value) || 0, currency, rates))}
             />
           </label>
 

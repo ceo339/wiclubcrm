@@ -5,6 +5,7 @@ import { COUNTRIES, stageLabel } from "@/lib/leads";
 import { STATUSES, statusLabel } from "@/lib/members";
 import { updateEnrollment } from "@/app/members/actions";
 import Money from "@/components/currency/Money";
+import MoneyAmountField from "@/components/currency/MoneyAmountField";
 import { useLocale, useT } from "@/components/i18n/LocaleProvider";
 import { addContactComment, getContactDetail, updateContact, type ContactDetail } from "@/app/contacts/actions";
 import type { Contact, ContactEnrollment } from "./types";
@@ -329,7 +330,6 @@ function EditEnrollmentForm({
   const { locale, t } = useLocale();
   const [status, setStatus] = useState(enrollment.status);
   const [startDate, setStartDate] = useState(enrollment.start_date ?? "");
-  const [price, setPrice] = useState(String(enrollment.price ?? 0));
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
@@ -371,18 +371,7 @@ function EditEnrollmentForm({
             className="rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-accent focus:ring-1 focus:ring-accent"
           />
         </label>
-        <label className="flex flex-col gap-1.5 text-sm">
-          <span className="font-medium text-ink-2">{t("fieldValueEur")}</span>
-          <input
-            name="price"
-            type="number"
-            min="0"
-            step="0.01"
-            value={price}
-            onChange={(e) => setPrice(e.target.value)}
-            className="rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-accent focus:ring-1 focus:ring-accent"
-          />
-        </label>
+        <MoneyAmountField label={t("fieldAmount")} name="price" defaultAmountEur={enrollment.price ?? 0} />
       </div>
       {error && <p className="mt-2 text-xs text-accent-strong">{t(error)}</p>}
       <div className="mt-3 flex justify-end gap-2">

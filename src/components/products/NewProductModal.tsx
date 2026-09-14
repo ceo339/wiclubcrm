@@ -2,6 +2,7 @@
 
 import { useActionState } from "react";
 import { createProduct, type ActionResult } from "@/app/products/actions";
+import MoneyAmountField from "@/components/currency/MoneyAmountField";
 import { useT } from "@/components/i18n/LocaleProvider";
 
 const initialState: ActionResult = { error: null };
@@ -38,16 +39,7 @@ export default function NewProductModal({ onClose }: { onClose: () => void }) {
               className="rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-accent focus:ring-1 focus:ring-accent"
             />
           </label>
-          <label className="flex flex-col gap-1.5 text-sm">
-            <span className="font-medium text-ink-2">{t("fieldPriceEur")}</span>
-            <input
-              name="price"
-              type="number"
-              min="0"
-              step="0.01"
-              className="rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-accent focus:ring-1 focus:ring-accent"
-            />
-          </label>
+          <MoneyAmountField label={t("fieldPrice")} name="price" defaultAmountEur={0} />
           <label className="flex flex-col gap-1.5 text-sm">
             <span className="font-medium text-ink-2">{t("fieldSessionsOptional")}</span>
             <input

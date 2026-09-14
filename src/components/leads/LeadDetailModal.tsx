@@ -26,7 +26,10 @@ import {
   type StageId,
 } from "@/lib/leads";
 import { statusLabel } from "@/lib/members";
+import { convertFromEur, convertToEur, currencySymbol, roundMoney } from "@/lib/currency";
 import Money from "@/components/currency/Money";
+import MoneyAmountField from "@/components/currency/MoneyAmountField";
+import { useCurrency } from "@/components/currency/CurrencyProvider";
 import { useLocale, useT } from "@/components/i18n/LocaleProvider";
 import T from "@/components/i18n/T";
 import SendEmailButton from "@/components/email/SendEmailButton";
@@ -516,13 +519,20 @@ function ConvertToMemberButton({
   cohorts: Cohort[];
 }) {
   const t = useT();
+  const { currency, rates } = useCurrency();
   const [open, setOpen] = useState(false);
   const [pending, startTransition] = useTransition();
   const [done, setDone] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [productId, setProductId] = useState(lead.product_id ?? "");
   const [cohortDate, setCohortDate] = useState(lead.cohort_start_date ?? "");
-  const [price, setPrice] = useState(String(lead.value ?? 0));
+  // "если я выбрала валюту Лари, то я и ввожу везде сумму в этой валюте"
+  // (Anastasiia, 14 сен 2026) — this field isn't a native form (see confirm
+  // below, it calls convertLeadToMember directly), so it converts inline
+  // rather than through MoneyAmountField's hidden-input trick: displayed
+  // in whatever currency is on screen, converted back to EUR only at the
+  // moment of the actual server call.
+  const [price, setPrice] = useState(String(roundMoney(convertFromEur(lead.value ?? 0, currency, rates))));
 
   const alreadyMember = !!lead.member_id || done;
 
@@ -535,7 +545,7 @@ function ConvertToMemberButton({
     setProductId(id);
     setCohortDate("");
     const product = products.find((p) => p.id === id);
-    if (product) setPrice(String(product.price));
+    if (product) setPrice(String(roundMoney(convertFromEur(product.price, currency, rates))));
   }
 
   function confirm() {
@@ -543,7 +553,7 @@ function ConvertToMemberButton({
       const res = await convertLeadToMember(lead.id, {
         productId: productId || null,
         cohortStartDate: cohortDate || null,
-        price: Number(String(price).replace(",", ".")) || 0,
+        price: convertToEur(Number(String(price).replace(",", ".")) || 0, currency, rates),
       });
       if (res.error) setError(res.error);
       else {
@@ -621,7 +631,9 @@ function ConvertToMemberButton({
         </select>
       )}
       <label className="flex items-center gap-2 text-xs">
-        <span className="text-muted">{t("fieldValueEur")}</span>
+        <span className="text-muted">
+          {t("fieldAmount")} ({currencySymbol(currency)})
+        </span>
         <input
           type="number"
           value={price}
@@ -817,7 +829,7 @@ function EditForm({
       </label>
 
       <Field label={t("fieldBirthday")} name="birthday" type="date" defaultValue={lead.birthday ?? ""} />
-      <Field label={t("fieldValueEur")} name="value" type="number" defaultValue={String(lead.value ?? 0)} />
+      <MoneyAmountField label={t("fieldAmount")} name="value" defaultAmountEur={lead.value ?? 0} />
 
       <label className="flex flex-col gap-1.5 text-sm">
         <span className="font-medium text-ink-2">{t("fieldNote")}</span>

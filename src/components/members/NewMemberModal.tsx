@@ -3,7 +3,9 @@
 import { useActionState, useMemo, useState } from "react";
 import { createMember, type ActionResult } from "@/app/members/actions";
 import { currentMonthYear, STATUSES, statusLabel } from "@/lib/members";
+import { convertFromEur, convertToEur, currencySymbol, roundMoney } from "@/lib/currency";
 import Money from "@/components/currency/Money";
+import { useCurrency } from "@/components/currency/CurrencyProvider";
 import { useLocale } from "@/components/i18n/LocaleProvider";
 import type { Tables } from "@/types/database";
 
@@ -25,6 +27,7 @@ export default function NewMemberModal({
   onClose: () => void;
 }) {
   const { locale, t } = useLocale();
+  const { currency, rates } = useCurrency();
   const [state, formAction, pending] = useActionState(
     async (_prev: ActionResult, formData: FormData) => {
       const result = await createMember(formData);
@@ -43,11 +46,14 @@ export default function NewMemberModal({
     [cohorts, productId]
   );
 
+  // "если я выбрала валюту Лари, то я и ввожу везде сумму в этой валюте"
+  // (Anastasiia, 14 сен 2026) — see fieldAmount label below, which submits
+  // through a hidden EUR-converted input instead.
   function handleProductChange(id: string) {
     setProductId(id);
     setStartDate("");
     const product = products.find((p) => p.id === id);
-    if (product) setPrice(String(product.price));
+    if (product) setPrice(String(roundMoney(convertFromEur(product.price, currency, rates))));
   }
 
   return (
@@ -175,15 +181,21 @@ export default function NewMemberModal({
               </label>
 
               <label className="flex flex-col gap-1.5 text-sm">
-                <span className="font-medium text-ink-2">{t("fieldValueEur")}</span>
+                <span className="font-medium text-ink-2">
+                  {t("fieldAmount")} ({currencySymbol(currency)})
+                </span>
                 <input
-                  name="price"
                   type="number"
                   min="0"
                   step="0.01"
                   value={price}
                   onChange={(e) => setPrice(e.target.value)}
                   className="rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-accent focus:ring-1 focus:ring-accent"
+                />
+                <input
+                  type="hidden"
+                  name="price"
+                  value={String(convertToEur(parseFloat(price) || 0, currency, rates))}
                 />
               </label>
             </>

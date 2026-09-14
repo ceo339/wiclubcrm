@@ -16,7 +16,9 @@ import {
 } from "@/app/members/actions";
 import { attendedArray, STATUSES, statusLabel, statusPillClasses } from "@/lib/members";
 import { stageLabel } from "@/lib/leads";
+import { convertFromEur, convertToEur, currencySymbol, roundMoney } from "@/lib/currency";
 import Money from "@/components/currency/Money";
+import { useCurrency } from "@/components/currency/CurrencyProvider";
 import { useLocale, useT } from "@/components/i18n/LocaleProvider";
 import SendEmailButton from "@/components/email/SendEmailButton";
 import type { Tables } from "@/types/database";
@@ -466,7 +468,12 @@ function EnrollmentAttendance({
 /** Shared status/date/price fields for both adding and editing an
  * enrollment — price is always a plain number the partner types, on
  * purpose (see project doc): a discount is just whatever she enters here,
- * not a second fixed price stored on the course itself. */
+ * not a second fixed price stored on the course itself. `price` here is a
+ * currency-native display string (the parent already converted it from EUR
+ * — see EditEnrollmentForm/NewEnrollmentForm); a hidden input converts it
+ * back to EUR at submit time, same pattern as MoneyAmountField ("если я
+ * выбрала валюту Лари, то я и ввожу везде сумму в этой валюте", Anastasiia,
+ * 14 сен 2026). */
 function EnrollmentFieldset({
   status,
   startDate,
@@ -483,6 +490,7 @@ function EnrollmentFieldset({
   onPriceChange: (v: string) => void;
 }) {
   const { locale, t } = useLocale();
+  const { currency, rates } = useCurrency();
   return (
     <>
       <label className="flex flex-col gap-1.5 text-sm">
@@ -511,15 +519,21 @@ function EnrollmentFieldset({
         />
       </label>
       <label className="flex flex-col gap-1.5 text-sm">
-        <span className="font-medium text-ink-2">{t("fieldValueEur")}</span>
+        <span className="font-medium text-ink-2">
+          {t("fieldAmount")} ({currencySymbol(currency)})
+        </span>
         <input
-          name="price"
           type="number"
           min="0"
           step="0.01"
           value={price}
           onChange={(e) => onPriceChange(e.target.value)}
           className="rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-accent focus:ring-1 focus:ring-accent"
+        />
+        <input
+          type="hidden"
+          name="price"
+          value={String(convertToEur(parseFloat(price) || 0, currency, rates))}
         />
       </label>
     </>
@@ -536,9 +550,10 @@ function EditEnrollmentForm({
   onSaved: () => void;
 }) {
   const t = useT();
+  const { currency, rates } = useCurrency();
   const [status, setStatus] = useState(enrollment.status);
   const [startDate, setStartDate] = useState(enrollment.start_date ?? "");
-  const [price, setPrice] = useState(String(enrollment.price));
+  const [price, setPrice] = useState(String(roundMoney(convertFromEur(enrollment.price, currency, rates))));
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
@@ -601,6 +616,7 @@ function NewEnrollmentForm({
   onSaved: () => void;
 }) {
   const t = useT();
+  const { currency, rates } = useCurrency();
   const [productId, setProductId] = useState("");
   const [status, setStatus] = useState("sAwaiting");
   const [startDate, setStartDate] = useState("");
@@ -620,7 +636,7 @@ function NewEnrollmentForm({
     setProductId(id);
     setStartDate("");
     const product = products.find((p) => p.id === id);
-    if (product) setPrice(String(product.price));
+    if (product) setPrice(String(roundMoney(convertFromEur(product.price, currency, rates))));
   }
 
   function handleSubmit(formData: FormData) {

@@ -88,6 +88,31 @@ export function convertFromEur(
   return amountEur * rates[target];
 }
 
+/**
+ * The inverse of convertFromEur — target currency -> EUR, used at the
+ * moment a money field is submitted (see MoneyAmountField). "если я
+ * выбрала валюту Лари, то я и ввожу везде сумму в этой валюте" (Anastasiia,
+ * 14 сен 2026): every amount is still stored in EUR (that's the one number
+ * every report/rollup already assumes), this just moves the conversion
+ * from "always assume EUR was typed" to "convert whatever was typed, in
+ * whatever currency is on screen, back to EUR before saving".
+ */
+export function convertToEur(
+  amount: number,
+  source: CurrencyCode,
+  rates: Record<string, number> | null
+): number {
+  if (source === BASE_CURRENCY || !rates || !rates[source]) return amount;
+  return amount / rates[source];
+}
+
+/** Two-decimal rounding shared by every money-entry field's currency
+ * conversion (MoneyAmountField, ConvertToMemberButton) — kept here so both
+ * round the same way rather than each inventing its own. */
+export function roundMoney(n: number): number {
+  return Math.round(n * 100) / 100;
+}
+
 export function formatMoney(
   amountEur: number,
   target: CurrencyCode,

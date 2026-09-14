@@ -4,6 +4,7 @@ import { useActionState, useState } from "react";
 import { updatePayment, deletePayment, type ActionResult } from "@/app/payments/actions";
 import { STATUSES, statusLabel } from "@/lib/payments";
 import Money from "@/components/currency/Money";
+import MoneyAmountField from "@/components/currency/MoneyAmountField";
 import { useLocale } from "@/components/i18n/LocaleProvider";
 import type { Payment } from "./types";
 
@@ -51,18 +52,12 @@ export default function EditPaymentModal({
         {canEdit ? (
           <form action={formAction} className="mt-4">
             <div className="flex flex-col gap-3">
-              <label className="flex flex-col gap-1.5 text-sm">
-                <span className="font-medium text-ink-2">{t("fieldValueEur")}</span>
-                <input
-                  name="amount"
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  defaultValue={payment.amount}
-                  required
-                  className="rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-accent focus:ring-1 focus:ring-accent"
-                />
-              </label>
+              <MoneyAmountField
+                label={t("fieldAmount")}
+                name="amount"
+                defaultAmountEur={payment.amount}
+                required
+              />
 
               <label className="flex flex-col gap-1.5 text-sm">
                 <span className="font-medium text-ink-2">{t("colStatus")}</span>

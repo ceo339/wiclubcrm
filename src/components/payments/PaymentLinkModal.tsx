@@ -2,6 +2,8 @@
 
 import { useActionState, useState } from "react";
 import { createPaymentLink, type PaymentLinkResult } from "@/app/payments/actions";
+import { convertFromEur, convertToEur, currencySymbol, roundMoney } from "@/lib/currency";
+import { useCurrency } from "@/components/currency/CurrencyProvider";
 import { useT } from "@/components/i18n/LocaleProvider";
 import type { MemberOption } from "./types";
 
@@ -15,6 +17,7 @@ export default function PaymentLinkModal({
   onClose: () => void;
 }) {
   const t = useT();
+  const { currency, rates } = useCurrency();
   const [targetKey, setTargetKey] = useState("");
   const [amount, setAmount] = useState("");
   const [link, setLink] = useState<string | null>(null);
@@ -26,10 +29,14 @@ export default function PaymentLinkModal({
     return result;
   }, initialState);
 
+  // "если я выбрала валюту Лари, то я и ввожу везде сумму в этой валюте"
+  // (Anastasiia, 14 сен 2026) — see NewPaymentModal for the same pattern.
   function handleTargetChange(key: string) {
     setTargetKey(key);
     const target = members.find((m) => m.key === key);
-    if (target?.defaultAmount != null) setAmount(String(target.defaultAmount));
+    if (target?.defaultAmount != null) {
+      setAmount(String(roundMoney(convertFromEur(target.defaultAmount, currency, rates))));
+    }
   }
 
   async function handleCopy() {
@@ -95,9 +102,10 @@ export default function PaymentLinkModal({
               </label>
 
               <label className="flex flex-col gap-1.5 text-sm">
-                <span className="font-medium text-ink-2">{t("fieldValueEur")}</span>
+                <span className="font-medium text-ink-2">
+                  {t("fieldAmount")} ({currencySymbol(currency)})
+                </span>
                 <input
-                  name="amount"
                   type="number"
                   min="0"
                   step="0.01"
@@ -105,6 +113,11 @@ export default function PaymentLinkModal({
                   onChange={(e) => setAmount(e.target.value)}
                   required
                   className="rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-accent focus:ring-1 focus:ring-accent"
+                />
+                <input
+                  type="hidden"
+                  name="amount"
+                  value={String(convertToEur(parseFloat(amount) || 0, currency, rates))}
                 />
               </label>
             </div>
