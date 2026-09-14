@@ -36,7 +36,7 @@ export default function NewPaymentModal({
     setTargetKey(key);
     const target = members.find((m) => m.key === key);
     if (target?.defaultAmount != null) {
-      setAmount(String(roundMoney(convertFromEur(target.defaultAmount, currency, rates))));
+      setAmount(String(roundMoney(convertFromEur(target.defaultAmount, currency, rates), currency)));
     }
   }
 

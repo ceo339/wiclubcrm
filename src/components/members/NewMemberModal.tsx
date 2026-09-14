@@ -53,7 +53,7 @@ export default function NewMemberModal({
     setProductId(id);
     setStartDate("");
     const product = products.find((p) => p.id === id);
-    if (product) setPrice(String(roundMoney(convertFromEur(product.price, currency, rates))));
+    if (product) setPrice(String(roundMoney(convertFromEur(product.price, currency, rates), currency)));
   }
 
   return (

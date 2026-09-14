@@ -106,10 +106,22 @@ export function convertToEur(
   return amount / rates[source];
 }
 
-/** Two-decimal rounding shared by every money-entry field's currency
- * conversion (MoneyAmountField, ConvertToMemberButton) — kept here so both
- * round the same way rather than each inventing its own. */
-export function roundMoney(n: number): number {
+/** Rounding shared by every money-entry field's currency conversion
+ * (MoneyAmountField, ConvertToMemberButton, and the various "prefill this
+ * amount from the product/enrollment price" spots) — kept here so all of
+ * them round the same way rather than each inventing its own.
+ *
+ * "цена стоит 35 лари в карточку курса, почему тут пишется 34.99" (Anastasiia,
+ * 14 сен 2026) — a price entered as a round number of lari gets stored as
+ * EUR cents, and converting that back through a slightly different day's
+ * rate lands a few tetri off (34.99, not 35). Nobody prices a course in
+ * kopecks/tetri, so a suggested lari amount rounds to a whole number
+ * instead of carrying that currency-conversion noise into the field —
+ * still just a starting point, she can always type over it. Currency is
+ * optional only so `roundMoney` keeps working the couple of places that
+ * round a EUR figure directly, with no target currency in play. */
+export function roundMoney(n: number, currency?: CurrencyCode): number {
+  if (currency === "GEL") return Math.round(n);
   return Math.round(n * 100) / 100;
 }
 

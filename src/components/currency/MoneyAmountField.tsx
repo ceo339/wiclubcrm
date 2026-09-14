@@ -32,14 +32,16 @@ export default function MoneyAmountField({
   required?: boolean;
 }) {
   const { currency, rates } = useCurrency();
-  const [display, setDisplay] = useState(() => String(roundMoney(convertFromEur(defaultAmountEur, currency, rates))));
+  const [display, setDisplay] = useState(() =>
+    String(roundMoney(convertFromEur(defaultAmountEur, currency, rates), currency))
+  );
   // Once the person starts typing, live rate updates (or a currency switch
   // mid-edit) must never clobber what they're mid-way through entering.
   const touched = useRef(false);
 
   useEffect(() => {
     if (touched.current) return;
-    setDisplay(String(roundMoney(convertFromEur(defaultAmountEur, currency, rates))));
+    setDisplay(String(roundMoney(convertFromEur(defaultAmountEur, currency, rates), currency)));
     // Only re-sync when the conversion inputs change, not on every keystroke.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rates, currency, defaultAmountEur]);

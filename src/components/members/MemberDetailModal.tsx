@@ -553,7 +553,7 @@ function EditEnrollmentForm({
   const { currency, rates } = useCurrency();
   const [status, setStatus] = useState(enrollment.status);
   const [startDate, setStartDate] = useState(enrollment.start_date ?? "");
-  const [price, setPrice] = useState(String(roundMoney(convertFromEur(enrollment.price, currency, rates))));
+  const [price, setPrice] = useState(String(roundMoney(convertFromEur(enrollment.price, currency, rates), currency)));
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
@@ -636,7 +636,7 @@ function NewEnrollmentForm({
     setProductId(id);
     setStartDate("");
     const product = products.find((p) => p.id === id);
-    if (product) setPrice(String(roundMoney(convertFromEur(product.price, currency, rates))));
+    if (product) setPrice(String(roundMoney(convertFromEur(product.price, currency, rates), currency)));
   }
 
   function handleSubmit(formData: FormData) {

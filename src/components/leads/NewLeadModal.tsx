@@ -91,7 +91,7 @@ export default function NewLeadModal({
     if (id) {
       setInterested({ kind: "none" });
       const product = products.find((p) => p.id === id);
-      if (product) setValue(String(roundMoney(convertFromEur(product.price, currency, rates))));
+      if (product) setValue(String(roundMoney(convertFromEur(product.price, currency, rates), currency)));
     } else {
       setValue("");
     }
@@ -108,11 +108,11 @@ export default function NewLeadModal({
     if (kind === "generic") {
       setInterested({ kind: "generic", id });
       const plan = GENERIC_PLANS.find((p) => p.id === id);
-      setValue(plan ? String(roundMoney(convertFromEur(plan.price, currency, rates))) : "");
+      setValue(plan ? String(roundMoney(convertFromEur(plan.price, currency, rates), currency)) : "");
     } else if (kind === "product") {
       setInterested({ kind: "product", id });
       const product = products.find((p) => p.id === id);
-      setValue(product ? String(roundMoney(convertFromEur(product.price, currency, rates))) : "");
+      setValue(product ? String(roundMoney(convertFromEur(product.price, currency, rates), currency)) : "");
     }
   }
 

@@ -532,7 +532,7 @@ function ConvertToMemberButton({
   // rather than through MoneyAmountField's hidden-input trick: displayed
   // in whatever currency is on screen, converted back to EUR only at the
   // moment of the actual server call.
-  const [price, setPrice] = useState(String(roundMoney(convertFromEur(lead.value ?? 0, currency, rates))));
+  const [price, setPrice] = useState(String(roundMoney(convertFromEur(lead.value ?? 0, currency, rates), currency)));
 
   const alreadyMember = !!lead.member_id || done;
 
@@ -545,7 +545,7 @@ function ConvertToMemberButton({
     setProductId(id);
     setCohortDate("");
     const product = products.find((p) => p.id === id);
-    if (product) setPrice(String(roundMoney(convertFromEur(product.price, currency, rates))));
+    if (product) setPrice(String(roundMoney(convertFromEur(product.price, currency, rates), currency)));
   }
 
   function confirm() {
