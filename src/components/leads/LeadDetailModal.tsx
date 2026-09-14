@@ -305,6 +305,31 @@ function ReadView({
           />
         )}
         {lead.cohort_start_date && <Row label={t("fieldCohortStart")} value={lead.cohort_start_date} />}
+        {/* "campaign_name мне нужны еще фильтры по этому параметру, чтоб
+            отслеживать динамику лида по каждой из рекламной компании"
+            (Anastasiia, 13 сен 2026) — utm_campaign/utm_content/utm_term/
+            landing_url have been in the DB since round 7 but were never
+            shown anywhere; a lead coming from the Facebook/Instagram Lead
+            Ads → Google Sheets bridge (round 11) is the first real source
+            that fills them in, so they need to be visible on the card. */}
+        {lead.utm_campaign && <Row label={t("fieldUtmCampaign")} value={lead.utm_campaign} />}
+        {lead.utm_content && <Row label={t("fieldUtmContent")} value={lead.utm_content} />}
+        {lead.utm_term && <Row label={t("fieldUtmTerm")} value={lead.utm_term} />}
+        {lead.landing_url && (
+          <>
+            <dt className="text-muted">{t("fieldLandingUrl")}</dt>
+            <dd className="truncate text-ink-2">
+              <a
+                href={lead.landing_url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-accent-strong hover:underline"
+              >
+                {lead.landing_url}
+              </a>
+            </dd>
+          </>
+        )}
         {lead.stage === "declined" && lead.decline_reason && (
           <Row
             label={t("declineModalTitle")}

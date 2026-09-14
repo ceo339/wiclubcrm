@@ -122,6 +122,12 @@ export async function POST(request: Request, { params }: { params: Promise<{ key
   const utmContent = pickExact(fields, "utm_content");
   const utmTerm = pickExact(fields, "utm_term");
   const landingUrl = pickExact(fields, "page_url") ?? pickExact(fields, "url") ?? request.headers.get("referer");
+  // New in round 11 — an optional free-text note (e.g. the Facebook/
+  // Instagram Lead Ads bridge sends the form's own custom-question answers
+  // here, since a native Lead Ad form has no "message" field of its own).
+  // Backward compatible: absent for every existing landing page, which
+  // never sent this field.
+  const note = pickExact(fields, "note");
 
   // Same email-first-then-phone matching rule as createLead/findOrCreateContact
   // (see lib/leads.ts's duplicateKey) — scoped to this one club, so a
@@ -162,6 +168,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ key
     utm_content: utmContent,
     utm_term: utmTerm,
     landing_url: landingUrl,
+    note,
   });
 
   if (error) return json({ ok: false, error: error.message }, 500);

@@ -57,6 +57,7 @@ export default function LeadsBoard({
   const [view, setView] = useState<"board" | "list">("board");
   const [search, setSearch] = useState("");
   const [source, setSource] = useState<string>("all");
+  const [campaign, setCampaign] = useState<string>("all");
   const [smartFilters, setSmartFilters] = useState<Set<SmartFilter>>(new Set());
   const [showNewLead, setShowNewLead] = useState(false);
   const [showImport, setShowImport] = useState(false);
@@ -111,6 +112,16 @@ export default function LeadsBoard({
     sourceRows.push({ label: t("sourceUnknown"), color: sourceColor(null), count: unspecifiedSourceCount });
   }
 
+  // "campaign_name мне нужны еще фильтры по этому параметру, чтоб
+  // отслеживать динамику лида по каждой из рекламной компании" (Anastasiia,
+  // 13 сен 2026) — utm_campaign starts getting filled in once leads arrive
+  // through the Facebook/Instagram Lead Ads → Google Sheets bridge (round
+  // 11). Built from whatever campaigns are actually present, same pattern
+  // as customSourceValues above — no campaigns yet means no dropdown.
+  const campaignValues = Array.from(
+    new Set(initialLeads.map((l) => l.utm_campaign).filter((c): c is string => !!c))
+  ).sort();
+
   function toggleSmart(id: SmartFilter) {
     setSmartFilters((prev) => {
       const next = new Set(prev);
@@ -132,6 +143,7 @@ export default function LeadsBoard({
     const q = search.trim().toLowerCase();
     return initialLeads.filter((lead) => {
       if (source !== "all" && lead.source !== source) return false;
+      if (campaign !== "all" && lead.utm_campaign !== campaign) return false;
       if (
         smartFilters.has("stuck") &&
         !(lead.stage !== "paid" && lead.stage !== "declined" && daysSince(lead.updated_at, now) > STALE_LEAD_DAYS)
@@ -146,7 +158,7 @@ export default function LeadsBoard({
         (lead.email ?? "").toLowerCase().includes(q)
       );
     });
-  }, [initialLeads, search, source, smartFilters, now]);
+  }, [initialLeads, search, source, campaign, smartFilters, now]);
 
   return (
     <div className="flex flex-1 flex-col gap-4">
@@ -218,6 +230,21 @@ export default function LeadsBoard({
             </optgroup>
           )}
         </select>
+
+        {campaignValues.length > 0 && (
+          <select
+            value={campaign}
+            onChange={(e) => setCampaign(e.target.value)}
+            className="rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-accent focus:ring-1 focus:ring-accent"
+          >
+            <option value="all">{t("allCampaigns")}</option>
+            {campaignValues.map((c) => (
+              <option key={c} value={c}>
+                {c}
+              </option>
+            ))}
+          </select>
+        )}
 
         <div className="ml-auto flex items-center gap-2">
           <div className="flex rounded-lg bg-surface-2 p-1 text-sm">

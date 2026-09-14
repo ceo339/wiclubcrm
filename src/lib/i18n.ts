@@ -343,6 +343,7 @@ export const DICT: Record<string, Entry> = {
   // ---- leads board ----
   searchLeadsPlaceholder: { ru: "Поиск по имени, телефону, email…", bg: "Търсене по име, телефон, имейл…" },
   allSources: { ru: "Все источники", bg: "Всички източници" },
+  allCampaigns: { ru: "Все кампании", bg: "Всички кампании" },
   otherSourcesGroupLabel: { ru: "Другие источники (из импорта)", bg: "Други източници (от импорт)" },
   viewKanban: { ru: "Канбан", bg: "Канбан" },
   viewList: { ru: "Список", bg: "Списък" },
@@ -427,6 +428,10 @@ export const DICT: Record<string, Entry> = {
   fieldBirthday: { ru: "Дата рождения", bg: "Дата на раждане" },
   fieldInterestedIn: { ru: "Интересует", bg: "Интересува се от" },
   fieldCohortStart: { ru: "Начало потока", bg: "Начало на потока" },
+  fieldUtmCampaign: { ru: "Рекламная кампания", bg: "Рекламна кампания" },
+  fieldUtmContent: { ru: "Объявление", bg: "Обява" },
+  fieldUtmTerm: { ru: "Форма заявки", bg: "Форма за заявка" },
+  fieldLandingUrl: { ru: "Страница", bg: "Страница" },
   fieldNote: { ru: "Заметка", bg: "Бележка" },
   fieldValueEur: { ru: "Сумма (€)", bg: "Сума (€)" },
   btnConvertToMember: { ru: "Сделать участницей", bg: "Направи участничка" },
