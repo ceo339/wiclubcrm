@@ -30,6 +30,18 @@ export default function ContactDetailModal({
   const t = useT();
   const [detail, setDetail] = useState<ContactDetail | null>(null);
   const [editing, setEditing] = useState(false);
+  // "не работает оплата и изменения курсов в контактах" (Anastasiia, 14 сен
+  // 2026) — updateEnrollment was saving correctly (syncEnrollmentPayment
+  // included), but this card renders straight off the `contact` prop (fed
+  // once from the page's initial data), so a save inside this modal never
+  // showed up here — she had to reload the whole page to see it. Local
+  // state patched from the save response fixes that without a round trip,
+  // matching what MemberDetailModal already does for its own enrollments.
+  const [enrollments, setEnrollments] = useState(contact.enrollments);
+
+  function handleEnrollmentSaved(updated: { id: string; status: string; start_date: string | null; price: number }) {
+    setEnrollments((prev) => prev.map((e) => (e.id === updated.id ? { ...e, ...updated } : e)));
+  }
 
   useEffect(() => {
     let cancelled = false;
@@ -87,10 +99,10 @@ export default function ContactDetailModal({
 
         <div className="mt-5">
           <span className="text-xs font-medium text-ink-2">{t("navCourses")}</span>
-          {contact.enrollments.length === 0 ? (
+          {enrollments.length === 0 ? (
             <p className="mt-2 text-xs text-muted">{t("emptyNoCoursesForMember")}</p>
           ) : (
-            <ContactEnrollmentsList contact={contact} canEdit={canEdit} />
+            <ContactEnrollmentsList enrollments={enrollments} canEdit={canEdit} onSaved={handleEnrollmentSaved} />
           )}
         </div>
 
@@ -283,15 +295,31 @@ function ContactLeadsList({ contact }: { contact: Contact }) {
  * source of truth for what an edit does (idempotent payment sync included),
  * just a lighter inline form here instead of that modal's full layout.
  */
-function ContactEnrollmentsList({ contact, canEdit }: { contact: Contact; canEdit: boolean }) {
+function ContactEnrollmentsList({
+  enrollments,
+  canEdit,
+  onSaved,
+}: {
+  enrollments: ContactEnrollment[];
+  canEdit: boolean;
+  onSaved: (updated: { id: string; status: string; start_date: string | null; price: number }) => void;
+}) {
   const { locale, t } = useLocale();
   const [editingId, setEditingId] = useState<string | null>(null);
 
   return (
     <div className="mt-2 flex flex-col gap-2">
-      {contact.enrollments.map((e) =>
+      {enrollments.map((e) =>
         editingId === e.id ? (
-          <EditEnrollmentForm key={e.id} enrollment={e} onCancel={() => setEditingId(null)} onSaved={() => setEditingId(null)} />
+          <EditEnrollmentForm
+            key={e.id}
+            enrollment={e}
+            onCancel={() => setEditingId(null)}
+            onSaved={(updated) => {
+              setEditingId(null);
+              onSaved(updated);
+            }}
+          />
         ) : (
           <div key={e.id} className="rounded-lg border border-border p-3 text-sm">
             <div className="flex items-center justify-between gap-2">
@@ -325,7 +353,7 @@ function EditEnrollmentForm({
 }: {
   enrollment: ContactEnrollment;
   onCancel: () => void;
-  onSaved: () => void;
+  onSaved: (updated: { id: string; status: string; start_date: string | null; price: number }) => void;
 }) {
   const { locale, t } = useLocale();
   const [status, setStatus] = useState(enrollment.status);
@@ -338,7 +366,14 @@ function EditEnrollmentForm({
     startTransition(async () => {
       const res = await updateEnrollment(enrollment.id, formData);
       if (res.error) setError(res.error);
-      else onSaved();
+      else {
+        onSaved({
+          id: enrollment.id,
+          status: String(formData.get("status") || enrollment.status),
+          start_date: String(formData.get("start_date") || "").trim() || null,
+          price: Number(formData.get("price")) || 0,
+        });
+      }
     });
   }
 
