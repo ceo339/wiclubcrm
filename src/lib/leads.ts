@@ -56,42 +56,33 @@ export const sourceLabel = (source: string, locale: Locale) => {
 // bar list on Home — so a given source always reads the same color across
 // the app.
 //
-// "сделай градиент из цветов, чтоб нагляднее было видно" (Anastasiia, 15
-// сен 2026) — the previous 4-color set (three near-identical reds plus one
-// grey fallback) made both charts hard to read at a glance: "Event" had no
-// color of its own at all and silently shared the same grey as "unknown",
-// and Instagram/Facebook/Referral were all just shades of the same red
-// against an already-red-branded UI. This spreads every source across a
-// real gradient — deep maroon through gold to a cool slate — so each one is
-// instantly distinguishable, while staying inside colors already used
-// elsewhere in the app (--warn, --muted, --ink-2) plus a couple of new
-// stops in the same warm/earthy family. A source outside the five built-in
-// ones (a raw CSV value, a partner's own channel name — see normalizeSource
-// in leads/actions.ts) still gets a real, stable color of its own, hashed
-// deterministically into the same gradient, instead of collapsing into one
-// shared "everything else" grey.
-const SOURCE_GRADIENT = [
-  "#7a0c1f", // deep maroon
-  "#c8102e", // brand accent red
-  "#eab454", // warm gold
-  "#5c6b73", // slate (cool neutral, max contrast against the reds)
-  "#f2896b", // coral
-  "#9e6b3f", // warm bronze
-  "#847b6d", // existing --muted tan
-  "#2b2b2b", // existing --ink-2 charcoal
-] as const;
-
+// "Используй такие цвета или похожие для источников лидов. Но так, чтоб
+// было визуально видно" (Anastasiia, 15 сен 2026, pointing at the "Воронка
+// лидов за период" funnel bars) — the very first pass at this (same day,
+// earlier) spread sources across a multi-hue set (gold, slate, coral) for
+// maximum contrast; she preferred the funnel's own look instead — one red
+// family, light to dark. This is that same family, spread across its full
+// light-to-dark range and assigned OUT OF ORDER on purpose, so the five
+// sources sit as far apart on the ladder as possible instead of as
+// easily-confused neighbours (still visually distinguishable, per her
+// "чтоб было видно").
 const SOURCE_COLORS: Record<string, string> = {
-  Instagram: SOURCE_GRADIENT[0],
-  Facebook: SOURCE_GRADIENT[2],
-  Referral: SOURCE_GRADIENT[1],
-  Website: SOURCE_GRADIENT[3],
-  Event: SOURCE_GRADIENT[4],
+  Website: "#fbeaec", // lightest — existing --accent-soft
+  Facebook: "#e2515f", // existing --warn
+  Event: "#9e0c24", // existing --accent-strong
+  Referral: "#591018",
+  Instagram: "#33080d", // darkest
 };
 
-// Deterministic string → stable index, so a given custom source string
-// always lands on the same color across renders and sessions (not random
-// per page load).
+// Any source outside these five (a raw CSV value, a partner's own channel
+// name — see normalizeSource in leads/actions.ts) still gets a real, stable
+// color of its own instead of collapsing into one shared "everything else"
+// grey — hashed deterministically (so the same string always lands on the
+// same swatch, not randomly per page load) into the gaps left between the
+// five stops above, so it reads as part of the same red family without
+// ever exactly repeating one of the five.
+const SOURCE_FALLBACK_GRADIENT = ["#f0b0b8", "#c8102e", "#7a0c1f", "#3d0a12"] as const;
+
 function hashSourceIndex(source: string, mod: number): number {
   let hash = 0;
   for (let i = 0; i < source.length; i++) {
@@ -100,13 +91,11 @@ function hashSourceIndex(source: string, mod: number): number {
   return hash % mod;
 }
 
-const FALLBACK_START = 5; // SOURCE_GRADIENT slots not already claimed above
-
 export const sourceColor = (source: string | null) => {
   if (!source) return "var(--muted)";
   if (SOURCE_COLORS[source]) return SOURCE_COLORS[source];
-  const idx = FALLBACK_START + hashSourceIndex(source, SOURCE_GRADIENT.length - FALLBACK_START);
-  return SOURCE_GRADIENT[idx];
+  const idx = hashSourceIndex(source, SOURCE_FALLBACK_GRADIENT.length);
+  return SOURCE_FALLBACK_GRADIENT[idx];
 };
 
 /**
