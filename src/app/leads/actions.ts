@@ -240,6 +240,7 @@ async function promotePaidLead(
     if (pendingEnrollment) {
       let status = pendingEnrollment.status;
       let price = Number(pendingEnrollment.price);
+      const leadValue = Number(lead.value) || 0;
       if (status === "sAwaiting") {
         // "бери за изначальные значения сумму, которую я прописываю в
         // карточке лида" (Anastasiia, 13 сен 2026) — the seat was very
@@ -247,12 +248,30 @@ async function promotePaidLead(
         // it from whatever's on the lead RIGHT NOW, at the moment it's
         // actually marked paid, rather than trusting a stale number or
         // guessing at the course's list price.
-        price = Number(lead.value) || 0;
+        price = leadValue;
         await supabase
           .from("member_enrollments")
           .update({ status: "sPaid", paid: true, price })
           .eq("id", pendingEnrollment.id);
         status = "sPaid";
+      } else if (leadValue > 0 && leadValue !== price) {
+        // "почему её нет в оплатах?" (Anastasiia, 15 сен 2026, лид «Олеся
+        // Горбачева») — a lead can reach "Оплата" (and get promoted to
+        // sPaid above) BEFORE "Сумма" is ever filled in — dragged straight
+        // there at 0, exactly like this case — and freezing the
+        // enrollment's price at that moment meant syncEnrollmentPayment
+        // below always saw price 0 and silently never created a payment,
+        // even after Anastasiia went back and filled in the real sum
+        // afterwards. Now, every time this function re-runs on an already
+        // sPaid enrollment (every save of the lead card — see updateLead's
+        // own call further down) and the lead's current Сумма is a real
+        // positive number that disagrees with what's stored, the
+        // enrollment's price is refreshed to match. Never runs the other
+        // way — a real stored price is never zeroed out just because
+        // Сумма happens to read 0/blank at the moment of an unrelated
+        // edit.
+        price = leadValue;
+        await supabase.from("member_enrollments").update({ price }).eq("id", pendingEnrollment.id);
       }
       matchedEnrollment = { id: pendingEnrollment.id, status, price, memberId: existingMember.id };
     }
