@@ -54,17 +54,83 @@ export const sourceLabel = (source: string, locale: Locale) => {
 // One fixed color per source, reused everywhere a source needs a swatch —
 // the kanban card dot, the "Откуда приходят лиды" donut, and the channel
 // bar list on Home — so a given source always reads the same color across
-// the app. Not a real brand color per platform, just a stable mapping onto
-// the app's own accent/ink palette (no new colors introduced).
+// the app.
+//
+// "сделай градиент из цветов, чтоб нагляднее было видно" (Anastasiia, 15
+// сен 2026) — the previous 4-color set (three near-identical reds plus one
+// grey fallback) made both charts hard to read at a glance: "Event" had no
+// color of its own at all and silently shared the same grey as "unknown",
+// and Instagram/Facebook/Referral were all just shades of the same red
+// against an already-red-branded UI. This spreads every source across a
+// real gradient — deep maroon through gold to a cool slate — so each one is
+// instantly distinguishable, while staying inside colors already used
+// elsewhere in the app (--warn, --muted, --ink-2) plus a couple of new
+// stops in the same warm/earthy family. A source outside the five built-in
+// ones (a raw CSV value, a partner's own channel name — see normalizeSource
+// in leads/actions.ts) still gets a real, stable color of its own, hashed
+// deterministically into the same gradient, instead of collapsing into one
+// shared "everything else" grey.
+const SOURCE_GRADIENT = [
+  "#7a0c1f", // deep maroon
+  "#c8102e", // brand accent red
+  "#eab454", // warm gold
+  "#5c6b73", // slate (cool neutral, max contrast against the reds)
+  "#f2896b", // coral
+  "#9e6b3f", // warm bronze
+  "#847b6d", // existing --muted tan
+  "#2b2b2b", // existing --ink-2 charcoal
+] as const;
+
 const SOURCE_COLORS: Record<string, string> = {
-  Instagram: "var(--accent)",
-  Facebook: "var(--warn)",
-  Referral: "var(--accent-strong)",
-  Website: "var(--ink-2)",
+  Instagram: SOURCE_GRADIENT[0],
+  Facebook: SOURCE_GRADIENT[2],
+  Referral: SOURCE_GRADIENT[1],
+  Website: SOURCE_GRADIENT[3],
+  Event: SOURCE_GRADIENT[4],
 };
 
-export const sourceColor = (source: string | null) =>
-  (source && SOURCE_COLORS[source]) || "var(--muted)";
+// Deterministic string → stable index, so a given custom source string
+// always lands on the same color across renders and sessions (not random
+// per page load).
+function hashSourceIndex(source: string, mod: number): number {
+  let hash = 0;
+  for (let i = 0; i < source.length; i++) {
+    hash = (hash * 31 + source.charCodeAt(i)) >>> 0;
+  }
+  return hash % mod;
+}
+
+const FALLBACK_START = 5; // SOURCE_GRADIENT slots not already claimed above
+
+export const sourceColor = (source: string | null) => {
+  if (!source) return "var(--muted)";
+  if (SOURCE_COLORS[source]) return SOURCE_COLORS[source];
+  const idx = FALLBACK_START + hashSourceIndex(source, SOURCE_GRADIENT.length - FALLBACK_START);
+  return SOURCE_GRADIENT[idx];
+};
+
+/**
+ * Linear RGB interpolation between two hex colors — used to paint the
+ * "Воронка лидов за период" funnel bars (DashboardBoard) as a real gradient
+ * from the widest (first) stage to the narrowest (last), instead of the
+ * previous flat single-color-per-bar look where only the very last bar
+ * ("Оплата") stood out.
+ */
+export function interpolateHex(from: string, to: string, t: number): string {
+  const clamped = Math.max(0, Math.min(1, t));
+  const f = parseInt(from.slice(1), 16);
+  const to255 = parseInt(to.slice(1), 16);
+  const fr = (f >> 16) & 255;
+  const fg = (f >> 8) & 255;
+  const fb = f & 255;
+  const tr = (to255 >> 16) & 255;
+  const tg = (to255 >> 8) & 255;
+  const tb = to255 & 255;
+  const r = Math.round(fr + (tr - fr) * clamped);
+  const g = Math.round(fg + (tg - fg) * clamped);
+  const b = Math.round(fb + (tb - fb) * clamped);
+  return `#${[r, g, b].map((v) => v.toString(16).padStart(2, "0")).join("")}`;
+}
 
 /** The real, disclosed number behind the Leads page's "Высокая ценность"
  * filter — a plain threshold on the lead's own value field, not a hidden

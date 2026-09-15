@@ -149,6 +149,30 @@ async function reserveAwaitingEnrollment(supabase: SupabaseServerClient, lead: R
 }
 
 /**
+ * "Смотри задвоились оплаты" (Anastasiia, 15 сен 2026) — a lead that reaches
+ * "Оплата" before it has a matching course enrollment falls back to a bare
+ * lead_id-keyed payment (see the `else if` branch in promotePaidLead below,
+ * gated on the lead having a value but no matched course/enrollment yet). If
+ * that same lead is later properly converted — a course/enrollment gets
+ * matched or created and syncEnrollmentPayment records its own
+ * enrollment-keyed payment — nothing used to remove the old fallback row, so
+ * the same money showed up twice in Оплаты (and in every revenue total):
+ * once keyed by lead_id (member_id/enrollment_id both null), once keyed by
+ * enrollment_id. Confirmed live for two leads (Ася, Марина Чобанян) — each
+ * had exactly this pair, the second created ~20 minutes after the first.
+ *
+ * Both promotePaidLead and convertLeadToMember — the two places that can
+ * create a real enrollment-keyed payment — call this right after doing so,
+ * to delete that now-redundant fallback row. Scoped tightly (this lead_id,
+ * AND enrollment_id AND member_id both null) so it only ever touches the
+ * specific fallback shape that `else if` branch creates, never a legitimate
+ * payment that happens to reference this lead.
+ */
+async function cleanupOrphanLeadPayment(supabase: SupabaseServerClient, leadId: string): Promise<void> {
+  await supabase.from("payments").delete().eq("lead_id", leadId).is("enrollment_id", null).is("member_id", null);
+}
+
+/**
  * Everything that happens once a lead is (or becomes) ready to be treated as
  * paid: reserve+promote her course seat to a real paid enrollment and record
  * the payment, or — if she has no course at all — the legacy lead_id-keyed
@@ -258,6 +282,11 @@ async function promotePaidLead(
       price: matchedEnrollment.price,
       status: matchedEnrollment.status,
     });
+    // See cleanupOrphanLeadPayment above — this lead may already have an
+    // old lead_id-keyed fallback payment from before it had a matched
+    // course/enrollment; the enrollment-keyed one above is now the real
+    // record, so drop the stale duplicate.
+    await cleanupOrphanLeadPayment(supabase, leadId);
   } else if (Number(lead.value) > 0) {
     // No course chosen on this lead at all — the pre-round-8 fallback:
     // one payment per lead, keyed by lead_id, using the lead's own value.
@@ -1197,6 +1226,9 @@ export async function convertLeadToMember(
         price: Number(price),
         status: "sPaid",
       });
+      // See cleanupOrphanLeadPayment above — same duplicate-payment fix as
+      // promotePaidLead, for this button's own path to a real enrollment.
+      await cleanupOrphanLeadPayment(supabase, leadId);
     }
   }
 

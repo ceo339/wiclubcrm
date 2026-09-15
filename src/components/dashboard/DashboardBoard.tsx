@@ -15,7 +15,7 @@ import type {
 import { formatPctDelta, formatPointsDelta, monthLabel, periodLabel } from "@/lib/dashboard";
 import type { MonthlyCount } from "@/lib/dashboard";
 import Money from "@/components/currency/Money";
-import { sourceColor, sourceLabel, stageLabel } from "@/lib/leads";
+import { interpolateHex, sourceColor, sourceLabel, stageLabel } from "@/lib/leads";
 import { useLocale } from "@/components/i18n/LocaleProvider";
 import Sparkline from "./Sparkline";
 
@@ -657,16 +657,25 @@ export default function DashboardBoard({
         <h2 className="text-sm font-semibold text-foreground">{t("headingFunnel")}</h2>
         <div className="mt-4 flex flex-col gap-2.5">
           {funnel.map((s, i) => {
-            const isLast = i === funnel.length - 1;
             const widthPct = Math.max(8, (s.count / maxFunnel) * 100);
+            // "И тут градиент из цветов" / "аналогично" (Anastasiia, 15 сен
+            // 2026) — this used to be one flat red for every stage except
+            // the very last ("Оплата"), so the funnel's own narrowing wasn't
+            // visible at a glance, only its numbers were. A real gradient
+            // across the stages — lighter/wider at the top, deepening
+            // toward the bottom — makes the funnel shape itself readable,
+            // the way funnel charts conventionally work.
+            const stageColor = interpolateHex(
+              "#e2515f",
+              "#7a0c1f",
+              funnel.length > 1 ? i / (funnel.length - 1) : 0
+            );
             return (
               <div key={s.id} className="grid grid-cols-[140px_1fr_112px] items-center gap-3 sm:grid-cols-[160px_1fr_120px]">
                 <div className="truncate text-sm text-ink-2">{t(s.labelKey)}</div>
                 <div
-                  className={`flex h-[30px] min-w-[40px] items-center rounded-lg px-2.5 text-[13px] font-bold text-white transition-[width] ${
-                    isLast ? "bg-accent-strong" : "bg-accent"
-                  }`}
-                  style={{ width: `${widthPct}%`, fontVariantNumeric: "tabular-nums" }}
+                  className="flex h-[30px] min-w-[40px] items-center rounded-lg px-2.5 text-[13px] font-bold text-white transition-[width]"
+                  style={{ width: `${widthPct}%`, background: stageColor, fontVariantNumeric: "tabular-nums" }}
                 >
                   {s.count}
                 </div>
