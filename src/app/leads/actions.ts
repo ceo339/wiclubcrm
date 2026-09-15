@@ -302,7 +302,17 @@ async function promotePaidLead(
         lead_id: leadId,
         member_id: existingMember?.id ?? null,
         product_id: lead.product_id,
-        amount: lead.value,
+        // `lead.value` is typed as `number | string | null` (ReserveLeadRow,
+        // above) — a CSV import or a form field can hand this in as a
+        // string — but the `payments.amount` column (and its generated
+        // Supabase type) is a plain `number`. This coercion was missing
+        // entirely before, which built fine locally (this project has never
+        // had a compiler available in development) but failed Vercel's own
+        // `npm run build` type-check the first time this code path actually
+        // ran there (`TS2322`, 15 сен 2026) — same class of gap as the one
+        // `convertLeadToMember` already works around (see its own comment
+        // on `partnerId`, round 22).
+        amount: Number(lead.value) || 0,
         status: "paid",
         paid_date: todayIso(),
       });
