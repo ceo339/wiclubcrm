@@ -24,6 +24,17 @@ export const runtime = "nodejs";
  * her having to rename anything, though renaming a field's technical id to
  * exactly "name"/"phone"/"email" in Tilda's field settings is the most
  * reliable option if a field still doesn't come through.
+ *
+ * `utm_source`/`utm_medium`/`utm_campaign`/`utm_content`/`utm_term` and
+ * `page_url`/`url` (round 7) and `product` (round 19, see PRODUCT_ALIASES
+ * below) are all read the same way — plain top-level fields in the posted
+ * body. Tilda does NOT forward these on its own: they only arrive here if
+ * the landing page's own form has hidden fields with exactly these names,
+ * filled in (by a small JS snippet reading the page's URL, or hardcoded for
+ * `product`, since one landing page is normally about one specific course)
+ * before the visitor submits. `page_url`/`url` is the one exception that
+ * needs no such setup — Tilda always sends the landing page's own address
+ * as the request's Referer header, which this route already falls back to.
  */
 
 const CORS_HEADERS = {
@@ -43,6 +54,15 @@ export async function OPTIONS() {
 const NAME_ALIASES = ["name", "имя", "fio", "full_name", "fullname", "ф.и.о."];
 const PHONE_ALIASES = ["phone", "телефон", "tel", "phone_number", "номер"];
 const EMAIL_ALIASES = ["email", "почта", "mail", "e-mail"];
+// "чтоб отображался сразу продукт в заявке (продукт с лендинга)" (Anastasiia,
+// 15 сен 2026) — a landing page almost always promotes one specific course,
+// so it only ever needs to send its own course's NAME as one more hidden
+// field (matched case-insensitively against this club's own `products` —
+// see the lookup right before the `leads.insert` below) — never an id,
+// which the landing page has no way to know. Anastasiia chose "course only,
+// not a поток" — the стрим itself still gets picked by hand in the lead
+// card, same as any lead without a landing page.
+const PRODUCT_ALIASES = ["product", "course", "продукт", "курс", "course_name", "product_name"];
 
 function pick(fields: Record<string, unknown>, aliases: string[]): string | null {
   const lower = new Map(Object.entries(fields).map(([k, v]) => [k.toLowerCase(), v]));
@@ -129,6 +149,21 @@ export async function POST(request: Request, { params }: { params: Promise<{ key
   // never sent this field.
   const note = pickExact(fields, "note");
 
+  // Resolve the landing page's own course name (if it sent one) to a real
+  // product belonging to THIS club — never trusted as an id, since a
+  // landing page's hidden field can only ever hold a name it was set up
+  // with by hand. No match (wrong spelling, course renamed/deleted since,
+  // or the field wasn't sent at all) just leaves the lead without a
+  // product, exactly like any other lead created with no course chosen —
+  // never blocks the lead from being created.
+  const productName = pick(fields, PRODUCT_ALIASES);
+  let productId: string | null = null;
+  if (productName) {
+    const { data: products } = await admin.from("products").select("id, name").eq("partner_id", partner.id);
+    const match = (products ?? []).find((p) => p.name.trim().toLowerCase() === productName.trim().toLowerCase());
+    productId = match?.id ?? null;
+  }
+
   // Same email-first-then-phone matching rule as createLead/findOrCreateContact
   // (see lib/leads.ts's duplicateKey) — scoped to this one club, so a
   // landing submission always attaches to the right existing Контакт
@@ -169,6 +204,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ key
     utm_term: utmTerm,
     landing_url: landingUrl,
     note,
+    product_id: productId,
   });
 
   if (error) return json({ ok: false, error: error.message }, 500);
