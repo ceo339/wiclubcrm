@@ -41,13 +41,20 @@ type SmartFilter = "stuck" | "week" | "highValue";
 export default function LeadsBoard({
   initialLeads,
   isHq,
+  isNetworkView,
   canEdit,
   products,
   cohorts,
   partnerCountry,
 }: {
   initialLeads: Lead[];
+  /** Strictly role === "hq" — gates real admin actions (Найти дубли,
+   * deleting a lead in LeadDetailModal). A viewer account must NOT get
+   * these, so this is never broadened — see src/lib/role.ts. */
   isHq: boolean;
+  /** hq OR viewer (see isNetworkRole) — purely "показывать колонку клуба
+   * и баннер о read-only сети", no write/delete power riding on it. */
+  isNetworkView: boolean;
   canEdit: boolean;
   products: Tables<"products">[];
   cohorts: Tables<"product_cohorts">[];
@@ -296,7 +303,7 @@ export default function LeadsBoard({
         </div>
       </div>
 
-      {isHq && (
+      {isNetworkView && (
         <p className="rounded-lg bg-surface-2 px-3 py-2 text-xs text-muted">
           {t("hqReadOnlyLeadsBanner")}
         </p>
@@ -306,7 +313,7 @@ export default function LeadsBoard({
         <KanbanBoard
           leads={filtered}
           canEdit={canEdit}
-          showPartner={isHq}
+          showPartner={isNetworkView}
           products={products}
           cohorts={cohorts}
           onSelect={setSelectedLeadId}
@@ -314,7 +321,7 @@ export default function LeadsBoard({
       ) : (
         <LeadsList
           leads={filtered}
-          showPartner={isHq}
+          showPartner={isNetworkView}
           onSelect={setSelectedLeadId}
         />
       )}

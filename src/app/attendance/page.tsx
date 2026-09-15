@@ -3,6 +3,7 @@ import { getCurrentProfile } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { scopeForProfile } from "@/lib/currency";
 import { localeScopeForProfile } from "@/lib/i18n";
+import { isNetworkRole, getViewScopePartnerId } from "@/lib/viewScope";
 import CurrencySwitcher from "@/components/currency/CurrencySwitcher";
 import CurrencyScope from "@/components/currency/CurrencyScope";
 import LocaleSwitcher from "@/components/i18n/LocaleSwitcher";
@@ -16,18 +17,33 @@ export default async function AttendancePage() {
   if (!profile) redirect("/login");
 
   const supabase = await createClient();
-  // RLS scopes both queries to the caller's own club (or every club for hq).
+  const networkView = isNetworkRole(profile.role);
+  const scopePartnerId = await getViewScopePartnerId(profile);
+
+  // RLS already scopes both queries to the caller's own club (or every club
+  // for hq/viewer) — the .eq below only narrows further, when an hq/viewer
+  // account has picked one specific city in the header switcher (Round 18).
   // The roster is enrollments now, not members directly — one member can
   // have several, each its own row here with its own attendance record.
+  let cohortsQuery = supabase
+    .from("product_cohorts")
+    .select("id, product_id, start_date, partner_id, products(name, sessions), partners(name)")
+    .order("start_date", { ascending: false });
+  let enrollmentsQuery = supabase
+    .from("member_enrollments")
+    .select("id, partner_id, product_id, start_date, attended, members(name)");
+  if (scopePartnerId) {
+    cohortsQuery = cohortsQuery.eq("partner_id", scopePartnerId);
+    enrollmentsQuery = enrollmentsQuery.eq("partner_id", scopePartnerId);
+  }
   const [{ data: cohorts, error }, { data: enrollments }] = await Promise.all([
-    supabase
-      .from("product_cohorts")
-      .select("id, product_id, start_date, partner_id, products(name, sessions), partners(name)")
-      .order("start_date", { ascending: false }),
-    supabase
-      .from("member_enrollments")
-      .select("id, partner_id, product_id, start_date, attended, members(name)"),
+    cohortsQuery,
+    enrollmentsQuery,
   ]);
+
+  const { data: clubs } = networkView
+    ? await supabase.from("partners").select("id, name").order("name")
+    : { data: [] };
 
   const members = (enrollments ?? []).map((e) => ({
     id: e.id,
@@ -38,7 +54,7 @@ export default async function AttendancePage() {
     attended: e.attended,
   }));
 
-  const isHq = profile.role === "hq";
+  const isHq = networkView && !scopePartnerId;
   const { scope, fallback } = scopeForProfile(profile);
   const localeScope = localeScopeForProfile(profile);
 
@@ -63,6 +79,8 @@ export default async function AttendancePage() {
     <AppShell
       profile={profile}
       title={<T k="navAttendance" />}
+      clubs={clubs ?? []}
+      activeClubId={scopePartnerId}
       headerExtra={
         <>
           <CurrencyScope scope={scope} fallback={fallback} />

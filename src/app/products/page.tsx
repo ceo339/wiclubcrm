@@ -3,6 +3,7 @@ import { getCurrentProfile } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { scopeForProfile } from "@/lib/currency";
 import { localeScopeForProfile } from "@/lib/i18n";
+import { isNetworkRole, getViewScopePartnerId } from "@/lib/viewScope";
 import CurrencySwitcher from "@/components/currency/CurrencySwitcher";
 import CurrencyScope from "@/components/currency/CurrencyScope";
 import LocaleSwitcher from "@/components/i18n/LocaleSwitcher";
@@ -16,24 +17,38 @@ export default async function ProductsPage() {
   if (!profile) redirect("/login");
 
   const supabase = await createClient();
-  // RLS scopes this to the caller's partner_id (or every partner for hq).
-  const { data: products, error } = await supabase
-    .from("products")
-    .select("*, partners(name)")
-    .order("name");
+  const networkView = isNetworkRole(profile.role);
+  const scopePartnerId = await getViewScopePartnerId(profile);
 
-  const { data: cohorts } = await supabase
-    .from("product_cohorts")
-    .select("*")
-    .order("start_date");
+  // RLS already scopes this to the caller's partner_id (or every partner
+  // for hq/viewer) — the .eq below only narrows further, when an hq/viewer
+  // account has picked one specific city in the header switcher (Round 18).
+  let productsQuery = supabase.from("products").select("*, partners(name)").order("name");
+  if (scopePartnerId) productsQuery = productsQuery.eq("partner_id", scopePartnerId);
+  const { data: products, error } = await productsQuery;
+
+  let cohortsQuery = supabase.from("product_cohorts").select("*").order("start_date");
+  if (scopePartnerId) cohortsQuery = cohortsQuery.eq("partner_id", scopePartnerId);
+  const { data: cohorts } = await cohortsQuery;
+
+  const { data: clubs } = networkView
+    ? await supabase.from("partners").select("id, name").order("name")
+    : { data: [] };
 
   // Real, disclosed counts for each card — how many leads are interested in
   // this product overall, and (per start date) how many members actually
   // enrolled in that cohort. Both scoped by the same RLS as everything else
-  // on this page, so HQ still sees network-wide numbers.
+  // on this page, so HQ still sees network-wide numbers (narrowed further
+  // by the same city filter when one is picked).
+  let leadsForCountQuery = supabase.from("leads").select("product_id");
+  let enrollmentsForCountQuery = supabase.from("member_enrollments").select("product_id, start_date");
+  if (scopePartnerId) {
+    leadsForCountQuery = leadsForCountQuery.eq("partner_id", scopePartnerId);
+    enrollmentsForCountQuery = enrollmentsForCountQuery.eq("partner_id", scopePartnerId);
+  }
   const [{ data: leadsForCount }, { data: enrollmentsForCount }] = await Promise.all([
-    supabase.from("leads").select("product_id"),
-    supabase.from("member_enrollments").select("product_id, start_date"),
+    leadsForCountQuery,
+    enrollmentsForCountQuery,
   ]);
 
   const { scope, fallback } = scopeForProfile(profile);
@@ -43,6 +58,8 @@ export default async function ProductsPage() {
     <AppShell
       profile={profile}
       title={<T k="navCourses" />}
+      clubs={clubs ?? []}
+      activeClubId={scopePartnerId}
       headerExtra={
         <>
           <CurrencyScope scope={scope} fallback={fallback} />
@@ -68,7 +85,7 @@ export default async function ProductsPage() {
             enrollmentsForCount ?? [],
             (e) => (e.product_id && e.start_date ? `${e.product_id}|${e.start_date}` : null)
           )}
-          isHq={profile.role === "hq"}
+          isHq={networkView && !scopePartnerId}
           canEdit={!!profile.partner_id}
         />
       )}

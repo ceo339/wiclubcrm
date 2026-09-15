@@ -3,6 +3,7 @@ import { getCurrentProfile } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { scopeForProfile } from "@/lib/currency";
 import { localeScopeForProfile } from "@/lib/i18n";
+import { isNetworkRole, getViewScopePartnerId } from "@/lib/viewScope";
 import CurrencySwitcher from "@/components/currency/CurrencySwitcher";
 import CurrencyScope from "@/components/currency/CurrencyScope";
 import LocaleSwitcher from "@/components/i18n/LocaleSwitcher";
@@ -16,14 +17,24 @@ export default async function LeadsPage() {
   if (!profile) redirect("/login");
 
   const supabase = await createClient();
+  const networkView = isNetworkRole(profile.role);
+  const scopePartnerId = await getViewScopePartnerId(profile);
+
   // RLS already scopes this to the caller's partner_id (or every partner
-  // for hq) — no manual filtering needed here. members(id) is the reverse
-  // side of members.lead_id — lets the lead card know whether it's already
-  // linked to a member (see the Lead type's member_id).
-  const { data: leads, error } = await supabase
+  // for hq/viewer) — the .eq below only narrows further, when an hq/viewer
+  // account has picked one specific city in the header switcher (Round 18).
+  // members(id) is the reverse side of members.lead_id — lets the lead
+  // card know whether it's already linked to a member (see Lead.member_id).
+  let leadsQuery = supabase
     .from("leads")
     .select("*, partners(name), members(id)")
     .order("added_date", { ascending: false });
+  if (scopePartnerId) leadsQuery = leadsQuery.eq("partner_id", scopePartnerId);
+  const { data: leads, error } = await leadsQuery;
+
+  const { data: clubs } = networkView
+    ? await supabase.from("partners").select("id, name").order("name")
+    : { data: [] };
 
   // "добавить под источником комментарии (если они есть)" (Anastasiia, 14
   // сен 2026) — комментарии live in their own table (entity_type/entity_id,
@@ -61,6 +72,8 @@ export default async function LeadsPage() {
     <AppShell
       profile={profile}
       title={<T k="navLeads" />}
+      clubs={clubs ?? []}
+      activeClubId={scopePartnerId}
       headerExtra={
         <>
           <CurrencyScope scope={scope} fallback={fallback} />
@@ -90,6 +103,7 @@ export default async function LeadsPage() {
             };
           })}
           isHq={profile.role === "hq"}
+          isNetworkView={networkView && !scopePartnerId}
           canEdit={canEdit}
           products={products ?? []}
           cohorts={cohorts ?? []}

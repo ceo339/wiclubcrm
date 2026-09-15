@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { getCurrentProfile } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { localeScopeForProfile } from "@/lib/i18n";
+import { isNetworkRole, getViewScopePartnerId } from "@/lib/viewScope";
 import LocaleSwitcher from "@/components/i18n/LocaleSwitcher";
 import LocaleScope from "@/components/i18n/LocaleScope";
 import T from "@/components/i18n/T";
@@ -22,14 +23,24 @@ export default async function ContactsPage() {
   if (!profile) redirect("/login");
 
   const supabase = await createClient();
-  // RLS scopes this to the caller's partner_id (or every partner for hq),
-  // same as leads/members.
-  const { data: contacts, error } = await supabase
+  const networkView = isNetworkRole(profile.role);
+  const scopePartnerId = await getViewScopePartnerId(profile);
+
+  // RLS already scopes this to the caller's partner_id (or every partner
+  // for hq/viewer) — the .eq below only narrows further, when an hq/viewer
+  // account has picked one specific city in the header switcher (Round 18).
+  let contactsQuery = supabase
     .from("contacts")
     .select(
       "*, partners(name), leads(id, name, stage, added_date, product_id, cohort_start_date, products(name)), members(id, member_since, member_enrollments(id, status, start_date, price, product_id, products(name)))"
     )
     .order("created_at", { ascending: false });
+  if (scopePartnerId) contactsQuery = contactsQuery.eq("partner_id", scopePartnerId);
+  const { data: contacts, error } = await contactsQuery;
+
+  const { data: clubs } = networkView
+    ? await supabase.from("partners").select("id, name").order("name")
+    : { data: [] };
 
   const localeScope = localeScopeForProfile(profile);
   const canEdit = !!profile.partner_id;
@@ -38,6 +49,8 @@ export default async function ContactsPage() {
     <AppShell
       profile={profile}
       title={<T k="navContacts" />}
+      clubs={clubs ?? []}
+      activeClubId={scopePartnerId}
       headerExtra={
         <>
           <LocaleScope scope={localeScope.scope} fallback={localeScope.fallback} />
@@ -104,7 +117,7 @@ export default async function ContactsPage() {
               enrollments,
             };
           })}
-          isHq={profile.role === "hq"}
+          isHq={networkView && !scopePartnerId}
           canEdit={canEdit}
         />
       )}

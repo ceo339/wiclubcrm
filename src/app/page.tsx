@@ -3,6 +3,7 @@ import { getCurrentProfile } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { scopeForProfile, currencyForCountry } from "@/lib/currency";
 import { localeScopeForProfile, localeForCountry } from "@/lib/i18n";
+import { isNetworkRole, getViewScopePartnerId } from "@/lib/viewScope";
 import { sortOpenTasks, type OpenTask } from "@/lib/tasks";
 import {
   computeCoreMetrics,
@@ -33,6 +34,7 @@ const ROLE_LABEL_KEYS: Record<string, string> = {
   partner: "roleLabelPartner",
   staff: "roleLabelStaff",
   hq: "roleLabelHq",
+  viewer: "roleLabelViewer",
 };
 
 /**
@@ -60,15 +62,29 @@ export default async function Home({
   const params = await searchParams;
   const supabase = await createClient();
 
+  const networkView = isNetworkRole(profile.role);
+  const scopePartnerId = await getViewScopePartnerId(profile);
+  // The club whose own dashboard we render below: a partner/staff account's
+  // own club, or — for hq/viewer — whichever club is picked in the header
+  // switcher (Round 18). Null means "no single club" (a partner with none
+  // attached yet, or an hq/viewer looking at the whole network).
+  const effectivePartnerId = profile.partner_id ?? scopePartnerId;
+
+  // Club list for the header switcher — only hq/viewer accounts get one.
+  const { data: switcherClubs } = networkView
+    ? await supabase.from("partners").select("id, name").order("name")
+    : { data: [] };
+
   // "Мои задачи" / "Задачи по сети" — every open (not done) task across a
   // partner's leads and members in one place; HQ gets the same list
   // read-only across every club (RLS decides which rows come back, this
   // just renders them). Tasks have no FK to leads/members (entity_id is
   // generic), so names come from two follow-up lookups rather than a join.
-  const { data: rawTasks } = await supabase
-    .from("tasks")
-    .select("*, partners(name)")
-    .eq("done", false);
+  // The .eq below narrows further when an hq/viewer account has picked one
+  // specific city in the switcher.
+  let tasksQuery = supabase.from("tasks").select("*, partners(name)").eq("done", false);
+  if (scopePartnerId) tasksQuery = tasksQuery.eq("partner_id", scopePartnerId);
+  const { data: rawTasks } = await tasksQuery;
 
   const leadIds = (rawTasks ?? []).filter((t) => t.entity_type === "lead").map((t) => t.entity_id);
   const memberIds = (rawTasks ?? []).filter((t) => t.entity_type === "member").map((t) => t.entity_id);
@@ -94,24 +110,25 @@ export default async function Home({
         entityType,
         entityId: row.entity_id,
         entityName,
-        partnerName: profile.role === "hq" ? (row.partners?.name ?? null) : null,
+        partnerName: networkView && !scopePartnerId ? (row.partners?.name ?? null) : null,
       };
     })
   );
 
-  const tasksPanel = (profile.partner_id || profile.role === "hq") && (
+  const tasksPanel = (profile.partner_id || networkView) && (
     <TasksWidget
       tasks={openTasks}
-      headingKey={profile.role === "hq" ? "headingNetworkTasks" : "headingMyTasks"}
+      headingKey={networkView && !scopePartnerId ? "headingNetworkTasks" : "headingMyTasks"}
       canEdit={!!profile.partner_id}
     />
   );
 
   // ---------------------------------------------------------------------
-  // HQ: network-wide dashboard (same fetch/computation the old standalone
-  // /dashboard page did — nothing pre-aggregated, everything computed live
-  // from the real leads/members/payments rows so it can't hide anything).
-  if (profile.role === "hq") {
+  // HQ/viewer with no single city picked: network-wide dashboard (same
+  // fetch/computation the old standalone /dashboard page did — nothing
+  // pre-aggregated, everything computed live from the real
+  // leads/members/payments rows so it can't hide anything).
+  if (networkView && !scopePartnerId) {
     const [{ data: partners }, { data: leads }, { data: members }, { data: enrollments }, { data: payments }, { data: products }] =
       await Promise.all([
         supabase.from("partners").select("id, name").order("name"),
@@ -203,6 +220,8 @@ export default async function Home({
             {profile.partner_name ?? <T k="noClubAttached" />} · {roleLabelKey ? <T k={roleLabelKey} /> : profile.role}
           </>
         }
+        clubs={switcherClubs ?? []}
+        activeClubId={null}
         headerExtra={
           <>
             <CurrencyScope scope="network" fallback="USD" />
@@ -243,12 +262,14 @@ export default async function Home({
   // ---------------------------------------------------------------------
   // Partner / staff with no club attached yet — nothing to show a
   // dashboard for, same as before this merge.
-  if (!profile.partner_id) {
+  if (!effectivePartnerId) {
     return (
       <AppShell
         profile={profile}
         title={<T k="headingHome" />}
         subtitle={<T k="noClubAttached" />}
+        clubs={switcherClubs ?? []}
+        activeClubId={scopePartnerId}
         headerExtra={
           <>
             <CurrencyScope scope={scope} fallback={fallback} />
@@ -265,8 +286,9 @@ export default async function Home({
 
   // ---------------------------------------------------------------------
   // Partner / staff: this club's own dashboard (same fetch/computation the
-  // old /dashboard/[partnerId] page did for the caller's own club).
-  const partnerId = profile.partner_id;
+  // old /dashboard/[partnerId] page did for the caller's own club) — or,
+  // for hq/viewer, whichever club they picked in the header switcher.
+  const partnerId = effectivePartnerId;
   const { data: partner } = await supabase
     .from("partners")
     .select("id, name, country")
@@ -332,9 +354,12 @@ export default async function Home({
       title={<T k="headingHome" />}
       subtitle={
         <>
-          {profile.partner_name ?? <T k="noClubAttached" />} · {roleLabelKey ? <T k={roleLabelKey} /> : profile.role}
+          {(networkView ? partner?.name : profile.partner_name) ?? <T k="noClubAttached" />} ·{" "}
+          {roleLabelKey ? <T k={roleLabelKey} /> : profile.role}
         </>
       }
+      clubs={switcherClubs ?? []}
+      activeClubId={scopePartnerId}
       headerExtra={
         <>
           <CurrencyScope scope={scope} fallback={partner ? currencyForCountry(partner.country) : fallback} />

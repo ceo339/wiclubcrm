@@ -4,8 +4,10 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
 import type { Profile } from "@/lib/auth";
+import { isNetworkRole } from "@/lib/role";
 import T from "@/components/i18n/T";
 import { signOut } from "@/app/login/actions";
+import CityScopeSwitcher from "./CityScopeSwitcher";
 import {
   IconHome,
   IconFunnel,
@@ -22,6 +24,7 @@ const ROLE_LABEL_KEYS: Record<string, string> = {
   partner: "roleLabelPartner",
   staff: "roleLabelStaff",
   hq: "roleLabelHq",
+  viewer: "roleLabelViewer",
 };
 
 type NavItem = {
@@ -96,6 +99,8 @@ export default function AppShell({
   backHref,
   backLabel,
   headerExtra,
+  clubs,
+  activeClubId,
   children,
 }: {
   profile: Profile;
@@ -108,6 +113,13 @@ export default function AppShell({
   backHref?: string;
   backLabel?: ReactNode;
   headerExtra?: ReactNode;
+  /** Round 18 city switcher — the full club list and the currently chosen
+   * one (from the hqCityFilter cookie, see src/lib/viewScope.ts). Only
+   * rendered for hq/viewer accounts; a page that doesn't pass `clubs`
+   * (e.g. a partner's own pages, which never show this) simply shows
+   * nothing extra here. */
+  clubs?: { id: string; name: string }[];
+  activeClubId?: string | null;
   children: ReactNode;
 }) {
   const pathname = usePathname();
@@ -182,7 +194,12 @@ export default function AppShell({
             </h1>
             {subtitle && <p className="mt-0.5 text-xs text-muted">{subtitle}</p>}
           </div>
-          {headerExtra && <div className="flex items-center gap-2">{headerExtra}</div>}
+          <div className="flex items-center gap-2">
+            {isNetworkRole(profile.role) && clubs && clubs.length > 0 && (
+              <CityScopeSwitcher clubs={clubs} activeClubId={activeClubId ?? null} />
+            )}
+            {headerExtra}
+          </div>
         </header>
         <main className="flex flex-1 flex-col p-6">{children}</main>
       </div>

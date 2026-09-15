@@ -3,6 +3,7 @@ import { getCurrentProfile } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { scopeForProfile } from "@/lib/currency";
 import { localeScopeForProfile } from "@/lib/i18n";
+import { isNetworkRole, getViewScopePartnerId } from "@/lib/viewScope";
 import CurrencySwitcher from "@/components/currency/CurrencySwitcher";
 import CurrencyScope from "@/components/currency/CurrencyScope";
 import LocaleSwitcher from "@/components/i18n/LocaleSwitcher";
@@ -24,13 +25,24 @@ export default async function MembersPage() {
   await autoCompleteDueEnrollments();
 
   const supabase = await createClient();
-  // RLS scopes this to the caller's partner_id (or every partner for hq).
+  const networkView = isNetworkRole(profile.role);
+  const scopePartnerId = await getViewScopePartnerId(profile);
+
+  // RLS already scopes this to the caller's partner_id (or every partner
+  // for hq/viewer) — the .eq below only narrows further, when an hq/viewer
+  // account has picked one specific city in the header switcher (Round 18).
   // A member can hold several course enrollments now, so they come in as a
   // nested array rather than flat columns on the member row itself.
-  const { data: members, error } = await supabase
+  let membersQuery = supabase
     .from("members")
     .select("*, partners(name), member_enrollments(*, products(name, price, sessions))")
     .order("created_at", { ascending: false });
+  if (scopePartnerId) membersQuery = membersQuery.eq("partner_id", scopePartnerId);
+  const { data: members, error } = await membersQuery;
+
+  const { data: clubs } = networkView
+    ? await supabase.from("partners").select("id, name").order("name")
+    : { data: [] };
 
   const { scope, fallback } = scopeForProfile(profile);
   const localeScope = localeScopeForProfile(profile);
@@ -47,6 +59,8 @@ export default async function MembersPage() {
     <AppShell
       profile={profile}
       title={<T k="navMembers" />}
+      clubs={clubs ?? []}
+      activeClubId={scopePartnerId}
       headerExtra={
         <>
           <CurrencyScope scope={scope} fallback={fallback} />
@@ -82,7 +96,7 @@ export default async function MembersPage() {
           })}
           products={products ?? []}
           cohorts={cohorts ?? []}
-          isHq={profile.role === "hq"}
+          isHq={networkView && !scopePartnerId}
           canEdit={canEdit}
         />
       )}

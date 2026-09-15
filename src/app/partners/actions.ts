@@ -9,6 +9,10 @@ export type ActionResult = {
   tempPassword?: string;
   /** Only set when error === "errCreateLoginFailed" — see createClubPartner below. */
   errorDetail?: string;
+  /** Only set by resetPartnerPassword/createViewerAccess — the login email
+   * the fresh tempPassword above belongs to, so the confirmation screen
+   * can show both together even though this form never asked for it. */
+  resetEmail?: string | null;
 };
 
 const PASSWORD_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789";
@@ -80,6 +84,47 @@ export async function createClubPartner(formData: FormData): Promise<ActionResul
 
   revalidatePath("/partners");
   return { error: null, tempPassword };
+}
+
+/**
+ * HQ-only: generates a new temporary password for a club's login and sets
+ * it directly via the admin API — the CRM-side answer to "где хранятся
+ * пароли и где их менять?" (Anastasiia, 15 сен 2026). Before this, the
+ * only way to reset a forgotten club password was HQ opening the Supabase
+ * dashboard itself (Authentication → Users) — this button does the same
+ * thing (admin.auth.admin.updateUserById with a fresh password) without
+ * leaving the CRM. The password itself is never stored anywhere in this
+ * app's own database, before or after — same as at account creation, it's
+ * shown once in the response and then gone.
+ */
+export async function resetPartnerPassword(partnerId: string): Promise<ActionResult> {
+  const profile = await getCurrentProfile();
+  if (!profile) return { error: "errNotAuthorized" };
+  if (profile.role !== "hq") return { error: "errHqOnlyResetPassword" };
+
+  let admin;
+  try {
+    admin = createAdminClient();
+  } catch {
+    return { error: "errSupabaseServiceKeyMissing" };
+  }
+
+  const { data: loginProfile, error: profileError } = await admin
+    .from("profiles")
+    .select("id")
+    .eq("partner_id", partnerId)
+    .eq("role", "partner")
+    .maybeSingle();
+  if (profileError) return { error: profileError.message };
+  if (!loginProfile) return { error: "errNoLoginForClub" };
+
+  const tempPassword = generateTempPassword();
+  const { data: userData, error: userError } = await admin.auth.admin.updateUserById(loginProfile.id, {
+    password: tempPassword,
+  });
+  if (userError) return { error: "errCreateLoginFailed", errorDetail: userError.message };
+
+  return { error: null, tempPassword, resetEmail: userData.user?.email ?? null };
 }
 
 /**

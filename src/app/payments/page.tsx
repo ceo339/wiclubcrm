@@ -3,6 +3,7 @@ import { getCurrentProfile } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { scopeForProfile } from "@/lib/currency";
 import { localeScopeForProfile } from "@/lib/i18n";
+import { isNetworkRole, getViewScopePartnerId } from "@/lib/viewScope";
 import CurrencySwitcher from "@/components/currency/CurrencySwitcher";
 import CurrencyScope from "@/components/currency/CurrencyScope";
 import LocaleSwitcher from "@/components/i18n/LocaleSwitcher";
@@ -17,13 +18,24 @@ export default async function PaymentsPage() {
   if (!profile) redirect("/login");
 
   const supabase = await createClient();
-  // RLS scopes this to the caller's partner_id (or every partner for hq).
-  const { data: payments, error } = await supabase
+  const networkView = isNetworkRole(profile.role);
+  const scopePartnerId = await getViewScopePartnerId(profile);
+
+  // RLS already scopes this to the caller's partner_id (or every partner
+  // for hq/viewer) — the .eq below only narrows further, when an hq/viewer
+  // account has picked one specific city in the header switcher (Round 18).
+  let paymentsQuery = supabase
     .from("payments")
     .select(
       "*, partners(name), members(name), products(name), leads(name, cohort_start_date, added_date), member_enrollments(start_date, created_at)"
     )
     .order("paid_date", { ascending: false });
+  if (scopePartnerId) paymentsQuery = paymentsQuery.eq("partner_id", scopePartnerId);
+  const { data: payments, error } = await paymentsQuery;
+
+  const { data: clubs } = networkView
+    ? await supabase.from("partners").select("id, name").order("name")
+    : { data: [] };
 
   const canEdit = !!profile.partner_id;
   const stripeEnabled =
@@ -63,6 +75,8 @@ export default async function PaymentsPage() {
     <AppShell
       profile={profile}
       title={<T k="navPayments" />}
+      clubs={clubs ?? []}
+      activeClubId={scopePartnerId}
       headerExtra={
         <>
           <CurrencyScope scope={scope} fallback={fallback} />
