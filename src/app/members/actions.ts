@@ -281,6 +281,23 @@ export async function autoCompleteDueEnrollments(): Promise<void> {
  * Price is always freely typed here (not derived from products.price), so a
  * discounted/negotiated amount for this one participant is just what she
  * types, no separate "discount price" field on the course itself needed.
+ *
+ * "Добавить курс — это тихая операция в обход воронки" (Anastasiia, 15 сен
+ * 2026, про Наталью: закончила МК в августе, записалась на сентябрьский
+ * поток тут же, с карточки Участницы, деньги ещё не пришли — а это никак
+ * не попадало ни в канбан, ни в чей-либо список "кому напомнить про
+ * оплату", потому что этот путь никогда не создавал Лид/сделку, только
+ * запись в member_enrollments). Не убираем саму кнопку — она по-прежнему
+ * нужна для уже решённого/оффлайн случая (заплатила наличными, просто
+ * фиксируем факт). Но если курс добавляется НЕ оплаченным ("Записалась"),
+ * функция теперь тихо заводит для неё сделку в Лидах на этапе "Записалась"
+ * — именно так, как решили: "первый пункт уже делай". Привязана к тому же
+ * Контакту, что и её карточка Участницы, поэтому "История контакта" на
+ * этой новой сделке сразу покажет её прошлые курсы (loadContactHistory,
+ * lib/server/contacts.ts, уже строится по contact_id — ничего отдельно
+ * настраивать не пришлось). Идемпотентно: если для этого же контакта уже
+ * есть открытая (не оплаченная и не отклонённая) сделка по этому же курсу
+ * и потоку, вторая не создаётся.
  */
 export async function addEnrollment(memberId: string, formData: FormData): Promise<ActionResult> {
   const profile = await getCurrentProfile();
@@ -290,7 +307,7 @@ export async function addEnrollment(memberId: string, formData: FormData): Promi
   const supabase = await createClient();
   const { data: member } = await supabase
     .from("members")
-    .select("id")
+    .select("id, contact_id, name, phone, email, city, birthday, country")
     .eq("id", memberId)
     .eq("partner_id", profile.partner_id)
     .maybeSingle();
@@ -339,11 +356,99 @@ export async function addEnrollment(memberId: string, formData: FormData): Promi
     status,
   });
 
+  if (status === "sAwaiting") {
+    await createDealForUnpaidEnrollment(supabase, profile.partner_id, member, verifiedProductId, startDate, price);
+  }
+
   revalidatePath("/members");
+  revalidatePath("/leads");
   revalidatePath("/attendance", "layout");
   revalidatePath("/payments");
   revalidatePath("/");
   return { error: null };
+}
+
+/**
+ * The actual "тихо заводит сделку" step used by addEnrollment above — kept
+ * as its own function since it has its own separate concern (a Лид, not a
+ * member_enrollment) and its own idempotency check. `source` is
+ * deliberately left null ("Источник не указан") rather than guessed at —
+ * this course interest didn't come through an ad or a landing page, it was
+ * typed in by a partner from an existing member's card, and a wrong guess
+ * here (e.g. defaulting to "Referral") would quietly corrupt the
+ * "Какой канал приводит участниц" / "Откуда приходят лиды" attribution
+ * reports Anastasiia is actively relying on — this is the exact "сквозная
+ * аналитика" question she's still deciding on (15 сен 2026, paused
+ * mid-conversation), so nothing is guessed here ahead of that decision.
+ */
+async function createDealForUnpaidEnrollment(
+  supabase: SupabaseServerClient,
+  partnerId: string,
+  member: {
+    id: string;
+    contact_id: string | null;
+    name: string;
+    phone: string | null;
+    email: string | null;
+    city: string | null;
+    birthday: string | null;
+    country: string | null;
+  },
+  productId: string | null,
+  cohortStartDate: string | null,
+  price: number
+): Promise<void> {
+  let contactId = member.contact_id;
+  if (!contactId) {
+    contactId = await findOrCreateContact(supabase, partnerId, {
+      name: member.name,
+      phone: member.phone,
+      email: member.email,
+      city: member.city,
+      birthday: member.birthday,
+      country: member.country,
+    });
+    if (contactId) await supabase.from("members").update({ contact_id: contactId }).eq("id", member.id);
+  }
+  if (!contactId) return;
+
+  // Don't spawn a second deal if this exact course+поток is already an
+  // open (not paid, not declined) Лид for this same contact — e.g. the
+  // course was picked here after already being started as a proper lead,
+  // or "Добавить курс" was used twice for the same signup.
+  let existingQuery = supabase
+    .from("leads")
+    .select("id")
+    .eq("contact_id", contactId)
+    .neq("stage", "paid")
+    .neq("stage", "declined");
+  existingQuery = productId ? existingQuery.eq("product_id", productId) : existingQuery.is("product_id", null);
+  existingQuery = cohortStartDate
+    ? existingQuery.eq("cohort_start_date", cohortStartDate)
+    : existingQuery.is("cohort_start_date", null);
+  const { data: existingDeal } = await existingQuery.maybeSingle();
+  if (existingDeal) return;
+
+  await supabase.from("leads").insert({
+    partner_id: partnerId,
+    contact_id: contactId,
+    name: member.name,
+    phone: member.phone,
+    email: member.email,
+    city: member.city,
+    birthday: member.birthday,
+    country: member.country,
+    product_id: productId,
+    cohort_start_date: cohortStartDate,
+    value: price,
+    source: null,
+    stage: "presented",
+  });
+
+  // Same contact_id as the member card, so LeadDetailModal's own
+  // "История контакта" (loadContactHistory, lib/server/contacts.ts) shows
+  // her other courses/leads on this new deal automatically — nothing else
+  // to wire up for that.
 }
 
 export async function updateEnrollment(enrollmentId: string, formData: FormData): Promise<ActionResult> {
