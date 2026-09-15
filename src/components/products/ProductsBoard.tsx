@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { addCohort, deleteCohort, deleteProduct, updateProduct } from "@/app/products/actions";
+import { addCohort, deleteCohort, deleteProduct, rescheduleCohort, updateProduct } from "@/app/products/actions";
 import { todayIso } from "@/lib/payments";
 import Money from "@/components/currency/Money";
 import MoneyAmountField from "@/components/currency/MoneyAmountField";
@@ -96,6 +96,15 @@ function ProductCard({
   // "нужно в курсах редактировать карточку курса, стоимость и название"
   // (Anastasiia, 14 сен 2026)
   const [editing, setEditing] = useState(false);
+  // "в карточке курса если изменять дату потока, то переносить всем участниц
+  // на новую дату" (Anastasiia, 15 сен 2026) — this is the cascading control
+  // (see rescheduleCohort in app/products/actions.ts): unlike the lead
+  // card's own "Перенести на другой поток" (moves just one lead onto an
+  // already-existing поток), changing the date HERE renames the поток
+  // itself and drags every lead/participant already on it along with it.
+  const [editingCohortId, setEditingCohortId] = useState<string | null>(null);
+  const [cohortDate, setCohortDate] = useState("");
+  const [cohortError, setCohortError] = useState<string | null>(null);
 
   const sortedCohorts = [...cohorts].sort((a, b) => a.start_date.localeCompare(b.start_date));
 
@@ -115,6 +124,16 @@ function ProductCard({
   function handleDeleteCohort(id: string) {
     startTransition(async () => {
       await deleteCohort(id);
+    });
+  }
+
+  function handleRescheduleCohort(id: string) {
+    if (!cohortDate) return;
+    setCohortError(null);
+    startTransition(async () => {
+      const res = await rescheduleCohort(id, cohortDate);
+      if (res.error) setCohortError(res.error);
+      else setEditingCohortId(null);
     });
   }
 
@@ -174,6 +193,36 @@ function ProductCard({
         {sortedCohorts.map((c) => {
           const enrolled = membersCountByCohort[`${product.id}|${c.start_date}`] ?? 0;
           const isPast = c.start_date < todayIso();
+
+          if (editingCohortId === c.id) {
+            return (
+              <div key={c.id} className="flex flex-col gap-1">
+                <div className="flex flex-wrap items-center gap-2">
+                  <input
+                    type="date"
+                    value={cohortDate}
+                    onChange={(e) => setCohortDate(e.target.value)}
+                    className="rounded-md border border-border bg-background px-2 py-1 text-xs outline-none focus:border-accent focus:ring-1 focus:ring-accent"
+                  />
+                  <button
+                    onClick={() => handleRescheduleCohort(c.id)}
+                    disabled={pending || !cohortDate}
+                    className="rounded-md bg-foreground px-2 py-1 text-xs font-medium text-background disabled:opacity-50"
+                  >
+                    {pending ? "..." : t("save")}
+                  </button>
+                  <button
+                    onClick={() => setEditingCohortId(null)}
+                    className="rounded-md border border-border px-2 py-1 text-xs text-ink-2 hover:bg-surface-2"
+                  >
+                    {t("cancel")}
+                  </button>
+                </div>
+                <span className="text-[10px] text-muted">{t("hintRescheduleCascades")}</span>
+              </div>
+            );
+          }
+
           return (
             <div key={c.id} className="flex flex-wrap items-center gap-2 text-xs text-ink-2">
               <span>{c.start_date}</span>
@@ -186,18 +235,31 @@ function ProductCard({
                 {t(isPast ? "prodPast" : "prodUpcoming")}
               </span>
               {canEdit && (
-                <button
-                  onClick={() => handleDeleteCohort(c.id)}
-                  disabled={pending}
-                  className="ml-auto text-muted hover:text-accent-strong"
-                  aria-label={t("ariaDeleteCohort")}
-                >
-                  ×
-                </button>
+                <span className="ml-auto flex items-center gap-2">
+                  <button
+                    onClick={() => {
+                      setEditingCohortId(c.id);
+                      setCohortDate(c.start_date);
+                      setCohortError(null);
+                    }}
+                    className="text-muted hover:text-ink-2"
+                  >
+                    {t("btnRescheduleCohort")}
+                  </button>
+                  <button
+                    onClick={() => handleDeleteCohort(c.id)}
+                    disabled={pending}
+                    className="text-muted hover:text-accent-strong"
+                    aria-label={t("ariaDeleteCohort")}
+                  >
+                    ×
+                  </button>
+                </span>
               )}
             </div>
           );
         })}
+        {cohortError && <p className="text-xs text-accent-strong">{t(cohortError)}</p>}
       </div>
 
       {canEdit && (

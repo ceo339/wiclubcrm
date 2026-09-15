@@ -678,6 +678,78 @@ export async function assignLeadProductAndReserve(
 }
 
 /**
+ * "нет, нужно перенести только этого лида на другой уже существующий поток"
+ * (Anastasiia, 15 сен 2026) — corrects the first version of the lead card's
+ * "reschedule" control, which called rescheduleCohort (products/actions.ts:
+ * renames the поток's own date and cascades to EVERYONE on it). This is the
+ * narrower sibling: it moves just this one lead — and, if she already has a
+ * reserved/paid seat for this course, that one enrollment row — onto a
+ * поток that already exists. Nobody else on either поток (old or new) is
+ * touched. Only ever offered a real, already-existing `product_cohorts`
+ * date for this lead's course (never an arbitrary typed date), since this
+ * action never creates or renames a поток itself — see rescheduleCohort for
+ * that, cascading, operation (used from the Курсы catalog instead).
+ */
+export async function moveLeadToCohort(leadId: string, newCohortStartDate: string): Promise<ActionResult> {
+  const profile = await getCurrentProfile();
+  if (!profile) return { error: "errNotAuthorized" };
+  if (!profile.partner_id) return { error: "errHqNoClubEdit" };
+
+  const trimmed = newCohortStartDate.trim();
+  if (!trimmed) return { error: "errEnterCohortStartDate" };
+
+  const supabase = await createClient();
+
+  const { data: lead } = await supabase
+    .from("leads")
+    .select("id, product_id, cohort_start_date, contact_id")
+    .eq("id", leadId)
+    .eq("partner_id", profile.partner_id)
+    .maybeSingle();
+  if (!lead) return { error: "errLeadNotFound" };
+  if (!lead.product_id) return { error: "errCourseNotFound" };
+
+  const { data: targetCohort } = await supabase
+    .from("product_cohorts")
+    .select("id")
+    .eq("partner_id", profile.partner_id)
+    .eq("product_id", lead.product_id)
+    .eq("start_date", trimmed)
+    .maybeSingle();
+  if (!targetCohort) return { error: "errCourseNotFound" };
+
+  const oldDate = lead.cohort_start_date;
+
+  const { error } = await supabase.from("leads").update({ cohort_start_date: trimmed }).eq("id", leadId);
+  if (error) return { error: error.message };
+
+  // Move this same person's own enrollment along with her, if she already
+  // has one for this course on the old поток (reserved on "Записалась"/
+  // "Выставлен счёт", or already paid) — matched by contact, the same
+  // canonical-person lookup used everywhere else (reserveAwaitingEnrollment,
+  // updateLeadStage), not by lead_id, so a repeat заявка from someone who
+  // already has a member card elsewhere still finds it.
+  if (lead.contact_id) {
+    const { data: member } = await supabase.from("members").select("id").eq("contact_id", lead.contact_id).maybeSingle();
+    if (member) {
+      let query = supabase
+        .from("member_enrollments")
+        .update({ start_date: trimmed })
+        .eq("member_id", member.id)
+        .eq("product_id", lead.product_id);
+      query = oldDate ? query.eq("start_date", oldDate) : query.is("start_date", null);
+      await query;
+    }
+  }
+
+  revalidatePath("/leads");
+  revalidatePath("/members");
+  revalidatePath("/contacts");
+  revalidatePath("/attendance");
+  return { error: null };
+}
+
+/**
  * Updates the editable contact/detail fields on a lead from the detail
  * card. Stage changes still happen via the kanban drag (updateLeadStage) —
  * this only covers the fields the prototype's lead drawer let you see and

@@ -9,12 +9,12 @@ import {
   convertLeadToMember,
   deleteLead,
   getLeadDetail,
+  moveLeadToCohort,
   setTaskDone,
   updateLead,
   updateLeadStage,
   type LeadDetail,
 } from "@/app/leads/actions";
-import { rescheduleCohort } from "@/app/products/actions";
 import {
   COUNTRIES,
   GENERIC_PLANS,
@@ -316,10 +316,11 @@ function ReadView({
           <RescheduleCohortRow
             label={t("fieldCohortStart")}
             value={lead.cohort_start_date}
-            cohort={
-              cohorts.find((c) => c.product_id === lead.product_id && c.start_date === lead.cohort_start_date) ??
-              null
-            }
+            leadId={lead.id}
+            productId={lead.product_id}
+            otherCohorts={cohorts.filter(
+              (c) => c.product_id === lead.product_id && c.start_date !== lead.cohort_start_date
+            )}
             canEdit={canEdit}
           />
         )}
@@ -690,33 +691,39 @@ function Row({ label, value }: { label: string; value: string | number | null })
 }
 
 /**
- * "В карточке лида меня дату потока курса через редактирование, а не через
- * удаление" (Anastasiia, 15 сен 2026) — lets her reschedule the whole поток
- * right from the lead card instead of deleting and recreating it in the
- * Курсы catalog (which used to orphan everyone else already on that date —
- * see rescheduleCohort in app/products/actions.ts for the cascade). Falls
- * back to a plain read-only row when there's no matching `product_cohorts`
- * row to reschedule against (e.g. a date typed by hand before cohorts
- * existed) — nothing to attach the edit control to in that case.
+ * "нет, нужно перенести только этого лида на другой уже существующий поток"
+ * (Anastasiia, 15 сен 2026) — corrects the first version of this control,
+ * which renamed the поток's own date and cascaded to EVERYONE on it (that
+ * operation still exists, just moved to the Курсы catalog — see
+ * rescheduleCohort in app/products/actions.ts, used from ProductsBoard.tsx).
+ * This one moves just this one lead — and her own enrollment, if she has
+ * one for this course — onto a поток that already exists; nobody else on
+ * either date is touched, and it never creates or renames a поток itself.
+ * Falls back to a plain read-only row when there's no OTHER already-existing
+ * поток of this lead's course to move her to.
  */
 function RescheduleCohortRow({
   label,
   value,
-  cohort,
+  leadId,
+  productId,
+  otherCohorts,
   canEdit,
 }: {
   label: string;
   value: string;
-  cohort: Cohort | null;
+  leadId: string;
+  productId: string | null;
+  otherCohorts: Cohort[];
   canEdit: boolean;
 }) {
   const t = useT();
   const [editing, setEditing] = useState(false);
-  const [date, setDate] = useState(value);
+  const [target, setTarget] = useState(() => otherCohorts[0]?.start_date ?? "");
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
-  if (!canEdit || !cohort) {
+  if (!canEdit || !productId || otherCohorts.length === 0) {
     return <Row label={label} value={value} />;
   }
 
@@ -728,10 +735,14 @@ function RescheduleCohortRow({
           {value}
           <button
             type="button"
-            onClick={() => setEditing(true)}
+            onClick={() => {
+              setTarget(otherCohorts[0]?.start_date ?? "");
+              setError(null);
+              setEditing(true);
+            }}
             className="text-xs font-medium text-accent-strong hover:underline"
           >
-            {t("btnRescheduleCohort")}
+            {t("btnMoveToCohort")}
           </button>
         </dd>
       </>
@@ -743,19 +754,24 @@ function RescheduleCohortRow({
       <dt className="text-muted">{label}</dt>
       <dd className="flex flex-col gap-1.5">
         <div className="flex flex-wrap items-center gap-2">
-          <input
-            type="date"
-            value={date}
-            onChange={(e) => setDate(e.target.value)}
+          <select
+            value={target}
+            onChange={(e) => setTarget(e.target.value)}
             className="rounded-md border border-border bg-background px-2 py-1 text-xs outline-none focus:border-accent focus:ring-1 focus:ring-accent"
-          />
+          >
+            {otherCohorts.map((c) => (
+              <option key={c.id} value={c.start_date}>
+                {c.start_date}
+              </option>
+            ))}
+          </select>
           <button
             type="button"
-            disabled={pending || !date}
+            disabled={pending || !target}
             onClick={() =>
               startTransition(async () => {
                 setError(null);
-                const res = await rescheduleCohort(cohort.id, date);
+                const res = await moveLeadToCohort(leadId, target);
                 if (res.error) setError(res.error);
                 else setEditing(false);
               })
@@ -768,7 +784,6 @@ function RescheduleCohortRow({
             type="button"
             onClick={() => {
               setEditing(false);
-              setDate(value);
               setError(null);
             }}
             className="rounded-md border border-border px-2 py-1 text-xs text-ink-2 hover:bg-surface-2"
@@ -776,7 +791,6 @@ function RescheduleCohortRow({
             {t("cancel")}
           </button>
         </div>
-        <span className="text-[11px] text-muted">{t("hintRescheduleCascades")}</span>
         {error && <span className="text-xs text-accent-strong">{t(error)}</span>}
       </dd>
     </>
