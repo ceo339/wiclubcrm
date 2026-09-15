@@ -149,6 +149,139 @@ async function reserveAwaitingEnrollment(supabase: SupabaseServerClient, lead: R
 }
 
 /**
+ * Everything that happens once a lead is (or becomes) ready to be treated as
+ * paid: reserve+promote her course seat to a real paid enrollment and record
+ * the payment, or — if she has no course at all — the legacy lead_id-keyed
+ * payment fallback. `partnerId` is passed separately (not read off `lead`)
+ * so this can be called with a plain non-null string from either caller
+ * without TypeScript losing track of the narrowing across the call.
+ *
+ * Shared by two different moments that can each be the one that finally
+ * makes a lead "ready": updateLeadStage below (the stage itself changing to
+ * "Оплата") and updateLead (course/поток/сумма filled in — or corrected —
+ * on a lead that was already sitting at "Оплата"). "если уже прописан курс
+ * и поток и сумма и стадия оплата - чтоб участницей становилась автоматом"
+ * (Anastasiia, 15 сен 2026) — before this, a lead that reached "Оплата"
+ * without a course already attached (dragged straight there, or the course
+ * added only afterward through the edit form) just sat there with a bare
+ * payments row and no member card, needing "Сделать участницей" clicked by
+ * hand even though everything required was already filled in.
+ */
+async function promotePaidLead(
+  supabase: SupabaseServerClient,
+  leadId: string,
+  partnerId: string,
+  lead: ReserveLeadRow
+): Promise<void> {
+  if (lead.product_id && lead.cohort_start_date && Number(lead.value) > 0) {
+    await reserveAwaitingEnrollment(supabase, lead);
+  }
+
+  // Found by contact, not by this lead's own lead_id (round 11, 13 сен
+  // 2026) — same fix as reserveAwaitingEnrollment above, for the same
+  // reason: a repeat заявка from someone who already has a member card
+  // elsewhere needs to reuse it, or this falls through to the orphaned
+  // lead_id-keyed payment below and creates a visible duplicate.
+  let existingMember: { id: string } | null = null;
+  if (lead.contact_id) {
+    const { data } = await supabase.from("members").select("id").eq("contact_id", lead.contact_id).maybeSingle();
+    existingMember = data;
+  }
+  if (!existingMember) {
+    const { data } = await supabase.from("members").select("id").eq("lead_id", leadId).maybeSingle();
+    existingMember = data;
+  }
+
+  // A pending "Ожидание" enrollment created when this lead reached
+  // "Записалась" (see reserveAwaitingEnrollment above) becomes "Оплачено"
+  // the moment the lead itself reaches "Оплата" — forward-only, only ever
+  // moves an sAwaiting row, so a status she already changed by hand
+  // (declined, refunded, completed…) is never touched by this. Matched by
+  // product **and** поток (start_date), same reasoning as
+  // reserveAwaitingEnrollment — otherwise a fresh signup for a later
+  // поток of the same course could get merged into an old, already-paid
+  // enrollment instead of getting its own payment.
+  let matchedEnrollment: { id: string; status: string; price: number; memberId: string } | null = null;
+  if (existingMember && lead.product_id) {
+    let pendingQuery = supabase
+      .from("member_enrollments")
+      .select("id, status, price")
+      .eq("member_id", existingMember.id)
+      .eq("product_id", lead.product_id);
+    pendingQuery = lead.cohort_start_date
+      ? pendingQuery.eq("start_date", lead.cohort_start_date)
+      : pendingQuery.is("start_date", null);
+    const { data: pendingEnrollment } = await pendingQuery.maybeSingle();
+
+    if (pendingEnrollment) {
+      let status = pendingEnrollment.status;
+      let price = Number(pendingEnrollment.price);
+      if (status === "sAwaiting") {
+        // "бери за изначальные значения сумму, которую я прописываю в
+        // карточке лида" (Anastasiia, 13 сен 2026) — the seat was very
+        // possibly reserved at 0/whatever "Сумма" was back then; refresh
+        // it from whatever's on the lead RIGHT NOW, at the moment it's
+        // actually marked paid, rather than trusting a stale number or
+        // guessing at the course's list price.
+        price = Number(lead.value) || 0;
+        await supabase
+          .from("member_enrollments")
+          .update({ status: "sPaid", paid: true, price })
+          .eq("id", pendingEnrollment.id);
+        status = "sPaid";
+      }
+      matchedEnrollment = { id: pendingEnrollment.id, status, price, memberId: existingMember.id };
+    }
+  }
+
+  // "нет данных по оплатам за июль, хотя были они" (Anastasiia, 13 сен
+  // 2026) — this used to stop at flipping the enrollment's status; it
+  // never created the matching `payments` row, so the block below (kept
+  // only as a fallback now) wrote a payment keyed by lead_id, gated on
+  // the LEAD's own `value` — which can be 0 even though the enrollment
+  // itself has a real price (e.g. the price was only ever set via
+  // "Сделать участницей"/the member card, not on the lead itself). When
+  // this lead has a real course enrollment, that enrollment — not the
+  // lead's `value` — is now the one source of truth for its payment,
+  // recorded through the same idempotent-by-enrollment_id helper the
+  // member card already uses (`syncEnrollmentPayment`), so a lead with a
+  // course never also creates a second, duplicate lead_id-keyed payment
+  // for the same money. This also quietly backfills a payment for an
+  // enrollment that was already sPaid/sCompleted from an earlier stage
+  // change, if one was somehow still missing.
+  if (matchedEnrollment) {
+    await syncEnrollmentPayment(supabase, {
+      partnerId,
+      memberId: matchedEnrollment.memberId,
+      enrollmentId: matchedEnrollment.id,
+      productId: lead.product_id,
+      price: matchedEnrollment.price,
+      status: matchedEnrollment.status,
+    });
+  } else if (Number(lead.value) > 0) {
+    // No course chosen on this lead at all — the pre-round-8 fallback:
+    // one payment per lead, keyed by lead_id, using the lead's own value.
+    const { data: existingPayment } = await supabase
+      .from("payments")
+      .select("id")
+      .eq("lead_id", leadId)
+      .maybeSingle();
+
+    if (!existingPayment) {
+      await supabase.from("payments").insert({
+        partner_id: partnerId,
+        lead_id: leadId,
+        member_id: existingMember?.id ?? null,
+        product_id: lead.product_id,
+        amount: lead.value,
+        status: "paid",
+        paid_date: todayIso(),
+      });
+    }
+  }
+}
+
+/**
  * Moves a lead to a new stage. RLS enforces that only the owning partner
  * can write to a lead — an HQ account (no partner_id) will simply be
  * rejected by the database, which is the correct behaviour (HQ is a
@@ -193,113 +326,7 @@ export async function updateLeadStage(
   // in the Платежи ledger without a separate manual step. Skipped when
   // there's no partner (hq can't write payments anyway).
   if (stage === "paid" && updated && updated.partner_id) {
-    // Found by contact, not by this lead's own lead_id (round 11, 13 сен
-    // 2026) — same fix as reserveAwaitingEnrollment above, for the same
-    // reason: a repeat заявка from someone who already has a member card
-    // elsewhere needs to reuse it, or this falls through to the orphaned
-    // lead_id-keyed payment below and creates a visible duplicate.
-    let existingMember: { id: string } | null = null;
-    if (updated.contact_id) {
-      const { data } = await supabase.from("members").select("id").eq("contact_id", updated.contact_id).maybeSingle();
-      existingMember = data;
-    }
-    if (!existingMember) {
-      const { data } = await supabase.from("members").select("id").eq("lead_id", leadId).maybeSingle();
-      existingMember = data;
-    }
-
-    // A pending "Ожидание" enrollment created when this lead reached
-    // "Записалась" (see reserveAwaitingEnrollment above) becomes "Оплачено"
-    // the moment the lead itself reaches "Оплата" — forward-only, only ever
-    // moves an sAwaiting row, so a status she already changed by hand
-    // (declined, refunded, completed…) is never touched by this. Matched by
-    // product **and** поток (start_date), same reasoning as
-    // reserveAwaitingEnrollment — otherwise a fresh signup for a later
-    // поток of the same course could get merged into an old, already-paid
-    // enrollment instead of getting its own payment.
-    let matchedEnrollment: { id: string; status: string; price: number; memberId: string } | null = null;
-    if (existingMember && updated.product_id) {
-      let pendingQuery = supabase
-        .from("member_enrollments")
-        .select("id, status, price")
-        .eq("member_id", existingMember.id)
-        .eq("product_id", updated.product_id);
-      pendingQuery = updated.cohort_start_date
-        ? pendingQuery.eq("start_date", updated.cohort_start_date)
-        : pendingQuery.is("start_date", null);
-      const { data: pendingEnrollment } = await pendingQuery.maybeSingle();
-
-      if (pendingEnrollment) {
-        let status = pendingEnrollment.status;
-        let price = Number(pendingEnrollment.price);
-        if (status === "sAwaiting") {
-          // "бери за изначальные значения сумму, которую я прописываю в
-          // карточке лида" (Anastasiia, 13 сен 2026) — the seat was very
-          // possibly reserved at 0/whatever "Сумма" was back then; refresh
-          // it from whatever's on the lead RIGHT NOW, at the moment it's
-          // actually marked paid, rather than trusting a stale number or
-          // guessing at the course's list price.
-          price = Number(updated.value) || 0;
-          await supabase
-            .from("member_enrollments")
-            .update({ status: "sPaid", paid: true, price })
-            .eq("id", pendingEnrollment.id);
-          status = "sPaid";
-        }
-        matchedEnrollment = {
-          id: pendingEnrollment.id,
-          status,
-          price,
-          memberId: existingMember.id,
-        };
-      }
-    }
-
-    // "нет данных по оплатам за июль, хотя были они" (Anastasiia, 13 сен
-    // 2026) — this used to stop at flipping the enrollment's status; it
-    // never created the matching `payments` row, so the block below (kept
-    // only as a fallback now) wrote a payment keyed by lead_id, gated on
-    // the LEAD's own `value` — which can be 0 even though the enrollment
-    // itself has a real price (e.g. the price was only ever set via
-    // "Сделать участницей"/the member card, not on the lead itself). When
-    // this lead has a real course enrollment, that enrollment — not the
-    // lead's `value` — is now the one source of truth for its payment,
-    // recorded through the same idempotent-by-enrollment_id helper the
-    // member card already uses (`syncEnrollmentPayment`), so a lead with a
-    // course never also creates a second, duplicate lead_id-keyed payment
-    // for the same money. This also quietly backfills a payment for an
-    // enrollment that was already sPaid/sCompleted from an earlier stage
-    // change, if one was somehow still missing.
-    if (matchedEnrollment) {
-      await syncEnrollmentPayment(supabase, {
-        partnerId: updated.partner_id,
-        memberId: matchedEnrollment.memberId,
-        enrollmentId: matchedEnrollment.id,
-        productId: updated.product_id,
-        price: matchedEnrollment.price,
-        status: matchedEnrollment.status,
-      });
-    } else if (Number(updated.value) > 0) {
-      // No course chosen on this lead at all — the pre-round-8 fallback:
-      // one payment per lead, keyed by lead_id, using the lead's own value.
-      const { data: existingPayment } = await supabase
-        .from("payments")
-        .select("id")
-        .eq("lead_id", leadId)
-        .maybeSingle();
-
-      if (!existingPayment) {
-        await supabase.from("payments").insert({
-          partner_id: updated.partner_id,
-          lead_id: leadId,
-          member_id: existingMember?.id ?? null,
-          product_id: updated.product_id,
-          amount: updated.value,
-          status: "paid",
-          paid_date: todayIso(),
-        });
-      }
-    }
+    await promotePaidLead(supabase, leadId, updated.partner_id, updated);
   }
 
   revalidatePath("/leads");
@@ -817,7 +844,7 @@ export async function updateLead(leadId: string, formData: FormData): Promise<Ac
       cohort_start_date: cohortStartDate,
     })
     .eq("id", leadId)
-    .select("contact_id")
+    .select("contact_id, stage")
     .maybeSingle();
 
   if (error) return { error: error.message };
@@ -834,9 +861,35 @@ export async function updateLead(leadId: string, formData: FormData): Promise<Ac
     await supabase.from("contacts").update({ name, phone, email, city, birthday, country }).eq("id", updated.contact_id);
   }
 
+  // "если уже прописан курс и поток и сумма и стадия оплата - чтоб
+  // участницей становилась автоматом" (Anastasiia, 15 сен 2026) — covers the
+  // other direction from updateLeadStage's own use of promotePaidLead: a
+  // lead that was already sitting at "Оплата" (reached it before the course/
+  // поток/сумма were ever filled in — no way to "re-trigger" a stage change
+  // to a stage it's already on) becomes a real Участница the moment those
+  // fields are filled in or corrected right here on the edit form, without
+  // "Сделать участницей" needing a manual click either.
+  if (updated?.stage === "paid") {
+    await promotePaidLead(supabase, leadId, profile.partner_id, {
+      id: leadId,
+      partner_id: profile.partner_id,
+      value,
+      product_id: productId,
+      cohort_start_date: cohortStartDate,
+      name,
+      phone,
+      email,
+      city,
+      birthday,
+      country,
+      contact_id: updated.contact_id,
+    });
+  }
+
   revalidatePath("/leads");
   revalidatePath("/members");
   revalidatePath("/contacts");
+  revalidatePath("/payments");
   return { error: null };
 }
 
