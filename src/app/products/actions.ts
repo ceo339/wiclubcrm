@@ -118,6 +118,85 @@ export async function addCohort(formData: FormData): Promise<ActionResult> {
   return { error: null };
 }
 
+/**
+ * "Нужно добавить возмождность редактирования курса, изменить дату потока"
+ * (Anastasiia, 15 сен 2026) — until round 19 the only way to change a
+ * поток's date was delete-and-recreate, which orphaned everyone already
+ * pointing at the old date string: `leads.cohort_start_date` and
+ * `member_enrollments.start_date` are plain date fields, not FKs to
+ * `product_cohorts.id`, so nothing would follow a deleted/recreated row
+ * anywhere else in the app. She explicitly asked for the edit control in the
+ * lead card (not just the Курсы catalog) and for the cascade — "Переносить
+ * всех вместе с потоком (рекомендовано)" — so everyone already on the old
+ * date (other leads, and already-enrolled/paid participants) moves with it.
+ * Guards against landing on a date some other cohort of the same course
+ * already occupies, which would otherwise silently merge two distinct
+ * потоки together.
+ */
+export async function rescheduleCohort(cohortId: string, newStartDate: string): Promise<ActionResult> {
+  const profile = await getCurrentProfile();
+  if (!profile) return { error: "errNotAuthorized" };
+  if (!profile.partner_id) return { error: "errHqNoClubGeneric" };
+
+  const trimmed = newStartDate.trim();
+  if (!trimmed) return { error: "errEnterCohortStartDate" };
+
+  const supabase = await createClient();
+
+  const { data: cohort } = await supabase
+    .from("product_cohorts")
+    .select("id, product_id, start_date")
+    .eq("id", cohortId)
+    .eq("partner_id", profile.partner_id)
+    .maybeSingle();
+  if (!cohort) return { error: "errCourseNotFound" };
+  if (cohort.start_date === trimmed) return { error: null };
+
+  const { data: collision } = await supabase
+    .from("product_cohorts")
+    .select("id")
+    .eq("product_id", cohort.product_id)
+    .eq("partner_id", profile.partner_id)
+    .eq("start_date", trimmed)
+    .neq("id", cohortId)
+    .maybeSingle();
+  if (collision) return { error: "errCohortDateTaken" };
+
+  const oldDate = cohort.start_date;
+
+  const { error } = await supabase
+    .from("product_cohorts")
+    .update({ start_date: trimmed })
+    .eq("id", cohortId)
+    .eq("partner_id", profile.partner_id);
+  if (error) return { error: error.message };
+
+  // Move everyone already tied to the old поток with it — matched by
+  // partner+product+the exact old date, same scoping every other cascade in
+  // this app uses for start_date (reserveAwaitingEnrollment, updateLeadStage).
+  await supabase
+    .from("leads")
+    .update({ cohort_start_date: trimmed })
+    .eq("partner_id", profile.partner_id)
+    .eq("product_id", cohort.product_id)
+    .eq("cohort_start_date", oldDate);
+
+  await supabase
+    .from("member_enrollments")
+    .update({ start_date: trimmed })
+    .eq("partner_id", profile.partner_id)
+    .eq("product_id", cohort.product_id)
+    .eq("start_date", oldDate);
+
+  revalidatePath("/products");
+  revalidatePath("/leads");
+  revalidatePath("/members");
+  revalidatePath("/contacts");
+  revalidatePath("/attendance");
+  revalidatePath("/");
+  return { error: null };
+}
+
 export async function deleteCohort(id: string): Promise<ActionResult> {
   const profile = await getCurrentProfile();
   if (!profile) return { error: "errNotAuthorized" };

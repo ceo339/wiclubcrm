@@ -160,7 +160,13 @@ export default function AttendanceBoard({
       </div>
 
       <div className="rounded-xl border border-border bg-background shadow-card">
-        <GroupAttendanceBoard members={roster} sessions={selectedCohort.sessions} canEdit={canEdit} />
+        {/* key={selectedCohort.id} forces a fresh GroupAttendanceBoard (and
+            fresh internal attendance grid) on every course/stream switch —
+            without it, React kept reusing the same component instance, so
+            its grid (built once via useState's lazy initializer) never
+            resynced with the new roster and crashed or showed stale ticks
+            once the two rosters had a different number of people. */}
+        <GroupAttendanceBoard key={selectedCohort.id} members={roster} sessions={selectedCohort.sessions} canEdit={canEdit} />
       </div>
     </div>
   );

@@ -178,7 +178,13 @@ export async function updateLeadStage(
 
   if (error) return { error: error.message };
 
-  if (stage === "presented" && updated && updated.partner_id && updated.product_id) {
+  // Round 19: the same course-selection prompt (see LeadDetailModal/
+  // KanbanBoard) now also fires on "Выставлен счет" (invoiced), not just
+  // "Записалась" — a lead can reach invoiced without ever passing through
+  // presented first, so the reservation this triggers has to fire on
+  // either stage, or a course picked at invoiced would never create a
+  // "Ожидание" row in Участницы until (if ever) it later reaches "Оплата".
+  if ((stage === "presented" || stage === "invoiced") && updated && updated.partner_id && updated.product_id) {
     await reserveAwaitingEnrollment(supabase, updated);
   }
 
@@ -652,7 +658,16 @@ export async function assignLeadProductAndReserve(
 
   if (error) return { error: error.message };
 
-  if (updated && updated.partner_id && updated.stage === "presented" && updated.product_id) {
+  // Round 19: also reserve when the course is (re)assigned to a lead
+  // already sitting on "Выставлен счет" — same reasoning as updateLeadStage
+  // above, this is the "Выбрать курс" banner's server call, used when a
+  // lead is stuck on a course-requiring stage with none chosen yet.
+  if (
+    updated &&
+    updated.partner_id &&
+    (updated.stage === "presented" || updated.stage === "invoiced") &&
+    updated.product_id
+  ) {
     await reserveAwaitingEnrollment(supabase, updated);
   }
 

@@ -14,6 +14,7 @@ import {
   updateLeadStage,
   type LeadDetail,
 } from "@/app/leads/actions";
+import { rescheduleCohort } from "@/app/products/actions";
 import {
   COUNTRIES,
   GENERIC_PLANS,
@@ -67,6 +68,7 @@ export default function LeadDetailModal({
   const [editing, setEditing] = useState(false);
   const [showDeclineModal, setShowDeclineModal] = useState(false);
   const [showCourseModal, setShowCourseModal] = useState(false);
+  const [coursePendingStage, setCoursePendingStage] = useState<StageId>("presented");
   const [showAssignCourseModal, setShowAssignCourseModal] = useState(false);
   const [stageError, setStageError] = useState<string | null>(null);
   const [, startStageTransition] = useTransition();
@@ -96,8 +98,11 @@ export default function LeadDetailModal({
     // "куда записалась я выбрать не могу" (Anastasiia, 13 сен 2026) —
     // without a course, round 8's auto-reserve in updateLeadStage has
     // nothing to attach to Участницы, so ask right here instead of leaving
-    // her to discover the course field is only in "Редактировать".
-    if (next === "presented" && !lead.product_id) {
+    // her to discover the course field is only in "Редактировать". Round 19
+    // extends the same prompt to "Выставлен счет" (invoiced) — a lead can
+    // reach that stage without ever having gone through "Записалась" first.
+    if ((next === "presented" || next === "invoiced") && !lead.product_id) {
+      setCoursePendingStage(next);
       setShowCourseModal(true);
       return;
     }
@@ -125,7 +130,7 @@ export default function LeadDetailModal({
           return;
         }
       }
-      const res = await updateLeadStage(lead.id, "presented");
+      const res = await updateLeadStage(lead.id, coursePendingStage);
       if (res.error) setStageError(res.error);
     });
   }
@@ -307,7 +312,17 @@ function ReadView({
             value={products.find((p) => p.id === lead.product_id)?.name ?? null}
           />
         )}
-        {lead.cohort_start_date && <Row label={t("fieldCohortStart")} value={lead.cohort_start_date} />}
+        {lead.cohort_start_date && (
+          <RescheduleCohortRow
+            label={t("fieldCohortStart")}
+            value={lead.cohort_start_date}
+            cohort={
+              cohorts.find((c) => c.product_id === lead.product_id && c.start_date === lead.cohort_start_date) ??
+              null
+            }
+            canEdit={canEdit}
+          />
+        )}
         {/* "campaign_name мне нужны еще фильтры по этому параметру, чтоб
             отслеживать динамику лида по каждой из рекламной компании"
             (Anastasiia, 13 сен 2026) — utm_campaign/utm_content/utm_term/
@@ -344,12 +359,13 @@ function ReadView({
       </dl>
 
       {/* "и снова запись и выбрать курс не работает" (Anastasiia, 13 сен
-          2026) — a lead already sitting on "Записалась" with no course had
-          no way back to the picker (the stage dropdown above is a no-op
-          when its value isn't actually changing). This callout is that way
-          back in, and it's also what makes the missing seat visible at a
-          glance instead of a silent no-op. */}
-      {lead.stage === "presented" && !lead.product_id && canEdit && (
+          2026) — a lead already sitting on "Записалась" (or, since round 19,
+          "Выставлен счет") with no course had no way back to the picker (the
+          stage dropdown above is a no-op when its value isn't actually
+          changing). This callout is that way back in, and it's also what
+          makes the missing seat visible at a glance instead of a silent
+          no-op. */}
+      {(lead.stage === "presented" || lead.stage === "invoiced") && !lead.product_id && canEdit && (
         <div className="mt-4 flex flex-wrap items-center gap-2 rounded-lg bg-warn-soft px-3 py-2 text-xs text-warn">
           <span className="font-medium">{t("noticeNoCourseYet")}</span>
           <button
@@ -669,6 +685,100 @@ function Row({ label, value }: { label: string; value: string | number | null })
     <>
       <dt className="text-muted">{label}</dt>
       <dd className="text-ink-2">{value}</dd>
+    </>
+  );
+}
+
+/**
+ * "В карточке лида меня дату потока курса через редактирование, а не через
+ * удаление" (Anastasiia, 15 сен 2026) — lets her reschedule the whole поток
+ * right from the lead card instead of deleting and recreating it in the
+ * Курсы catalog (which used to orphan everyone else already on that date —
+ * see rescheduleCohort in app/products/actions.ts for the cascade). Falls
+ * back to a plain read-only row when there's no matching `product_cohorts`
+ * row to reschedule against (e.g. a date typed by hand before cohorts
+ * existed) — nothing to attach the edit control to in that case.
+ */
+function RescheduleCohortRow({
+  label,
+  value,
+  cohort,
+  canEdit,
+}: {
+  label: string;
+  value: string;
+  cohort: Cohort | null;
+  canEdit: boolean;
+}) {
+  const t = useT();
+  const [editing, setEditing] = useState(false);
+  const [date, setDate] = useState(value);
+  const [pending, startTransition] = useTransition();
+  const [error, setError] = useState<string | null>(null);
+
+  if (!canEdit || !cohort) {
+    return <Row label={label} value={value} />;
+  }
+
+  if (!editing) {
+    return (
+      <>
+        <dt className="text-muted">{label}</dt>
+        <dd className="flex items-center gap-2 text-ink-2">
+          {value}
+          <button
+            type="button"
+            onClick={() => setEditing(true)}
+            className="text-xs font-medium text-accent-strong hover:underline"
+          >
+            {t("btnRescheduleCohort")}
+          </button>
+        </dd>
+      </>
+    );
+  }
+
+  return (
+    <>
+      <dt className="text-muted">{label}</dt>
+      <dd className="flex flex-col gap-1.5">
+        <div className="flex flex-wrap items-center gap-2">
+          <input
+            type="date"
+            value={date}
+            onChange={(e) => setDate(e.target.value)}
+            className="rounded-md border border-border bg-background px-2 py-1 text-xs outline-none focus:border-accent focus:ring-1 focus:ring-accent"
+          />
+          <button
+            type="button"
+            disabled={pending || !date}
+            onClick={() =>
+              startTransition(async () => {
+                setError(null);
+                const res = await rescheduleCohort(cohort.id, date);
+                if (res.error) setError(res.error);
+                else setEditing(false);
+              })
+            }
+            className="rounded-md bg-foreground px-2 py-1 text-xs font-medium text-background disabled:opacity-50"
+          >
+            {pending ? "..." : t("save")}
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setEditing(false);
+              setDate(value);
+              setError(null);
+            }}
+            className="rounded-md border border-border px-2 py-1 text-xs text-ink-2 hover:bg-surface-2"
+          >
+            {t("cancel")}
+          </button>
+        </div>
+        <span className="text-[11px] text-muted">{t("hintRescheduleCascades")}</span>
+        {error && <span className="text-xs text-accent-strong">{t(error)}</span>}
+      </dd>
     </>
   );
 }

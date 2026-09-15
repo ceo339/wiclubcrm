@@ -2,10 +2,11 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import type { ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import type { Profile } from "@/lib/auth";
 import { isNetworkRole } from "@/lib/role";
 import T from "@/components/i18n/T";
+import { useT } from "@/components/i18n/LocaleProvider";
 import { signOut } from "@/app/login/actions";
 import CityScopeSwitcher from "./CityScopeSwitcher";
 import {
@@ -18,6 +19,7 @@ import {
   IconWallet,
   IconMail,
   IconBuilding,
+  IconMenu,
 } from "./icons";
 
 const ROLE_LABEL_KEYS: Record<string, string> = {
@@ -123,20 +125,66 @@ export default function AppShell({
   children: ReactNode;
 }) {
   const pathname = usePathname();
+  const t = useT();
   const items = navItemsForProfile(profile);
   const roleLabelKey = ROLE_LABEL_KEYS[profile.role];
+  // Round 19 mobile pass ("Нужно сделать оптимизацию под мобильный
+  // телефон", Anastasiia, 15 сен 2026) — the sidebar used to be a fixed
+  // 248px column with no way to hide it, which on a ~390px phone left less
+  // than half the screen for the page itself. Below the md breakpoint it's
+  // now an off-canvas drawer, toggled by the hamburger button in the header.
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
+
+  // Closing on every route change means a tapped nav link doesn't leave the
+  // drawer (and its backdrop) covering the page it just navigated to.
+  useEffect(() => {
+    setMobileNavOpen(false);
+  }, [pathname]);
+
+  // Stop the page behind the drawer from scrolling while it's open — only
+  // matters on mobile, where the drawer overlays the content instead of
+  // sitting beside it.
+  useEffect(() => {
+    if (!mobileNavOpen) return;
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = previous;
+    };
+  }, [mobileNavOpen]);
 
   return (
     <div className="flex min-h-screen bg-surface-2">
-      <aside className="sticky top-0 flex h-screen w-[248px] shrink-0 flex-col gap-1.5 border-r border-border bg-background px-3.5 py-5">
-        <Link href="/" className="mb-4 flex items-center gap-2.5 px-1.5">
-          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-accent font-display text-[17px] leading-none text-white">
-            Wi
-          </span>
-          <span className="text-[15px] font-semibold tracking-tight text-foreground">
-            WI Club CRM
-          </span>
-        </Link>
+      {mobileNavOpen && (
+        <div
+          className="fixed inset-0 z-40 bg-black/30 md:hidden"
+          onClick={() => setMobileNavOpen(false)}
+          aria-hidden="true"
+        />
+      )}
+      <aside
+        className={`fixed inset-y-0 left-0 z-50 flex h-screen w-[248px] shrink-0 flex-col gap-1.5 overflow-y-auto border-r border-border bg-background px-3.5 py-5 shadow-xl transition-transform duration-200 ease-out md:sticky md:top-0 md:z-auto md:translate-x-0 md:shadow-none ${
+          mobileNavOpen ? "translate-x-0" : "-translate-x-full"
+        }`}
+      >
+        <div className="mb-4 flex items-center justify-between gap-2.5 px-1.5">
+          <Link href="/" className="flex items-center gap-2.5">
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-accent font-display text-[17px] leading-none text-white">
+              Wi
+            </span>
+            <span className="text-[15px] font-semibold tracking-tight text-foreground">
+              WI Club CRM
+            </span>
+          </Link>
+          <button
+            type="button"
+            onClick={() => setMobileNavOpen(false)}
+            className="shrink-0 rounded-md p-1 text-lg leading-none text-muted hover:bg-surface-2 hover:text-ink-2 md:hidden"
+            aria-label={t("close")}
+          >
+            ×
+          </button>
+        </div>
 
         <nav className="flex flex-col gap-0.5">
           {items.map((item) => {
@@ -182,26 +230,38 @@ export default function AppShell({
       </aside>
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="flex flex-wrap items-start justify-between gap-2 border-b border-border bg-background px-6 py-4">
-          <div>
-            {backHref && (
-              <Link href={backHref} className="text-sm text-muted hover:text-ink-2">
-                ← {backLabel}
-              </Link>
-            )}
-            <h1 className={`text-[22px] leading-tight tracking-tight text-foreground ${backHref ? "mt-1" : ""}`}>
-              {title}
-            </h1>
-            {subtitle && <p className="mt-0.5 text-xs text-muted">{subtitle}</p>}
+        <header className="flex flex-wrap items-start justify-between gap-2 border-b border-border bg-background px-4 py-3.5 md:px-6 md:py-4">
+          <div className="flex min-w-0 items-start gap-2">
+            <button
+              type="button"
+              onClick={() => setMobileNavOpen(true)}
+              className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-ink-2 hover:bg-surface-2 md:hidden"
+              aria-label={t("navOpenMenu")}
+            >
+              <IconMenu />
+            </button>
+            <div className="min-w-0">
+              {backHref && (
+                <Link href={backHref} className="text-sm text-muted hover:text-ink-2">
+                  ← {backLabel}
+                </Link>
+              )}
+              <h1
+                className={`text-lg leading-tight tracking-tight text-foreground sm:text-[22px] ${backHref ? "mt-1" : ""}`}
+              >
+                {title}
+              </h1>
+              {subtitle && <p className="mt-0.5 text-xs text-muted">{subtitle}</p>}
+            </div>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             {isNetworkRole(profile.role) && clubs && clubs.length > 0 && (
               <CityScopeSwitcher clubs={clubs} activeClubId={activeClubId ?? null} />
             )}
             {headerExtra}
           </div>
         </header>
-        <main className="flex flex-1 flex-col p-6">{children}</main>
+        <main className="flex flex-1 flex-col p-4 md:p-6">{children}</main>
       </div>
     </div>
   );

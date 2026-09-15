@@ -105,6 +105,16 @@ export function IconContact() {
   );
 }
 
+/** Mobile-only hamburger button icon (round 19 — opens the sidebar drawer;
+ * see AppShell). Not part of the original ~9-destination icon set above. */
+export function IconMenu() {
+  return (
+    <svg {...iconProps()}>
+      <path d="M4 6.5h16M4 12h16M4 17.5h16" />
+    </svg>
+  );
+}
+
 export function IconBuilding() {
   return (
     <svg {...iconProps()}>

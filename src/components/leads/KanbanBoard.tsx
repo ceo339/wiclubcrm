@@ -43,6 +43,7 @@ export default function KanbanBoard({
   const [dragId, setDragId] = useState<string | null>(null);
   const [declineTarget, setDeclineTarget] = useState<Lead | null>(null);
   const [courseTarget, setCourseTarget] = useState<Lead | null>(null);
+  const [courseTargetStage, setCourseTargetStage] = useState<StageId>("presented");
   const [, startTransition] = useTransition();
 
   function applyStage(id: string, stage: StageId, decline?: { reason: string; note: string | null }) {
@@ -58,15 +59,19 @@ export default function KanbanBoard({
   // a card straight to "Записалась" is the everyday path here (the modal's
   // own dropdown is the other one, see LeadDetailModal), so it gets the same
   // course/поток prompt when the lead doesn't have one yet — otherwise
-  // round 8's auto-reserve has nothing to attach to Участницы.
+  // round 8's auto-reserve has nothing to attach to Участницы. Round 19
+  // extends the same prompt to a drop on "Выставлен счет" — courseTargetStage
+  // remembers which of the two triggered it, since a lead can reach invoiced
+  // without ever passing through presented first.
   function handleCourseConfirm(productId: string | null, cohortDate: string | null) {
     const lead = courseTarget;
+    const stage = courseTargetStage;
     setCourseTarget(null);
     if (!lead) return;
     startTransition(async () => {
       if (productId) await assignLeadProduct(lead.id, productId, cohortDate);
-      applyOptimistic({ id: lead.id, stage: "presented", reason: null, note: null });
-      await updateLeadStage(lead.id, "presented");
+      applyOptimistic({ id: lead.id, stage, reason: null, note: null });
+      await updateLeadStage(lead.id, stage);
     });
   }
 
@@ -80,7 +85,8 @@ export default function KanbanBoard({
       setDeclineTarget(lead);
       return;
     }
-    if (stage === "presented" && !lead.product_id) {
+    if ((stage === "presented" || stage === "invoiced") && !lead.product_id) {
+      setCourseTargetStage(stage);
       setCourseTarget(lead);
       return;
     }

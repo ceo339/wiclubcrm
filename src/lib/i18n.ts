@@ -249,6 +249,7 @@ export const DICT: Record<string, Entry> = {
   noClubAttached: { ru: "Без привязки к клубу", bg: "Без обвързан клуб" },
   signOut: { ru: "Выйти", bg: "Изход" },
   navHome: { ru: "Главная", bg: "Начало" },
+  navOpenMenu: { ru: "Открыть меню", bg: "Отвори менюто" },
   navNetworkSummaryDesc: {
     ru: "Лиды, участницы и оплаты по всей сети и по каждому клубу",
     bg: "Запитвания, участнички и плащания по цялата мрежа и по всеки клуб",
@@ -363,7 +364,7 @@ export const DICT: Record<string, Entry> = {
   chipHighValue: { ru: "Высокая ценность", bg: "Висока стойност" },
   declineModalTitle: { ru: "Причина отказа", bg: "Причина за отказ" },
   declineModalSubtitle: { ru: "Почему {name} отказывается?", bg: "Защо {name} отказва?" },
-  courseModalTitle: { ru: "Куда записалась?", bg: "Къде се записа?" },
+  courseModalTitle: { ru: "Выберите курс", bg: "Изберете курс" },
   courseModalSubtitle: {
     ru: "Выберите курс и поток для {name} — так она сразу появится в «Участницах» со статусом «Ожидание».",
     bg: "Изберете курс и поток за {name} — така веднага ще се появи в «Участнички» със статус «Изчакване».",
@@ -428,6 +429,11 @@ export const DICT: Record<string, Entry> = {
   fieldBirthday: { ru: "Дата рождения", bg: "Дата на раждане" },
   fieldInterestedIn: { ru: "Интересует", bg: "Интересува се от" },
   fieldCohortStart: { ru: "Начало потока", bg: "Начало на потока" },
+  btnRescheduleCohort: { ru: "Изменить дату", bg: "Промени датата" },
+  hintRescheduleCascades: {
+    ru: "Дата изменится у всех, кто уже записан на этот поток",
+    bg: "Датата ще се промени за всички, вече записани в този поток",
+  },
   fieldUtmCampaign: { ru: "Рекламная кампания", bg: "Рекламна кампания" },
   fieldUtmContent: { ru: "Объявление", bg: "Обява" },
   fieldUtmTerm: { ru: "Форма заявки", bg: "Форма за заявка" },
@@ -716,6 +722,10 @@ export const DICT: Record<string, Entry> = {
   },
   errEnterCourseName: { ru: "Укажите название курса", bg: "Въведете наименование на курса" },
   errEnterCohortStartDate: { ru: "Укажите дату начала потока", bg: "Въведете начална дата на потока" },
+  errCohortDateTaken: {
+    ru: "На эту дату уже есть другой поток этого курса",
+    bg: "На тази дата вече има друг поток на този курс",
+  },
 
   // ---- partners board ----
   emptyNoClubsShort: { ru: "Клубов пока нет.", bg: "Все още няма клубове." },
