@@ -16,6 +16,7 @@ import ImportModal from "./ImportModal";
 import LeadDetailModal from "./LeadDetailModal";
 import DuplicatesModal from "./DuplicatesModal";
 import SourceDonut from "./SourceDonut";
+import MultiSelectFilter from "./MultiSelectFilter";
 
 function daysSince(dateStr: string, now: Date): number {
   return Math.floor((now.getTime() - new Date(dateStr).getTime()) / (24 * 60 * 60 * 1000));
@@ -63,8 +64,12 @@ export default function LeadsBoard({
   const { locale, t } = useLocale();
   const [view, setView] = useState<"board" | "list">("board");
   const [search, setSearch] = useState("");
-  const [source, setSource] = useState<string>("all");
-  const [campaign, setCampaign] = useState<string>("all");
+  // "Нет возможности выбрать сразу несколько, а только одну. Добавь выбор
+  // нескольких и всех сразу" (Anastasiia, 15 сен 2026) — an empty set is the
+  // canonical "all" (no filter), same meaning the old single-value
+  // dropdown's own "Все ..." option had. See MultiSelectFilter.
+  const [sources, setSources] = useState<Set<string>>(new Set());
+  const [campaigns, setCampaigns] = useState<Set<string>>(new Set());
   const [smartFilters, setSmartFilters] = useState<Set<SmartFilter>>(new Set());
   const [showNewLead, setShowNewLead] = useState(false);
   const [showImport, setShowImport] = useState(false);
@@ -143,6 +148,12 @@ export default function LeadsBoard({
     new Set(initialLeads.map((l) => l.utm_campaign).filter((c): c is string => !!c))
   ).sort();
 
+  const sourceOptions = [
+    ...SOURCES.map((s) => ({ value: s, label: sourceLabel(s, locale) })),
+    ...customSourceValues.map((v) => ({ value: v, label: v })),
+  ];
+  const campaignOptions = campaignValues.map((c) => ({ value: c, label: c }));
+
   function toggleSmart(id: SmartFilter) {
     setSmartFilters((prev) => {
       const next = new Set(prev);
@@ -163,8 +174,8 @@ export default function LeadsBoard({
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     return initialLeads.filter((lead) => {
-      if (source !== "all" && lead.source !== source) return false;
-      if (campaign !== "all" && lead.utm_campaign !== campaign) return false;
+      if (sources.size > 0 && (!lead.source || !sources.has(lead.source))) return false;
+      if (campaigns.size > 0 && (!lead.utm_campaign || !campaigns.has(lead.utm_campaign))) return false;
       if (
         smartFilters.has("stuck") &&
         !(lead.stage !== "paid" && lead.stage !== "declined" && daysSince(lead.updated_at, now) > STALE_LEAD_DAYS)
@@ -179,7 +190,7 @@ export default function LeadsBoard({
         (lead.email ?? "").toLowerCase().includes(q)
       );
     });
-  }, [initialLeads, search, source, campaign, smartFilters, now]);
+  }, [initialLeads, search, sources, campaigns, smartFilters, now]);
 
   return (
     <div className="flex flex-1 flex-col gap-4">
@@ -230,41 +241,20 @@ export default function LeadsBoard({
           placeholder={t("searchLeadsPlaceholder")}
           className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-accent focus:ring-1 focus:ring-accent sm:w-64"
         />
-        <select
-          value={source}
-          onChange={(e) => setSource(e.target.value)}
-          className="rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-accent focus:ring-1 focus:ring-accent"
-        >
-          <option value="all">{t("allSources")}</option>
-          {SOURCES.map((s) => (
-            <option key={s} value={s}>
-              {sourceLabel(s, locale)}
-            </option>
-          ))}
-          {customSourceValues.length > 0 && (
-            <optgroup label={t("otherSourcesGroupLabel")}>
-              {customSourceValues.map((v) => (
-                <option key={v} value={v}>
-                  {v}
-                </option>
-              ))}
-            </optgroup>
-          )}
-        </select>
+        <MultiSelectFilter
+          allLabel={t("allSources")}
+          options={sourceOptions}
+          selected={sources}
+          onChange={setSources}
+        />
 
-        {campaignValues.length > 0 && (
-          <select
-            value={campaign}
-            onChange={(e) => setCampaign(e.target.value)}
-            className="rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-accent focus:ring-1 focus:ring-accent"
-          >
-            <option value="all">{t("allCampaigns")}</option>
-            {campaignValues.map((c) => (
-              <option key={c} value={c}>
-                {c}
-              </option>
-            ))}
-          </select>
+        {campaignOptions.length > 0 && (
+          <MultiSelectFilter
+            allLabel={t("allCampaigns")}
+            options={campaignOptions}
+            selected={campaigns}
+            onChange={setCampaigns}
+          />
         )}
 
         <div className="ml-auto flex items-center gap-2">

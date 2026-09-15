@@ -334,9 +334,15 @@ export type FunnelStage = {
   id: string;
   labelKey: string;
   count: number;
-  /** Null on the first stage (nothing before it) and when the previous
-   * stage's count is 0 (no baseline to take a percentage of). */
-  pctFromPrevious: number | null;
+  /** % of the FIRST stage's count (every new lead, stage counts[0]) that
+   * reached this stage — not the previous stage's count. "нужно считать все
+   * стадии % от новых заявок (от первой стадии)" (Anastasiia, 15 сен 2026) —
+   * before this it was each stage's % of the one right before it, so e.g.
+   * "Оплата" showed what fraction of "Выставлен счёт" paid, not what
+   * fraction of all new leads did. Null only on the first stage itself
+   * (100% by definition, not worth showing) and when there are no leads at
+   * all (nothing to take a percentage of). */
+  pctFromFirst: number | null;
 };
 
 export function computeFunnel(leads: { stage: string }[]): FunnelStage[] {
@@ -348,7 +354,7 @@ export function computeFunnel(leads: { stage: string }[]): FunnelStage[] {
     id: s.id,
     labelKey: s.labelKey,
     count: counts[i],
-    pctFromPrevious: i === 0 ? null : pctOf(counts[i], counts[i - 1]),
+    pctFromFirst: i === 0 ? null : pctOf(counts[i], counts[0]),
   }));
 }
 

@@ -188,7 +188,11 @@ export const DICT: Record<string, Entry> = {
   // ---- dashboard: funnel / breakdown headings ----
   headingFunnel: { ru: "Воронка лидов за период", bg: "Фуния на запитванията за периода" },
   funnelStart: { ru: "начало пути", bg: "начало на пътя" },
-  funnelPctContinue: { ru: "{percent}% идут дальше", bg: "{percent}% продължават напред" },
+  // Renamed from funnelPctContinue (was "% от предыдущего этапа") — every
+  // stage's % is now of the very first stage's count, i.e. of all new
+  // заявок, not of whichever stage sits right before it (Anastasiia, 15 сен
+  // 2026: "нужно считать все стадии % от новых заявок (от первой стадии)").
+  funnelPctOfNew: { ru: "{percent}% от заявок", bg: "{percent}% от запитванията" },
   funnelDeclinedNote: {
     ru: "Из них в отказе за период: {n} — не входит в шаги выше: на каком именно шаге лид отказался, не отслеживается.",
     bg: "От тях в отказ за периода: {n} — не са включени в стъпките по-горе: на коя точно стъпка е отказало запитването, не се проследява.",
@@ -345,6 +349,10 @@ export const DICT: Record<string, Entry> = {
   searchLeadsPlaceholder: { ru: "Поиск по имени, телефону, email…", bg: "Търсене по име, телефон, имейл…" },
   allSources: { ru: "Все источники", bg: "Всички източници" },
   allCampaigns: { ru: "Все кампании", bg: "Всички кампании" },
+  // "Добавь выбор нескольких и всех сразу" (Anastasiia, 15 сен 2026) — shown
+  // on the Источник/Кампания filter buttons instead of a single value once
+  // more than one (but not all) option is checked.
+  nFiltersSelected: { ru: "Выбрано: {n}", bg: "Избрани: {n}" },
   otherSourcesGroupLabel: { ru: "Другие источники (из импорта)", bg: "Други източници (от импорт)" },
   viewKanban: { ru: "Канбан", bg: "Канбан" },
   viewList: { ru: "Список", bg: "Списък" },

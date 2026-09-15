@@ -93,14 +93,17 @@ export default function KanbanBoard({
     applyStage(lead.id, stage);
   }
 
-  // Real "% дошли до этого этапа" per stage — the same cumulative-forward
-  // calculation the Home funnel widget uses (see computeFunnel in
-  // lib/dashboard.ts), applied to whatever's currently on this board
-  // (already filtered by search/source above). Deliberately NOT the
-  // prototype's fixed STAGES[].prob constant: that's a static assumption
-  // per stage, not something observed from this board's own leads, and
-  // this app already has the real number one calculation away. "Declined"
-  // isn't part of the forward funnel, so it gets no percentage pill.
+  // Real "% от новых заявок дошли до этого этапа" per stage — the same
+  // cumulative-forward calculation the Home funnel widget uses (see
+  // computeFunnel in lib/dashboard.ts), applied to whatever's currently on
+  // this board (already filtered by search/source above). Deliberately NOT
+  // the prototype's fixed STAGES[].prob constant: that's a static
+  // assumption per stage, not something observed from this board's own
+  // leads, and this app already has the real number one calculation away.
+  // Every stage's % is of the FIRST stage's count (all new leads), not the
+  // stage right before it — "нужно считать все стадии % от новых заявок (от
+  // первой стадии)" (Anastasiia, 15 сен 2026). "Declined" isn't part of the
+  // forward funnel, so it gets no percentage pill.
   const funnelByStage = new Map(computeFunnel(items).map((s) => [s.id, s]));
   const now = new Date();
 
@@ -110,7 +113,7 @@ export default function KanbanBoard({
         {STAGES.map((stage) => {
           const stageLeads = items.filter((l) => l.stage === stage.id);
           const stageValue = stageLeads.reduce((sum, l) => sum + (l.value ?? 0), 0);
-          const pctReached = funnelByStage.get(stage.id)?.pctFromPrevious ?? null;
+          const pctReached = funnelByStage.get(stage.id)?.pctFromFirst ?? null;
           return (
             <div
               key={stage.id}

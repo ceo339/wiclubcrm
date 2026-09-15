@@ -230,7 +230,14 @@ export default function AppShell({
       </aside>
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="flex flex-wrap items-start justify-between gap-2 border-b border-border bg-background px-4 py-3.5 md:px-6 md:py-4">
+        {/* "лиды в моб версии исправить нужно" (Anastasiia, 15 сен 2026) —
+            this header used to scroll away with the page like any other
+            in-flow element, which on a phone (one screenful is a fraction of
+            a page like "Лиды") meant the hamburger button disappeared the
+            moment you scrolled past the very top, with no way back to the
+            nav short of scrolling all the way back up. `sticky top-0`
+            keeps it pinned through the scroll, on every breakpoint. */}
+        <header className="sticky top-0 z-30 flex flex-wrap items-start justify-between gap-2 border-b border-border bg-background px-4 py-3.5 md:px-6 md:py-4">
           <div className="flex min-w-0 items-start gap-2">
             <button
               type="button"

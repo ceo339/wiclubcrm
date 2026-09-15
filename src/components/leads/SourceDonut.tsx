@@ -26,15 +26,22 @@ export default function SourceDonut({
   const strokeWidth = 20;
   const circumference = 2 * Math.PI * r;
 
-  const segments = visible.reduce<{ label: string; color: string; count: number; dasharray: string; dashoffset: number }[]>(
-    (acc, row) => {
-      const offsetSoFar = acc.reduce((sum, s) => sum - s.dashoffset, 0);
-      const dash = (row.count / total) * circumference;
-      acc.push({ ...row, dasharray: `${dash} ${circumference - dash}`, dashoffset: -offsetSoFar });
-      return acc;
-    },
-    []
-  );
+  // Each slice is drawn as its own full-circle <circle> with a
+  // stroke-dasharray "dash gap" pair, offset around the ring so slices sit
+  // end-to-end instead of stacking on top of each other. `cumulative` tracks
+  // how far around the ring the previous slices already used — a plain
+  // running total of their own dash lengths. (An earlier version derived
+  // this from the segments' own `dashoffset` values instead of their `dash`
+  // lengths, which always came out to 0 — every slice started at the same
+  // point and painted over the others, the "неправильно отрисовывается"
+  // bug Anastasiia reported, 15 сен 2026.)
+  let cumulative = 0;
+  const segments = visible.map((row) => {
+    const dash = (row.count / total) * circumference;
+    const segment = { ...row, dasharray: `${dash} ${circumference - dash}`, dashoffset: -cumulative };
+    cumulative += dash;
+    return segment;
+  });
 
   return (
     <div className="flex flex-wrap items-center gap-5">

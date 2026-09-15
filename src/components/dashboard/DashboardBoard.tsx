@@ -673,9 +673,9 @@ export default function DashboardBoard({
                 <div className="text-right text-xs text-muted">
                   {i === 0
                     ? t("funnelStart")
-                    : s.pctFromPrevious === null
+                    : s.pctFromFirst === null
                       ? t("dash")
-                      : t("funnelPctContinue", { percent: s.pctFromPrevious })}
+                      : t("funnelPctOfNew", { percent: s.pctFromFirst })}
                 </div>
               </div>
             );
