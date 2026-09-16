@@ -130,6 +130,18 @@ export async function POST(request: Request, { params }: { params: Promise<{ key
 
   const fields = await parseBody(request);
 
+  // Tilda's own webhook-verification ping — sent once, the moment she saves
+  // the webhook URL in her site settings, before any real landing page has
+  // gone live. It carries only `test=test`, no name/phone/email at all, and
+  // Tilda treats anything other than a 200 back as "this webhook doesn't
+  // work" and refuses to save it. Answered here with a plain 200 and no
+  // lead created; a genuine submission (name+phone/email always present)
+  // can never match this exact one-field shape, so real "missing name"
+  // validation below is untouched.
+  if (Object.keys(fields).length === 1 && pickExact(fields, "test") === "test") {
+    return json({ ok: true, test: true });
+  }
+
   const name = pick(fields, NAME_ALIASES);
   const phone = pick(fields, PHONE_ALIASES);
   const email = pick(fields, EMAIL_ALIASES);
