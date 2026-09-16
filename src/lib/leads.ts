@@ -66,12 +66,21 @@ export const sourceLabel = (source: string, locale: Locale) => {
 // sources sit as far apart on the ladder as possible instead of as
 // easily-confused neighbours (still visually distinguishable, per her
 // "чтоб было видно").
+//
+// Round 28, часть D — "и там, где лиды тоже сделай более светлые оттенки, а
+// то этот бордовый прям выбивается" (Anastasiia, about the same darkest
+// stop that made the "Откуда приходят лиды" donut read as one dominant
+// near-black wedge). Compressed the whole ladder toward the lighter end —
+// same reasoning as HEAT_FROM/HEAT_TO in CohortsBoard.tsx, just applied to
+// this shared palette instead of a heatmap: the previous darkest stop
+// (#33080d) was close enough to black that a source with a large share (a
+// typical Instagram-heavy club) visually swallowed the whole donut.
 const SOURCE_COLORS: Record<string, string> = {
   Website: "#fbeaec", // lightest — existing --accent-soft
-  Facebook: "#e2515f", // existing --warn
-  Event: "#9e0c24", // existing --accent-strong
-  Referral: "#591018",
-  Instagram: "#33080d", // darkest
+  Facebook: "#f0b0b8",
+  Event: "#e2515f", // existing --warn
+  Referral: "#c8102e", // WI Red
+  Instagram: "#7a0c1f", // darkest — no longer near-black
 };
 
 // Any source outside these five (a raw CSV value, a partner's own channel
@@ -81,7 +90,7 @@ const SOURCE_COLORS: Record<string, string> = {
 // same swatch, not randomly per page load) into the gaps left between the
 // five stops above, so it reads as part of the same red family without
 // ever exactly repeating one of the five.
-const SOURCE_FALLBACK_GRADIENT = ["#f0b0b8", "#c8102e", "#7a0c1f", "#3d0a12"] as const;
+const SOURCE_FALLBACK_GRADIENT = ["#f7d0d5", "#d6737e", "#a30f28", "#5c0e1c"] as const;
 
 function hashSourceIndex(source: string, mod: number): number {
   let hash = 0;

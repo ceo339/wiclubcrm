@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import { useSearchParams } from "next/navigation";
 import { HIGH_VALUE_THRESHOLD, SOURCES, sourceColor, sourceLabel } from "@/lib/leads";
-import { STALE_LEAD_DAYS } from "@/lib/dashboard";
+import { STALE_LEAD_DAYS, currentMonthKey, monthKeyOf } from "@/lib/dashboard";
 import { useLocale } from "@/components/i18n/LocaleProvider";
 import Money from "@/components/currency/Money";
 import type { Tables } from "@/types/database";
@@ -17,6 +17,7 @@ import LeadDetailModal from "./LeadDetailModal";
 import DuplicatesModal from "./DuplicatesModal";
 import SourceDonut from "./SourceDonut";
 import MultiSelectFilter from "./MultiSelectFilter";
+import LocalPeriodFilter, { monthMatchesLocalPeriod, type LocalPeriod } from "@/components/shared/LocalPeriodFilter";
 
 function daysSince(dateStr: string, now: Date): number {
   return Math.floor((now.getTime() - new Date(dateStr).getTime()) / (24 * 60 * 60 * 1000));
@@ -70,6 +71,12 @@ export default function LeadsBoard({
   // dropdown's own "Все ..." option had. See MultiSelectFilter.
   const [sources, setSources] = useState<Set<string>>(new Set());
   const [campaigns, setCampaigns] = useState<Set<string>>(new Set());
+  // "в лиды нужно добавить выбор фильтр периодов?" (Anastasiia, round 28,
+  // часть D) — same client-only period picker already built for "Когортный
+  // анализ" (LocalPeriodFilter), filtering by added_date. Defaults to "все
+  // время" so existing behaviour (every lead, no date narrowing) doesn't
+  // change until she actually picks a period.
+  const [period, setPeriod] = useState<LocalPeriod>({ mode: "all" });
   const [smartFilters, setSmartFilters] = useState<Set<SmartFilter>>(new Set());
   const [showNewLead, setShowNewLead] = useState(false);
   const [showImport, setShowImport] = useState(false);
@@ -93,26 +100,49 @@ export default function LeadsBoard({
     const openId = searchParams.get("open");
     if (openId) setSelectedLeadId(openId);
   }, [searchParams]);
+  // Deliberately looked up from the FULL, unfiltered list — a deep link
+  // from "Мои задачи" (?open=<id>) must still open that lead's card even if
+  // it falls outside whatever period she currently has selected below.
   const selectedLead = initialLeads.find((l) => l.id === selectedLeadId) ?? null;
 
   const now = useMemo(() => new Date(), []);
 
-  // Top-of-page KPIs and the source donut deliberately look at every lead,
-  // not just what's currently filtered/searched — same reasoning as the
-  // prototype's own kInPipeline/dIfJoins/donut, which stayed put while the
-  // board below them got filtered. "В воронке" = still open (not yet paid
-  // or declined); a closed lead isn't "in the funnel" anymore either way.
+  const monthOptions = useMemo(() => {
+    const set = new Set<string>([currentMonthKey()]);
+    initialLeads.forEach((l) => set.add(monthKeyOf(l.added_date)));
+    return [...set].sort().reverse().slice(0, 6);
+  }, [initialLeads]);
+  const yearOptions = useMemo(() => {
+    const set = new Set<string>([currentMonthKey().slice(0, 4)]);
+    initialLeads.forEach((l) => set.add(monthKeyOf(l.added_date).slice(0, 4)));
+    return [...set].sort().reverse();
+  }, [initialLeads]);
+  // "в лиды нужно добавить выбор фильтр периодов?" — the period narrows the
+  // base pool everything else below (KPIs, donut, smart-filter counts, the
+  // board/list itself) works from, same convention as the Dashboard's own
+  // period picker narrowing everything on that page.
+  const periodLeads = useMemo(
+    () => initialLeads.filter((l) => monthMatchesLocalPeriod(monthKeyOf(l.added_date), period)),
+    [initialLeads, period]
+  );
+
+  // Top-of-page KPIs and the source donut deliberately look at every lead in
+  // the selected period, not just what's currently filtered/searched below —
+  // same reasoning as the prototype's own kInPipeline/dIfJoins/donut, which
+  // stayed put while the board below them got filtered. "В воронке" = still
+  // open (not yet paid or declined); a closed lead isn't "in the funnel"
+  // anymore either way.
   const pipelineLeads = useMemo(
-    () => initialLeads.filter((l) => l.stage !== "paid" && l.stage !== "declined"),
-    [initialLeads]
+    () => periodLeads.filter((l) => l.stage !== "paid" && l.stage !== "declined"),
+    [periodLeads]
   );
   const pipelineValue = pipelineLeads.reduce((sum, l) => sum + (l.value ?? 0), 0);
-  const newThisWeekCount = initialLeads.filter((l) => daysSince(l.added_date, now) <= 7).length;
+  const newThisWeekCount = periodLeads.filter((l) => daysSince(l.added_date, now) <= 7).length;
 
   const sourceRows = SOURCES.map((s) => ({
     label: sourceLabel(s, locale),
     color: sourceColor(s),
-    count: initialLeads.filter((l) => l.source === s).length,
+    count: periodLeads.filter((l) => l.source === s).length,
   }));
   // Import can now bring in a source value that isn't one of the app's five
   // built-in ones (see normalizeSource in leads/actions.ts — a CSV channel
@@ -121,7 +151,7 @@ export default function LeadsBoard({
   // "Источник не указан" stays reserved for leads with no source at all.
   const customSourceValues = Array.from(
     new Set(
-      initialLeads
+      periodLeads
         .map((l) => l.source)
         .filter((s): s is string => !!s && !(SOURCES as readonly string[]).includes(s))
     )
@@ -130,10 +160,10 @@ export default function LeadsBoard({
     sourceRows.push({
       label: value,
       color: sourceColor(value),
-      count: initialLeads.filter((l) => l.source === value).length,
+      count: periodLeads.filter((l) => l.source === value).length,
     });
   });
-  const unspecifiedSourceCount = initialLeads.filter((l) => !l.source).length;
+  const unspecifiedSourceCount = periodLeads.filter((l) => !l.source).length;
   if (unspecifiedSourceCount > 0) {
     sourceRows.push({ label: t("sourceUnknown"), color: sourceColor(null), count: unspecifiedSourceCount });
   }
@@ -145,7 +175,7 @@ export default function LeadsBoard({
   // 11). Built from whatever campaigns are actually present, same pattern
   // as customSourceValues above — no campaigns yet means no dropdown.
   const campaignValues = Array.from(
-    new Set(initialLeads.map((l) => l.utm_campaign).filter((c): c is string => !!c))
+    new Set(periodLeads.map((l) => l.utm_campaign).filter((c): c is string => !!c))
   ).sort();
 
   const sourceOptions = [
@@ -164,16 +194,16 @@ export default function LeadsBoard({
   }
 
   const smartCounts: Record<SmartFilter, number> = {
-    stuck: initialLeads.filter(
+    stuck: periodLeads.filter(
       (l) => l.stage !== "paid" && l.stage !== "declined" && daysSince(l.updated_at, now) > STALE_LEAD_DAYS
     ).length,
     week: newThisWeekCount,
-    highValue: initialLeads.filter((l) => (l.value ?? 0) >= HIGH_VALUE_THRESHOLD).length,
+    highValue: periodLeads.filter((l) => (l.value ?? 0) >= HIGH_VALUE_THRESHOLD).length,
   };
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
-    return initialLeads.filter((lead) => {
+    return periodLeads.filter((lead) => {
       if (sources.size > 0 && (!lead.source || !sources.has(lead.source))) return false;
       if (campaigns.size > 0 && (!lead.utm_campaign || !campaigns.has(lead.utm_campaign))) return false;
       if (
@@ -190,10 +220,18 @@ export default function LeadsBoard({
         (lead.email ?? "").toLowerCase().includes(q)
       );
     });
-  }, [initialLeads, search, sources, campaigns, smartFilters, now]);
+  }, [periodLeads, search, sources, campaigns, smartFilters, now]);
 
   return (
     <div className="flex flex-1 flex-col gap-4">
+      <LocalPeriodFilter
+        period={period}
+        onChange={setPeriod}
+        monthOptions={monthOptions}
+        yearOptions={yearOptions}
+        allTimeLabel={t("cohortAllTime")}
+      />
+
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
         <LeadStat label={t("statLeadsPipeline")} value={String(pipelineLeads.length)} caption={t("deltaLeadsPipeline")} />
         <LeadStat

@@ -420,6 +420,11 @@ export const DICT: Record<string, Entry> = {
   // the heatmap ("Сделай еще такие графики как на скрине").
   cohortChartSources: { ru: "Источники сделок", bg: "Източници на сделки" },
   cohortChartMonthly: { ru: "Распределение по месяцам", bg: "Разпределение по месеци" },
+  // Round 28, часть D — "Давай все, что попадает в кампании объединим в
+  // target" (Anastasiia) — every real ad-campaign cohort collapses into this
+  // one bucket in the source donut until she drills into specific campaigns
+  // via the campaign checkbox filter (see CohortsBoard.sourceBreakdown).
+  cohortTargetBucket: { ru: "Таргет", bg: "Таргетирана реклама" },
   hqReadOnlyLeadsBanner: {
     ru: "Режим HQ: видны лиды всех клубов сети, доступно только для просмотра.",
     bg: "Режим HQ: видими са запитванията на всички клубове в мрежата, само за преглед.",
