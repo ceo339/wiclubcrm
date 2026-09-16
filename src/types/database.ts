@@ -59,6 +59,12 @@ export type Database = {
           country: string | null
           created_at: string
           email: string | null
+          first_source: string | null
+          first_utm_campaign: string | null
+          first_utm_content: string | null
+          first_utm_medium: string | null
+          first_utm_source: string | null
+          first_utm_term: string | null
           id: string
           name: string
           partner_id: string
@@ -71,6 +77,12 @@ export type Database = {
           country?: string | null
           created_at?: string
           email?: string | null
+          first_source?: string | null
+          first_utm_campaign?: string | null
+          first_utm_content?: string | null
+          first_utm_medium?: string | null
+          first_utm_source?: string | null
+          first_utm_term?: string | null
           id?: string
           name: string
           partner_id: string
@@ -83,6 +95,12 @@ export type Database = {
           country?: string | null
           created_at?: string
           email?: string | null
+          first_source?: string | null
+          first_utm_campaign?: string | null
+          first_utm_content?: string | null
+          first_utm_medium?: string | null
+          first_utm_source?: string | null
+          first_utm_term?: string | null
           id?: string
           name?: string
           partner_id?: string

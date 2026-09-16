@@ -20,6 +20,7 @@ import {
   IconMail,
   IconBuilding,
   IconMenu,
+  IconChart,
 } from "./icons";
 
 const ROLE_LABEL_KEYS: Record<string, string> = {
@@ -52,6 +53,7 @@ function navItemsForProfile(profile: Profile): NavItem[] {
     { href: "/attendance", labelKey: "navAttendance", icon: <IconCalendar />, matchPrefix: true },
     { href: "/products", labelKey: "navCourses", icon: <IconBook /> },
     { href: "/payments", labelKey: "navPayments", icon: <IconWallet /> },
+    { href: "/cohorts", labelKey: "navCohorts", icon: <IconChart /> },
     { href: "/email", labelKey: "navEmail", icon: <IconMail /> }
   );
 

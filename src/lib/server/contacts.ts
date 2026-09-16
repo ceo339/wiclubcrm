@@ -21,6 +21,22 @@ export type ContactPerson = {
   city?: string | null;
   birthday?: string | null;
   country?: string | null;
+  /**
+   * First-touch attribution (round 27, 16 сен 2026 — "Да! Давай так как ты
+   * предложила. По первому касанию считать"), for the "Когорты" report.
+   * Only ever used on the CREATE path below — an existing contact's first
+   * touch is never overwritten by a later lead/deal, even one from a
+   * completely different campaign. Omit these entirely at a call site with
+   * no real attribution data (a manually added contact/member, a payment
+   * recorded by hand) rather than guessing; null here just means "not from
+   * an ad", which is the honest answer for those paths.
+   */
+  source?: string | null;
+  utmSource?: string | null;
+  utmMedium?: string | null;
+  utmCampaign?: string | null;
+  utmContent?: string | null;
+  utmTerm?: string | null;
 };
 
 /**
@@ -58,6 +74,12 @@ export async function findOrCreateContact(
       city: person.city ?? null,
       birthday: person.birthday ?? null,
       country: person.country ?? null,
+      first_source: person.source ?? null,
+      first_utm_source: person.utmSource ?? null,
+      first_utm_medium: person.utmMedium ?? null,
+      first_utm_campaign: person.utmCampaign ?? null,
+      first_utm_content: person.utmContent ?? null,
+      first_utm_term: person.utmTerm ?? null,
     })
     .select("id")
     .single();

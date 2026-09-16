@@ -41,6 +41,16 @@ type ReserveLeadRow = {
   birthday: string | null;
   country: string | null;
   contact_id: string | null;
+  // First-touch attribution (round 27) — only read when this lead is the
+  // one that ends up creating a brand-new Контакт below (see
+  // reserveAwaitingEnrollment); an existing contact's first touch is never
+  // touched from here.
+  source?: string | null;
+  utm_source?: string | null;
+  utm_medium?: string | null;
+  utm_campaign?: string | null;
+  utm_content?: string | null;
+  utm_term?: string | null;
 };
 
 /**
@@ -89,6 +99,12 @@ async function reserveAwaitingEnrollment(supabase: SupabaseServerClient, lead: R
         city: lead.city,
         birthday: lead.birthday,
         country: lead.country,
+        source: lead.source,
+        utmSource: lead.utm_source,
+        utmMedium: lead.utm_medium,
+        utmCampaign: lead.utm_campaign,
+        utmContent: lead.utm_content,
+        utmTerm: lead.utm_term,
       });
       if (contactId) await supabase.from("leads").update({ contact_id: contactId }).eq("id", lead.id);
     }
@@ -363,7 +379,7 @@ export async function updateLeadStage(
     })
     .eq("id", leadId)
     .select(
-      "id, partner_id, value, product_id, cohort_start_date, name, phone, email, city, birthday, country, contact_id"
+      "id, partner_id, value, product_id, cohort_start_date, name, phone, email, city, birthday, country, contact_id, source, utm_source, utm_medium, utm_campaign, utm_content, utm_term"
     )
     .maybeSingle();
 
@@ -476,6 +492,10 @@ export async function createLead(formData: FormData): Promise<CreateLeadResult> 
     city,
     birthday,
     country,
+    // No utm_* here — the "Добавить лид" form only ever collects the
+    // manually-picked source dropdown, never a real campaign; still a
+    // genuine (if coarse) first-touch signal for the "Когорты" report.
+    source,
   });
   if (contactId) await supabase.from("leads").update({ contact_id: contactId }).eq("id", inserted.id);
 
@@ -621,7 +641,7 @@ export async function importLeads(rows: ImportRow[]): Promise<ImportResult> {
     const { data: insertedRows, error, count } = await supabase
       .from("leads")
       .insert(chunk, { count: "exact" })
-      .select("id, name, phone, email");
+      .select("id, name, phone, email, source");
     if (error) {
       return {
         error: "errImportPartial",
@@ -642,6 +662,7 @@ export async function importLeads(rows: ImportRow[]): Promise<ImportResult> {
         name: row.name,
         phone: row.phone,
         email: row.email,
+        source: row.source,
       });
       if (contactId) await supabase.from("leads").update({ contact_id: contactId }).eq("id", row.id);
     }
@@ -737,7 +758,7 @@ export async function assignLeadProductAndReserve(
     })
     .eq("id", leadId)
     .select(
-      "id, partner_id, stage, value, product_id, cohort_start_date, name, phone, email, city, birthday, country, contact_id"
+      "id, partner_id, stage, value, product_id, cohort_start_date, name, phone, email, city, birthday, country, contact_id, source, utm_source, utm_medium, utm_campaign, utm_content, utm_term"
     )
     .maybeSingle();
 
@@ -1164,6 +1185,12 @@ export async function convertLeadToMember(
       city: lead.city,
       birthday: lead.birthday,
       country: lead.country,
+      source: lead.source,
+      utmSource: lead.utm_source,
+      utmMedium: lead.utm_medium,
+      utmCampaign: lead.utm_campaign,
+      utmContent: lead.utm_content,
+      utmTerm: lead.utm_term,
     });
     if (contactId) await supabase.from("leads").update({ contact_id: contactId }).eq("id", lead.id);
   }

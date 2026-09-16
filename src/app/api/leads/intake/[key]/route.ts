@@ -216,10 +216,29 @@ export async function POST(request: Request, { params }: { params: Promise<{ key
     );
     contactId = match?.id ?? null;
   }
+  // Computed once and reused below both for this lead's own `source` and,
+  // when this submission is what creates a brand-new Контакт, for that
+  // contact's permanent first-touch attribution (round 27, 16 сен 2026) —
+  // a real ad campaign is exactly what a landing page submission is, so
+  // this is the most valuable place in the whole app for that field to
+  // ever get filled in correctly.
+  const resolvedSource = inferSource(utmSource, utmMedium);
+
   if (!contactId) {
     const { data: createdContact } = await admin
       .from("contacts")
-      .insert({ partner_id: partner.id, name, phone, email })
+      .insert({
+        partner_id: partner.id,
+        name,
+        phone,
+        email,
+        first_source: resolvedSource,
+        first_utm_source: utmSource,
+        first_utm_medium: utmMedium,
+        first_utm_campaign: utmCampaign,
+        first_utm_content: utmContent,
+        first_utm_term: utmTerm,
+      })
       .select("id")
       .single();
     contactId = createdContact?.id ?? null;
@@ -231,7 +250,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ key
     name,
     phone,
     email,
-    source: inferSource(utmSource, utmMedium),
+    source: resolvedSource,
     stage: "new",
     utm_source: utmSource,
     utm_medium: utmMedium,
