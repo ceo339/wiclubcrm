@@ -151,33 +151,18 @@ export default function CohortsBoard({
     return result.sort((a, b) => b.count - a.count);
   }, [report, locale, t, campaigns]);
 
-  // Round 28, часть D — "если выбраны все источники — по месяцам в
-  // совокупности, без разбивки; переключаю источники — показывать по
-  // каналу" (Anastasiia, про этот график). `channelActive` считает
-  // конкретным выбором ЛЮБОЙ из двух фильтров (источник или кампания) — в
-  // отличие от sourceBreakdown выше, где схлопывание завязано только на
-  // кампаниях.
-  const channelActive = sources.size > 0 || campaigns.size > 0;
-  const monthlyByChannel = useMemo(() => {
-    if (!channelActive) return null;
-    const channels = new Map<string, { label: string; color: string; values: number[] }>();
-    for (const row of report.rows) {
-      const label = cohortLabel(row.campaignKey, row.isCampaign, locale, t("cohortNoSource"));
-      const color = row.campaignKey ? sourceColor(row.campaignKey) : "var(--muted)";
-      let channel = channels.get(label);
-      if (!channel) {
-        channel = { label, color, values: report.columns.map(() => 0) };
-        channels.set(label, channel);
-      }
-      row.monthly.forEach((value, i) => {
-        channel!.values[i] += value;
-      });
-    }
-    return Array.from(channels.values()).sort(
-      (a, b) => b.values.reduce((s, v) => s + v, 0) - a.values.reduce((s, v) => s + v, 0)
-    );
-  }, [report, locale, t, channelActive]);
-
+  // Round 28, часть E — "если выбраны все источники показывай их просто в
+  // одну строку итого. не разбивая... Если нужно посмотреть какие-то
+  // конкретные источники - можно выбрать. и тогда они показываются тоже
+  // итого. чтоб все было 1 строкой" (Anastasiia) — она явно попросила НЕ
+  // делать то, что часть D сюда добавила (разбивку по каналам, введённую
+  // как раз по её предыдущей фразе "переключаю источники - показывать по
+  // каналу"): один столбец на месяц ВСЕГДА, будь то по всем данным или по
+  // уже отфильтрованному источником/кампанией срезу — только сама сумма
+  // меняется вместе с фильтром, форма графика больше не должна ветвиться.
+  // `monthlyTotals` ниже уже как раз это и делает (считает от `report`,
+  // который сам уже отфильтрован) — убрана только сегментация по каналам и
+  // легенда под графиком, которые эту сумму раньше разбивали на части.
   const monthlyTotals = useMemo(
     () =>
       report.columns.map((col, i) => ({
@@ -220,46 +205,19 @@ export default function CohortsBoard({
             <div className="rounded-xl border border-border bg-background p-4 shadow-card">
               <h3 className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted">{t("cohortChartMonthly")}</h3>
               <div className="flex items-end gap-2 overflow-x-auto pb-1">
-                {monthlyTotals.map((m, colIndex) => (
+                {monthlyTotals.map((m) => (
                   <div key={m.key} className="flex w-16 shrink-0 flex-col items-center gap-1">
                     <span className="whitespace-nowrap text-[11px] font-medium text-ink-2">
                       <Money amountEur={m.value} />
                     </span>
-                    {monthlyByChannel ? (
-                      <div className="flex w-8 flex-col-reverse" style={{ height: "120px" }}>
-                        {monthlyByChannel.map((ch) => {
-                          const value = ch.values[colIndex];
-                          if (value <= 0) return null;
-                          return (
-                            <div
-                              key={ch.label}
-                              title={`${ch.label}: ${value}`}
-                              className="w-8 last:rounded-t-md"
-                              style={{ height: `${(value / maxMonthly) * 120}px`, background: ch.color }}
-                            />
-                          );
-                        })}
-                      </div>
-                    ) : (
-                      <div
-                        className="w-8 rounded-t-md"
-                        style={{ height: `${Math.max(4, (m.value / maxMonthly) * 120)}px`, background: HEAT_TO }}
-                      />
-                    )}
+                    <div
+                      className="w-8 rounded-t-md"
+                      style={{ height: `${Math.max(4, (m.value / maxMonthly) * 120)}px`, background: HEAT_TO }}
+                    />
                     <span className="whitespace-nowrap text-[11px] text-muted">{m.label}</span>
                   </div>
                 ))}
               </div>
-              {monthlyByChannel && (
-                <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1.5 border-t border-border pt-3">
-                  {monthlyByChannel.map((ch) => (
-                    <div key={ch.label} className="flex items-center gap-1.5 text-xs text-ink-2">
-                      <span className="h-2 w-2 shrink-0 rounded-sm" style={{ background: ch.color }} />
-                      {ch.label}
-                    </div>
-                  ))}
-                </div>
-              )}
             </div>
           </div>
 
