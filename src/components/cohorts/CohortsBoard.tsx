@@ -7,21 +7,37 @@ import type { Locale } from "@/lib/i18n";
 import Money from "@/components/currency/Money";
 import { useLocale } from "@/components/i18n/LocaleProvider";
 import MultiSelectFilter, { type MultiSelectOption } from "@/components/leads/MultiSelectFilter";
+import SourceDonut from "@/components/leads/SourceDonut";
 import { computeCohortReport, type CohortContactInput, type CohortPaymentInput, type CohortRow } from "@/lib/cohorts";
 
 /** Same red family as the funnel's own gradient ("Воронка лидов за период",
- * DashboardBoard.tsx) — Anastasiia asked explicitly for this exact palette
- * here too ("Используй такие цвета... для источников лидов" carried over to
- * round 28's cohort heatmap: "Цвета возьми градиента красного как тут
- * (стадии воронок)"), so this reuses the funnel's literal from/to hex
- * instead of a separately-tuned pair. */
-const HEAT_FROM = "#e2515f";
-const HEAT_TO = "#7a0c1f";
+ * DashboardBoard.tsx) — Anastasiia originally asked for this exact palette
+ * here too ("Цвета возьми градиента красного как тут (стадии воронок)"), but
+ * the funnel's own darkest stop (#7a0c1f) made the white-on-dark numbers on
+ * the hottest cells unreadable at table-cell size ("не такой темный красный,
+ * тк цифры не читаются" — round 28, second pass). Softened to the same red
+ * family's lighter stops (Website/WI Red from SOURCE_COLORS in lib/leads.ts)
+ * and paired with a text-color switch below so a cell's own number stays
+ * legible at every heat level instead of just picking a lighter ceiling and
+ * hoping. */
+const HEAT_FROM = "#fbeaec";
+const HEAT_TO = "#c8102e";
+
+function heatT(value: number, rowMax: number): number {
+  if (value <= 0 || rowMax <= 0) return 0;
+  return Math.min(1, value / rowMax);
+}
 
 function heatColor(value: number, rowMax: number): string | undefined {
-  if (value <= 0 || rowMax <= 0) return undefined;
-  const t = Math.min(1, value / rowMax);
+  const t = heatT(value, rowMax);
+  if (t <= 0) return undefined;
   return interpolateHex(HEAT_FROM, HEAT_TO, t);
+}
+
+/** Past ~55% toward the darkest stop, white reads more reliably than the
+ * table's usual dark ink — matched by eye against HEAT_FROM/HEAT_TO above. */
+function heatTextClass(value: number, rowMax: number): string {
+  return heatT(value, rowMax) > 0.55 ? "text-white" : "text-ink-2";
 }
 
 function cohortLabel(campaignKey: string | null, isCampaign: boolean, locale: Locale, noSourceText: string): string {
@@ -221,6 +237,34 @@ export default function CohortsBoard({
     return computeCohortReport(filteredContacts, payments);
   }, [contacts, payments, sources, campaigns, period]);
 
+  // Round 28, second pass — "Сделай еще такие графики как на скрине": both
+  // charts read from `report`, i.e. from the ALREADY-filtered rows, so they
+  // automatically follow the same "все выбрано → показать всех, выбран
+  // один/несколько → показать только их" rule as the table above, with no
+  // separate filtering logic of their own to keep in sync.
+  const sourceBreakdown = useMemo(() => {
+    const totals = new Map<string, { label: string; color: string; count: number }>();
+    for (const row of report.rows) {
+      const label = cohortLabel(row.campaignKey, row.isCampaign, locale, t("cohortNoSource"));
+      const color = row.campaignKey ? sourceColor(row.campaignKey) : "var(--muted)";
+      const existing = totals.get(label);
+      if (existing) existing.count += row.contactsCount;
+      else totals.set(label, { label, color, count: row.contactsCount });
+    }
+    return Array.from(totals.values()).sort((a, b) => b.count - a.count);
+  }, [report, locale, t]);
+
+  const monthlyTotals = useMemo(
+    () =>
+      report.columns.map((col, i) => ({
+        key: col,
+        label: monthLabel(col, locale),
+        value: report.rows.reduce((sum, row) => sum + row.monthly[i], 0),
+      })),
+    [report, locale]
+  );
+  const maxMonthly = Math.max(1, ...monthlyTotals.map((m) => m.value));
+
   return (
     <div className="flex flex-col gap-4">
       <p className="max-w-2xl text-sm text-muted">{t("cohortHint")}</p>
@@ -237,7 +281,32 @@ export default function CohortsBoard({
       {report.rows.length === 0 ? (
         <p className="rounded-lg bg-surface-2 px-4 py-3 text-sm text-muted">{t("cohortEmpty")}</p>
       ) : (
-        <div className="overflow-x-auto rounded-xl border border-border">
+        <>
+          <div className="grid gap-4 md:grid-cols-2">
+            <div className="rounded-xl border border-border bg-background p-4 shadow-card">
+              <h3 className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted">{t("cohortChartSources")}</h3>
+              <SourceDonut rows={sourceBreakdown} emptyLabel={t("cohortEmpty")} />
+            </div>
+            <div className="rounded-xl border border-border bg-background p-4 shadow-card">
+              <h3 className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted">{t("cohortChartMonthly")}</h3>
+              <div className="flex items-end gap-2 overflow-x-auto pb-1">
+                {monthlyTotals.map((m) => (
+                  <div key={m.key} className="flex w-16 shrink-0 flex-col items-center gap-1">
+                    <span className="whitespace-nowrap text-[11px] font-medium text-ink-2">
+                      <Money amountEur={m.value} />
+                    </span>
+                    <div
+                      className="w-8 rounded-t-md"
+                      style={{ height: `${Math.max(4, (m.value / maxMonthly) * 120)}px`, background: HEAT_TO }}
+                    />
+                    <span className="whitespace-nowrap text-[11px] text-muted">{m.label}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          <div className="overflow-x-auto rounded-xl border border-border">
           <table className="w-full min-w-[960px] border-collapse text-sm">
             <thead>
               <tr className="border-b border-border bg-surface-2 text-left text-xs font-medium uppercase tracking-wide text-muted">
@@ -276,7 +345,7 @@ export default function CohortsBoard({
                     {row.monthly.map((value, i) => (
                       <td
                         key={i}
-                        className="whitespace-nowrap px-2 py-2 text-right text-ink-2"
+                        className={`whitespace-nowrap px-2 py-2 text-right ${heatTextClass(value, rowMax)}`}
                         style={{ background: heatColor(value, rowMax) }}
                       >
                         {value > 0 ? <Money amountEur={value} /> : <span className="text-muted">—</span>}
@@ -287,7 +356,8 @@ export default function CohortsBoard({
               })}
             </tbody>
           </table>
-        </div>
+          </div>
+        </>
       )}
     </div>
   );

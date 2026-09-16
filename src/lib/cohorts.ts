@@ -150,10 +150,22 @@ export function computeCohortReport(contacts: CohortContactInput[], payments: Co
   if (buckets.size === 0) return { rows: [], columns: [] };
 
   // Build the shared column list — every real calendar month from the
-  // earliest cohort through the later of "now" and the most recent revenue
-  // month actually observed, so a cohort still accruing revenue this month
-  // isn't cut off, but the table also doesn't extend uselessly far into a
-  // future with no data at all yet.
+  // earlier of (the earliest cohort, the earliest revenue observed) through
+  // the later of "now" and the most recent revenue month actually observed.
+  //
+  // Round 28 — "Почему не взят первый месяц август? там же были оплаты?".
+  // Almost the entire historical client base was bulk-entered into the CRM
+  // in one stretch around 9–14 сен 2026 (see contacts/leads creation-date
+  // audit, round 28 notes) — so `bucket.month` (a cohort's acquisition
+  // month, keyed on when the CONTACT was added to the CRM) reads as
+  // September for nearly everyone even though some of them paid for a real
+  // course back in July/August, per `payments.paid_date`. There is no
+  // recorded "true first touch" date anywhere in the data for that
+  // pre-CRM backlog to fix the row's own acquisition month with — so this
+  // only widens the COLUMN range to include those earlier revenue months
+  // (a September-acquired row can still show real payments landing in an
+  // earlier July/August column) rather than pretending the row itself was
+  // "acquired" earlier than the data actually shows.
   let earliest = "";
   let latest = currentMonthKey();
   for (const bucket of buckets.values()) {
@@ -161,6 +173,7 @@ export function computeCohortReport(contacts: CohortContactInput[], payments: Co
     if (bucket.month > latest) latest = bucket.month;
     for (const paymentMonth of bucket.byMonth.keys()) {
       if (paymentMonth > latest) latest = paymentMonth;
+      if (paymentMonth < earliest) earliest = paymentMonth;
     }
   }
 

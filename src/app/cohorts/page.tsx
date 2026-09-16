@@ -41,8 +41,11 @@ export default async function CohortsPage() {
     .from("contacts")
     .select("id, created_at, first_source, first_utm_campaign");
   let paymentsQuery = supabase.from("payments").select("member_id, lead_id, amount, paid_date, status");
-  let membersQuery = supabase.from("members").select("id, contact_id");
-  let leadsQuery = supabase.from("leads").select("id, contact_id");
+  // added_date/created_at pulled in (round 28) so a contact's cohort month
+  // can fall back to its earliest lead/membership instead of only
+  // contacts.created_at — see cohortContacts below.
+  let membersQuery = supabase.from("members").select("id, contact_id, created_at");
+  let leadsQuery = supabase.from("leads").select("id, contact_id, added_date");
   if (scopePartnerId) {
     contactsQuery = contactsQuery.eq("partner_id", scopePartnerId);
     paymentsQuery = paymentsQuery.eq("partner_id", scopePartnerId);
@@ -64,12 +67,41 @@ export default async function CohortsPage() {
   const memberContactMap = new Map((members ?? []).map((m) => [m.id, m.contact_id]));
   const leadContactMap = new Map((leads ?? []).map((l) => [l.id, l.contact_id]));
 
-  const cohortContacts: CohortContactInput[] = (contacts ?? []).map((c) => ({
-    id: c.id,
-    createdAt: c.created_at,
-    firstSource: c.first_source,
-    firstUtmCampaign: c.first_utm_campaign,
-  }));
+  // Round 28 — "Почему не взят первый месяц август? там же были оплаты?".
+  // `contacts.created_at` is only a true first-touch date for contacts
+  // created by findOrCreateContact from a real, live interaction (true since
+  // round 4B, 11 сен 2026). Everyone migrated INTO `contacts` by that same
+  // round's one-off backfill got `created_at` stamped at migration time, not
+  // at their real original lead date — so a lead from August can end up
+  // attached to a contact whose own created_at reads as September, silently
+  // pushing the whole cohort (and its August revenue) out of the earliest
+  // column. Falling back to the earliest linked lead's/member's own date
+  // fixes this without touching the stored contacts.created_at (which other
+  // parts of the app may rely on as "when this Контакт row was inserted").
+  const earliestLeadDateByContact = new Map<string, string>();
+  for (const l of leads ?? []) {
+    if (!l.contact_id || !l.added_date) continue;
+    const current = earliestLeadDateByContact.get(l.contact_id);
+    if (!current || l.added_date < current) earliestLeadDateByContact.set(l.contact_id, l.added_date);
+  }
+  const earliestMemberDateByContact = new Map<string, string>();
+  for (const m of members ?? []) {
+    if (!m.contact_id || !m.created_at) continue;
+    const current = earliestMemberDateByContact.get(m.contact_id);
+    if (!current || m.created_at < current) earliestMemberDateByContact.set(m.contact_id, m.created_at);
+  }
+
+  const cohortContacts: CohortContactInput[] = (contacts ?? []).map((c) => {
+    const candidates = [c.created_at, earliestLeadDateByContact.get(c.id), earliestMemberDateByContact.get(c.id)].filter(
+      (d): d is string => !!d
+    );
+    return {
+      id: c.id,
+      createdAt: candidates.sort()[0] ?? c.created_at,
+      firstSource: c.first_source,
+      firstUtmCampaign: c.first_utm_campaign,
+    };
+  });
 
   const cohortPayments: CohortPaymentInput[] = (payments ?? [])
     .filter((p) => p.status === "paid")
