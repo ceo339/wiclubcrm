@@ -63,6 +63,16 @@ const EMAIL_ALIASES = ["email", "почта", "mail", "e-mail"];
 // not a поток" — the стрим itself still gets picked by hand in the lead
 // card, same as any lead without a landing page.
 const PRODUCT_ALIASES = ["product", "course", "продукт", "курс", "course_name", "product_name"];
+// "нужно создавать лид с продуктом, который на лендинге... Как реализовать,
+// чтоб четко продукт передавался и цена?" (Anastasiia, 16 сен 2026) — the
+// landing page can send its own explicit price as one more hidden field
+// (useful when the same course is sold at different prices on different
+// landing pages — an early-bird page, a regional page, etc.). When it
+// doesn't (the common case — one price per course), the lead's value falls
+// back to that course's own price from the "Курсы" catalog, resolved the
+// same way as PRODUCT_ALIASES above — so "продукт передаётся точно" already
+// carries its price with it, with zero extra setup on the landing page.
+const PRICE_ALIASES = ["price", "цена", "value", "сумма", "amount"];
 
 function pick(fields: Record<string, unknown>, aliases: string[]): string | null {
   const lower = new Map(Object.entries(fields).map(([k, v]) => [k.toLowerCase(), v]));
@@ -170,10 +180,24 @@ export async function POST(request: Request, { params }: { params: Promise<{ key
   // never blocks the lead from being created.
   const productName = pick(fields, PRODUCT_ALIASES);
   let productId: string | null = null;
+  let matchedProductPrice: number | null = null;
   if (productName) {
-    const { data: products } = await admin.from("products").select("id, name").eq("partner_id", partner.id);
+    const { data: products } = await admin.from("products").select("id, name, price").eq("partner_id", partner.id);
     const match = (products ?? []).find((p) => p.name.trim().toLowerCase() === productName.trim().toLowerCase());
     productId = match?.id ?? null;
+    matchedProductPrice = match?.price ?? null;
+  }
+
+  // Explicit price from the landing page's own hidden field wins (see
+  // PRICE_ALIASES above); otherwise fall back to the matched course's own
+  // price so a resolved product never leaves the lead's value at 0.
+  const priceRaw = pick(fields, PRICE_ALIASES);
+  let value = 0;
+  if (priceRaw) {
+    const parsed = Number(priceRaw.replace(",", "."));
+    value = Number.isFinite(parsed) ? parsed : 0;
+  } else if (matchedProductPrice !== null) {
+    value = matchedProductPrice;
   }
 
   // Same email-first-then-phone matching rule as createLead/findOrCreateContact
@@ -217,6 +241,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ key
     landing_url: landingUrl,
     note,
     product_id: productId,
+    value,
   });
 
   if (error) return json({ ok: false, error: error.message }, 500);
