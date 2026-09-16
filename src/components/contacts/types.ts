@@ -32,3 +32,20 @@ export type Contact = Tables<"contacts"> & {
   leads: ContactLead[];
   enrollments: ContactEnrollment[];
 };
+
+// "в контактах показывать оплату каждого курса и общую за контакт, и в
+// списке добавить этот столбик" (Anastasiia, 16 сен 2026) — the per-course
+// amount already renders in the card (ContactEnrollmentsList shows
+// `enrollment.price` on every row), so the only real gap was a TOTAL. Only
+// actually-paid enrollments count towards it — same rule MembersBoard's own
+// "Оплатили: X из Y" summary already uses (`sPaid`/`sCompleted`) — so a
+// course she's merely signed up for but hasn't paid ("Ожидание") doesn't
+// inflate the number; its own price still shows on its own row, just not
+// folded into this total.
+const PAID_ENROLLMENT_STATUSES = new Set(["sPaid", "sCompleted"]);
+
+export function contactPaidTotal(enrollments: ContactEnrollment[]): number {
+  return enrollments
+    .filter((e) => PAID_ENROLLMENT_STATUSES.has(e.status))
+    .reduce((sum, e) => sum + (e.price || 0), 0);
+}

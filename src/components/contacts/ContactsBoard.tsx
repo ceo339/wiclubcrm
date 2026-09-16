@@ -4,8 +4,9 @@ import { useMemo, useState } from "react";
 import { stageLabel } from "@/lib/leads";
 import { statusLabel } from "@/lib/members";
 import Avatar from "@/components/ui/Avatar";
+import Money from "@/components/currency/Money";
 import { useLocale } from "@/components/i18n/LocaleProvider";
-import type { Contact } from "./types";
+import { contactPaidTotal, type Contact } from "./types";
 import ContactDetailModal from "./ContactDetailModal";
 import ImportContactsModal from "./ImportContactsModal";
 
@@ -175,7 +176,7 @@ export default function ContactsBoard({
         </p>
       ) : (
         <div className="overflow-x-auto rounded-xl border border-border bg-background shadow-card">
-          <table className="w-full min-w-[760px] text-left text-sm">
+          <table className="w-full min-w-[860px] text-left text-sm">
             <thead className="border-b border-border text-xs uppercase tracking-wide text-muted">
               <tr>
                 <th className="w-10 px-4 py-3 text-right font-medium">№</th>
@@ -183,6 +184,7 @@ export default function ContactsBoard({
                 {isHq && <th className="px-4 py-3 font-medium">{t("colClub")}</th>}
                 <th className="px-4 py-3 font-medium">{t("colLeadsShort")}</th>
                 <th className="px-4 py-3 font-medium">{t("navCourses")}</th>
+                <th className="px-4 py-3 text-right font-medium">{t("colPaidTotal")}</th>
               </tr>
             </thead>
             <tbody>
@@ -229,6 +231,13 @@ export default function ContactsBoard({
                           </span>
                         ))}
                       </div>
+                    )}
+                  </td>
+                  <td className="px-4 py-3 text-right text-ink-2">
+                    {contactPaidTotal(c.enrollments) > 0 ? (
+                      <Money amountEur={contactPaidTotal(c.enrollments)} />
+                    ) : (
+                      <span className="text-muted">—</span>
                     )}
                   </td>
                 </tr>

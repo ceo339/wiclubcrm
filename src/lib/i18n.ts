@@ -625,6 +625,10 @@ export const DICT: Record<string, Entry> = {
   allStartDates: { ru: "Все даты старта", bg: "Всички начални дати" },
   countTotalMembers: { ru: "Всего участниц: {count}", bg: "Общо участнички: {count}" },
   countTotalContacts: { ru: "Всего контактов: {count}", bg: "Общо контакти: {count}" },
+  // Round 29 — payment total column/summary on «Контакты» (see
+  // contactPaidTotal in components/contacts/types.ts).
+  colPaidTotal: { ru: "Оплата", bg: "Плащане" },
+  contactPaidTotalLabel: { ru: "Оплачено всего", bg: "Общо платено" },
   countInCourse: { ru: "На курсе «{course}»: {count}", bg: "В курс „{course}“: {count}" },
   countInStream: { ru: "На курсе «{course}», поток {date}: {count}", bg: "В курс „{course}“, поток {date}: {count}" },
   streamPaidCount: { ru: "Оплатили: {paid} из {total}", bg: "Платили: {paid} от {total}" },

@@ -8,7 +8,7 @@ import Money from "@/components/currency/Money";
 import MoneyAmountField from "@/components/currency/MoneyAmountField";
 import { useLocale, useT } from "@/components/i18n/LocaleProvider";
 import { addContactComment, getContactDetail, updateContact, type ContactDetail } from "@/app/contacts/actions";
-import type { Contact, ContactEnrollment } from "./types";
+import { contactPaidTotal, type Contact, type ContactEnrollment } from "./types";
 
 /**
  * "контакты нужно редактировать должна быть вся информация в карточке
@@ -98,7 +98,18 @@ export default function ContactDetailModal({
         </div>
 
         <div className="mt-5">
-          <span className="text-xs font-medium text-ink-2">{t("navCourses")}</span>
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-xs font-medium text-ink-2">{t("navCourses")}</span>
+            {/* "показывать оплату каждого курса и общую за контакт"
+                (Anastasiia, 16 сен 2026) — каждый курс уже показывает свою
+                цену ниже; здесь только сумма по-настоящему оплаченных
+                курсов (sPaid/sCompleted), см. contactPaidTotal. */}
+            {enrollments.length > 0 && (
+              <span className="text-xs text-muted">
+                {t("contactPaidTotalLabel")}: <Money amountEur={contactPaidTotal(enrollments)} />
+              </span>
+            )}
+          </div>
           {enrollments.length === 0 ? (
             <p className="mt-2 text-xs text-muted">{t("emptyNoCoursesForMember")}</p>
           ) : (
