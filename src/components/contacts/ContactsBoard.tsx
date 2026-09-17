@@ -6,6 +6,7 @@ import { statusLabel } from "@/lib/members";
 import Avatar from "@/components/ui/Avatar";
 import Money from "@/components/currency/Money";
 import { useLocale } from "@/components/i18n/LocaleProvider";
+import MultiSelectFilter, { type MultiSelectOption } from "@/components/leads/MultiSelectFilter";
 import { contactPaidTotal, type Contact } from "./types";
 import ContactDetailModal from "./ContactDetailModal";
 import ImportContactsModal from "./ImportContactsModal";
@@ -21,8 +22,14 @@ export default function ContactsBoard({
 }) {
   const { locale, t } = useLocale();
   const [search, setSearch] = useState("");
-  const [productId, setProductId] = useState<string>("all");
-  const [startDate, setStartDate] = useState<string>("all");
+  // Round 29 — "сделай как на «Лидах»/«Когортах»" (Anastasiia, 17 сен
+  // 2026): она уже спрашивала эти фильтры в раунде 6 (обычные одиночные
+  // <select>), но с тех пор источник/кампания на «Лидах» и «Когортах»
+  // переехали на чекбокс-мультивыбор (MultiSelectFilter, раунд 21) — курс и
+  // поток здесь переведены на тот же компонент для единообразия. Пустой
+  // набор — по-прежнему "показать всё", та же конвенция, что и везде.
+  const [courseIds, setCourseIds] = useState<Set<string>>(new Set());
+  const [streamDates, setStreamDates] = useState<Set<string>>(new Set());
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [showImport, setShowImport] = useState(false);
 
@@ -30,7 +37,7 @@ export default function ContactsBoard({
   // 2026) — a contact's course can come either from an actual course
   // enrollment (she's a participant) or from a заявка that already named a
   // course/stream (she hasn't converted yet), so both are combined here.
-  const productOptions = useMemo(() => {
+  const courseOptions: MultiSelectOption[] = useMemo(() => {
     const seen = new Map<string, string>();
     initialContacts.forEach((c) => {
       c.leads.forEach((l) => {
@@ -41,52 +48,58 @@ export default function ContactsBoard({
       });
     });
     return Array.from(seen.entries())
-      .map(([id, name]) => ({ id, name }))
-      .sort((a, b) => a.name.localeCompare(b.name));
+      .map(([id, name]) => ({ value: id, label: name }))
+      .sort((a, b) => a.label.localeCompare(b.label));
   }, [initialContacts]);
 
-  const dateOptions = useMemo(() => {
+  const streamOptions: MultiSelectOption[] = useMemo(() => {
     const seen = new Set<string>();
     initialContacts.forEach((c) => {
       c.leads.forEach((l) => {
         if (!l.cohort_start_date) return;
-        if (productId !== "all" && l.product_id !== productId) return;
+        if (courseIds.size > 0 && (!l.product_id || !courseIds.has(l.product_id))) return;
         seen.add(l.cohort_start_date);
       });
       c.enrollments.forEach((e) => {
         if (!e.start_date) return;
-        if (productId !== "all" && e.product_id !== productId) return;
+        if (courseIds.size > 0 && (!e.product_id || !courseIds.has(e.product_id))) return;
         seen.add(e.start_date);
       });
     });
-    return Array.from(seen).sort();
-  }, [initialContacts, productId]);
+    return Array.from(seen)
+      .sort()
+      .map((d) => ({ value: d, label: d }));
+  }, [initialContacts, courseIds]);
 
-  function handleProductChange(id: string) {
-    setProductId(id);
-    setStartDate("all");
+  function handleCourseChange(next: Set<string>) {
+    setCourseIds(next);
+    // те же соображения, что и раньше в handleProductChange: выбранные
+    // потоки могли принадлежать курсу, который только что убрали из
+    // фильтра — сбрасываем, а не оставляем невидимый активный фильтр.
+    setStreamDates(new Set());
   }
 
-  const hasActiveFilters = search.trim() !== "" || productId !== "all" || startDate !== "all";
+  const hasActiveFilters = search.trim() !== "" || courseIds.size > 0 || streamDates.size > 0;
 
   function resetFilters() {
     setSearch("");
-    setProductId("all");
-    setStartDate("all");
+    setCourseIds(new Set());
+    setStreamDates(new Set());
   }
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     return initialContacts.filter((c) => {
-      if (productId !== "all") {
+      if (courseIds.size > 0) {
         const matches =
-          c.leads.some((l) => l.product_id === productId) || c.enrollments.some((e) => e.product_id === productId);
+          c.leads.some((l) => l.product_id && courseIds.has(l.product_id)) ||
+          c.enrollments.some((e) => e.product_id && courseIds.has(e.product_id));
         if (!matches) return false;
       }
-      if (startDate !== "all") {
+      if (streamDates.size > 0) {
         const matches =
-          c.leads.some((l) => l.cohort_start_date === startDate) ||
-          c.enrollments.some((e) => e.start_date === startDate);
+          c.leads.some((l) => l.cohort_start_date && streamDates.has(l.cohort_start_date)) ||
+          c.enrollments.some((e) => e.start_date && streamDates.has(e.start_date));
         if (!matches) return false;
       }
       if (!q) return true;
@@ -97,7 +110,7 @@ export default function ContactsBoard({
         (c.email ?? "").toLowerCase().includes(q)
       );
     });
-  }, [initialContacts, search, productId, startDate]);
+  }, [initialContacts, search, courseIds, streamDates]);
 
   const selected = initialContacts.find((c) => c.id === selectedId) ?? null;
 
@@ -111,34 +124,22 @@ export default function ContactsBoard({
           className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-accent focus:ring-1 focus:ring-accent sm:w-64"
         />
 
-        {productOptions.length > 0 && (
-          <select
-            value={productId}
-            onChange={(e) => handleProductChange(e.target.value)}
-            className="rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-accent focus:ring-1 focus:ring-accent"
-          >
-            <option value="all">{t("allCourses")}</option>
-            {productOptions.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.name}
-              </option>
-            ))}
-          </select>
+        {courseOptions.length > 0 && (
+          <MultiSelectFilter
+            allLabel={t("allCourses")}
+            options={courseOptions}
+            selected={courseIds}
+            onChange={handleCourseChange}
+          />
         )}
 
-        {dateOptions.length > 0 && (
-          <select
-            value={startDate}
-            onChange={(e) => setStartDate(e.target.value)}
-            className="rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-accent focus:ring-1 focus:ring-accent"
-          >
-            <option value="all">{t("allStartDates")}</option>
-            {dateOptions.map((d) => (
-              <option key={d} value={d}>
-                {d}
-              </option>
-            ))}
-          </select>
+        {streamOptions.length > 0 && (
+          <MultiSelectFilter
+            allLabel={t("allStartDates")}
+            options={streamOptions}
+            selected={streamDates}
+            onChange={setStreamDates}
+          />
         )}
 
         {hasActiveFilters && (
