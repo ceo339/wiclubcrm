@@ -105,26 +105,52 @@ function inferSource(utmSource: string | null, utmMedium: string | null): string
   return "Website";
 }
 
+/**
+ * Round 31 — "webhook возвращает ошибку missing name на проверочный запрос
+ * Tilda" (Anastasiia, 17 сен 2026), despite round 25 already special-casing
+ * that exact ping. Root cause, confirmed with a standalone Node script
+ * before touching this file (real Fetch API `Request`/`.formData()`, no
+ * network needed): the old version trusted the incoming `Content-Type`
+ * header to decide HOW to parse the body — `.formData()` throws for any
+ * Content-Type it doesn't recognize as multipart/urlencoded (including
+ * `text/plain`, which is exactly what some Tilda webhook deliveries carry
+ * a JSON body under — a documented real-world quirk, see the qna.habr.com
+ * thread on this route's Round 20 research). That throw was swallowed by
+ * the `catch` below it, silently turning a real `{"test":"test"}` body
+ * into an empty `{}` — which no longer matches round 25's one-field check,
+ * so the ping fell straight through into "missing name".
+ *
+ * Fixed by not trusting the header at all: read the raw body text once,
+ * try JSON.parse on it first (works whatever the header claims), and only
+ * fall back to treating it as a plain querystring (`URLSearchParams`) when
+ * it isn't valid JSON — covers Tilda's own `application/x-www-form-urlencoded`
+ * submissions and a hand-written landing page's JSON POST equally, and
+ * verified against both webhook ping shapes and real submission shapes in
+ * that same standalone script before rolling it out here.
+ */
 async function parseBody(request: Request): Promise<Record<string, unknown>> {
-  const contentType = request.headers.get("content-type") ?? "";
-  if (contentType.includes("application/json")) {
-    try {
-      const parsed = await request.json();
-      return parsed && typeof parsed === "object" ? (parsed as Record<string, unknown>) : {};
-    } catch {
-      return {};
-    }
-  }
+  let raw = "";
   try {
-    const formData = await request.formData();
-    const record: Record<string, unknown> = {};
-    formData.forEach((value, key) => {
-      record[key] = value;
-    });
-    return record;
+    raw = await request.text();
   } catch {
     return {};
   }
+  if (!raw.trim()) return {};
+
+  try {
+    const parsed = JSON.parse(raw);
+    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+      return parsed as Record<string, unknown>;
+    }
+  } catch {
+    // Not JSON — fall through to querystring parsing below.
+  }
+
+  const record: Record<string, unknown> = {};
+  new URLSearchParams(raw).forEach((value, key) => {
+    record[key] = value;
+  });
+  return record;
 }
 
 export async function POST(request: Request, { params }: { params: Promise<{ key: string }> }) {
