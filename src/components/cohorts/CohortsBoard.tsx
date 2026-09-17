@@ -9,7 +9,7 @@ import { useLocale } from "@/components/i18n/LocaleProvider";
 import MultiSelectFilter, { type MultiSelectOption } from "@/components/leads/MultiSelectFilter";
 import SourceDonut from "@/components/leads/SourceDonut";
 import LocalPeriodFilter, { monthMatchesLocalPeriod, type LocalPeriod } from "@/components/shared/LocalPeriodFilter";
-import { computeCohortReport, type CohortContactInput, type CohortPaymentInput, type CohortRow } from "@/lib/cohorts";
+import { computeCohortReport, type CohortContactInput, type CohortPaymentInput } from "@/lib/cohorts";
 
 /** Round 28, часть D — "объединим в target" (Anastasiia): a cohort keyed on
  * a real utm_campaign (row.isCampaign — an actual ad campaign, not just a
@@ -174,6 +174,68 @@ export default function CohortsBoard({
   );
   const maxMonthly = Math.max(1, ...monthlyTotals.map((m) => m.value));
 
+  // Round 29 — «Всё, что я просила ранее объединять в одну строку — это
+  // было вот тут» (Anastasiia, 16 сен 2026, скриншот именно ЭТОЙ таблицы —
+  // не столбчатого графика выше). Часть D/E ошибочно чинили сегментацию
+  // столбчатого графика «Распределение по месяцам», а на самом деле все три
+  // её фразы («еслм выбираю все источники то, просто показывается по
+  // месяцам в совокупности, без разбивки по источникам», «если выбраны все
+  // источники показывай их просто в одну строку итого... чтоб все было 1
+  // строкой») были про эту саму таблицу — ту, где на один месяц раньше
+  // приходилось по строке на каждый источник/кампанию (см. её скриншот:
+  // 9+ строк «Сентябрь 2026», одна на «список 40», одна на «Instagram» и
+  // т.д. — то самое «не читабельно»). Теперь строки этой таблицы всегда
+  // схлопнуты до одной на месяц привлечения, независимо от фильтра —
+  // фильтр по-прежнему решает, ЧТО суммируется в эту строку (всё, когда
+  // источник/кампания не выбраны; только выбранное — когда выбраны), но
+  // сама таблица больше никогда не показывает больше одной строки на
+  // месяц. Разбивка по источникам никуда не делась — она осталась в доната
+  // «Источники сделок» выше, где ей самое место.
+  const aggregatedRows = useMemo(() => {
+    type MonthTotal = {
+      month: string;
+      contactsCount: number;
+      paidContactsCount: number;
+      totalRevenue: number;
+      monthly: number[];
+    };
+    const byMonth = new Map<string, MonthTotal>();
+    for (const row of report.rows) {
+      let bucket = byMonth.get(row.month);
+      if (!bucket) {
+        bucket = {
+          month: row.month,
+          contactsCount: 0,
+          paidContactsCount: 0,
+          totalRevenue: 0,
+          monthly: report.columns.map(() => 0),
+        };
+        byMonth.set(row.month, bucket);
+      }
+      bucket.contactsCount += row.contactsCount;
+      bucket.paidContactsCount += row.paidContactsCount;
+      bucket.totalRevenue += row.totalRevenue;
+      row.monthly.forEach((v, i) => {
+        bucket!.monthly[i] += v;
+      });
+    }
+    return Array.from(byMonth.values())
+      .map((b) => ({
+        ...b,
+        conversionPct: b.contactsCount > 0 ? Math.round((b.paidContactsCount / b.contactsCount) * 1000) / 10 : 0,
+      }))
+      .sort((a, b) => b.month.localeCompare(a.month));
+  }, [report]);
+
+  // Label for the (now single, per month) "Источник / кампания" cell —
+  // reflects what the filter currently includes in that one aggregated row,
+  // same wording MultiSelectFilter's own button already uses for "some
+  // picked" ("Выбрано: N").
+  const sourceFilterSummary = useMemo(() => {
+    const n = sources.size + campaigns.size;
+    return n === 0 ? t("allSources") : t("nFiltersSelected", { n: String(n) });
+  }, [sources, campaigns, t]);
+
   return (
     <div className="flex flex-col gap-4">
       <p className="max-w-2xl text-sm text-muted">{t("cohortHint")}</p>
@@ -239,18 +301,12 @@ export default function CohortsBoard({
               </tr>
             </thead>
             <tbody>
-              {report.rows.map((row: CohortRow) => {
+              {aggregatedRows.map((row) => {
                 const rowMax = Math.max(0, ...row.monthly);
                 return (
-                  <tr key={row.key} className="border-b border-border last:border-0">
+                  <tr key={row.month} className="border-b border-border last:border-0">
                     <td className="whitespace-nowrap px-3 py-2 text-ink-2">{monthLabel(row.month, locale)}</td>
-                    <td className="whitespace-nowrap px-3 py-2 text-ink-2">
-                      <span
-                        className="mr-1.5 inline-block h-2 w-2 rounded-full align-middle"
-                        style={{ background: row.campaignKey && !row.isCampaign ? sourceColor(row.campaignKey) : undefined }}
-                      />
-                      {cohortLabel(row.campaignKey, row.isCampaign, locale, t("cohortNoSource"))}
-                    </td>
+                    <td className="whitespace-nowrap px-3 py-2 text-ink-2">{sourceFilterSummary}</td>
                     <td className="whitespace-nowrap px-3 py-2 text-right text-ink-2">{row.contactsCount}</td>
                     <td className="whitespace-nowrap px-3 py-2 text-right text-ink-2">{row.paidContactsCount}</td>
                     <td className="whitespace-nowrap px-3 py-2 text-right text-ink-2">{row.conversionPct}%</td>
