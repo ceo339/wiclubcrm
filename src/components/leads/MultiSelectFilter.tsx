@@ -6,6 +6,19 @@ import { useT } from "@/components/i18n/LocaleProvider";
 export type MultiSelectOption = { value: string; label: string };
 
 /**
+ * A `selected` set can never legitimately contain this string as a real
+ * option value (options always come from real source/campaign/course/stream
+ * data) — used as a sentinel to represent "deliberately deselected
+ * everything", distinct from the empty set's existing meaning of "all"
+ * (see below). Kept private to this file: every consumer only ever calls
+ * `.size`/`.has(realValue)` on the set it gets back, both of which already
+ * behave correctly against a sentinel-only set without the consumer needing
+ * to know it exists (`.size > 0` still triggers filtering, and `.has()`
+ * never matches a real value, so every row is correctly filtered out).
+ */
+const NONE_MARKER = "\u0000__multiselect_none__\u0000";
+
+/**
  * "Нет возможности выбрать сразу несколько, а только одну. Добавь выбор
  * нескольких и всех сразу" (Anastasiia, 15 сен 2026) — replaces the plain
  * single-value <select> used for the leads board's "Источник"/"Кампания"
@@ -18,6 +31,17 @@ export type MultiSelectOption = { value: string; label: string };
  * collapses back to that same empty-set "all", rather than an
  * equivalent-but-distinct full set — keeps there being exactly one way to
  * mean "no filter".
+ *
+ * Round 30 — "если нажать на все источники, то выбираются все, если нажать
+ * еще раз, то отменяются все" (Anastasiia, 17 сен 2026): the "Все ..." row
+ * used to be a no-op after the first click — since `selected` collapses to
+ * the full explicit set (still "all" by the check below) rather than ever
+ * reaching a distinct "none" state, a second click just reselected the same
+ * "all" state again. The master checkbox is now a genuine toggle between
+ * "all" (the canonical empty set, unchanged) and "none" — represented by
+ * `NONE_MARKER` so every real option reads as unchecked and every consumer's
+ * existing "> 0 means filter" logic correctly shows zero matching rows,
+ * without any change needed outside this component.
  */
 export default function MultiSelectFilter({
   allLabel,
@@ -43,22 +67,32 @@ export default function MultiSelectFilter({
     return () => document.removeEventListener("mousedown", onClickOutside);
   }, [open]);
 
-  const allSelected = selected.size === 0 || selected.size === options.length;
-  const buttonLabel = allSelected
-    ? allLabel
-    : selected.size === 1
-      ? (options.find((o) => selected.has(o.value))?.label ?? allLabel)
-      : t("nFiltersSelected", { n: selected.size });
+  const isNoneSelected = selected.has(NONE_MARKER);
+  const allSelected = !isNoneSelected && (selected.size === 0 || selected.size === options.length);
+  const buttonLabel = isNoneSelected
+    ? t("noFiltersSelected")
+    : allSelected
+      ? allLabel
+      : selected.size === 1
+        ? (options.find((o) => selected.has(o.value))?.label ?? allLabel)
+        : t("nFiltersSelected", { n: selected.size });
 
   function toggle(value: string) {
-    // Starting from the canonical "all" (empty set) and unchecking one
-    // option means "everyone except this one" — expand to the full list
-    // first so the click actually narrows the filter instead of doing
-    // nothing (removing from an empty set is a no-op).
-    const next = selected.size === 0 ? new Set(options.map((o) => o.value)) : new Set(selected);
+    // Starting from either sentinel state ("all" — empty set, or "none" —
+    // NONE_MARKER) and checking/unchecking one option should narrow from
+    // the real underlying set that sentinel represents, not from the
+    // sentinel's literal contents — expand first so the click actually
+    // changes the filter instead of operating on a marker value.
+    const next = isNoneSelected
+      ? new Set<string>()
+      : selected.size === 0
+        ? new Set(options.map((o) => o.value))
+        : new Set(selected);
     if (next.has(value)) next.delete(value);
     else next.add(value);
-    onChange(next.size === options.length ? new Set() : next);
+    if (next.size === options.length) onChange(new Set());
+    else if (next.size === 0) onChange(new Set([NONE_MARKER]));
+    else onChange(next);
   }
 
   return (
@@ -77,7 +111,7 @@ export default function MultiSelectFilter({
             <input
               type="checkbox"
               checked={allSelected}
-              onChange={() => onChange(allSelected ? new Set(options.map((o) => o.value)) : new Set())}
+              onChange={() => onChange(allSelected ? new Set([NONE_MARKER]) : new Set())}
               className="h-3.5 w-3.5"
             />
             {allLabel}

@@ -358,6 +358,11 @@ export const DICT: Record<string, Entry> = {
   // on the Источник/Кампания filter buttons instead of a single value once
   // more than one (but not all) option is checked.
   nFiltersSelected: { ru: "Выбрано: {n}", bg: "Избрани: {n}" },
+  // "если нажать на все источники, то выбираются все, если нажать еще раз,
+  // то отменяются все" (Anastasiia, 17 сен 2026) — shown on the filter
+  // button when the "Все ..." checkbox has been clicked a second time to
+  // deliberately deselect everything (see MultiSelectFilter's NONE_MARKER).
+  noFiltersSelected: { ru: "Ничего не выбрано", bg: "Нищо не е избрано" },
   otherSourcesGroupLabel: { ru: "Другие источники (из импорта)", bg: "Други източници (от импорт)" },
   viewKanban: { ru: "Канбан", bg: "Канбан" },
   viewList: { ru: "Список", bg: "Списък" },

@@ -1,8 +1,11 @@
 import { redirect } from "next/navigation";
 import { getCurrentProfile } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
+import { scopeForProfile } from "@/lib/currency";
 import { localeScopeForProfile } from "@/lib/i18n";
 import { isNetworkRole, getViewScopePartnerId } from "@/lib/viewScope";
+import CurrencySwitcher from "@/components/currency/CurrencySwitcher";
+import CurrencyScope from "@/components/currency/CurrencyScope";
 import LocaleSwitcher from "@/components/i18n/LocaleSwitcher";
 import LocaleScope from "@/components/i18n/LocaleScope";
 import T from "@/components/i18n/T";
@@ -42,6 +45,7 @@ export default async function ContactsPage() {
     ? await supabase.from("partners").select("id, name").order("name")
     : { data: [] };
 
+  const { scope, fallback } = scopeForProfile(profile);
   const localeScope = localeScopeForProfile(profile);
   const canEdit = !!profile.partner_id;
 
@@ -53,6 +57,8 @@ export default async function ContactsPage() {
       activeClubId={scopePartnerId}
       headerExtra={
         <>
+          <CurrencyScope scope={scope} fallback={fallback} />
+          <CurrencySwitcher />
           <LocaleScope scope={localeScope.scope} fallback={localeScope.fallback} />
           <LocaleSwitcher />
         </>
