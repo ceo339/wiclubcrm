@@ -11,8 +11,9 @@ import type {
   ProductCount,
   SourceConversion,
   StaleLead,
+  UpcomingCohort,
 } from "@/lib/dashboard";
-import { formatPctDelta, formatPointsDelta, monthLabel, periodLabel } from "@/lib/dashboard";
+import { formatDateRu, formatPctDelta, formatPointsDelta, monthLabel, periodLabel } from "@/lib/dashboard";
 import type { MonthlyCount } from "@/lib/dashboard";
 import Money from "@/components/currency/Money";
 import { interpolateHex, sourceColor, sourceLabel, stageLabel } from "@/lib/leads";
@@ -509,6 +510,92 @@ function ClubsTable({ clubs, qs }: { clubs: ClubRow[]; qs: string }) {
   );
 }
 
+/** "сегодня" / "завтра" / "через N дн." next to a cohort's date — the same
+ * plain-language framing StaleLeadsPanel's colDaysStuck uses for the
+ * opposite direction (days since, not days until). */
+function daysUntilLabel(daysUntil: number, t: (key: string, vars?: Record<string, string | number>) => string): string {
+  if (daysUntil <= 0) return t("eventStartsToday");
+  if (daysUntil === 1) return t("eventStartsTomorrow");
+  return t("eventStartsInDays", { n: daysUntil });
+}
+
+/**
+ * "давай добавим на главну виджет по ближайшим событиям (в ближайшие 30
+ * дней) курс - поток (дата) - записалось кол-во - оплатили кол-во -
+ * выручка. ТОлько красивый и понятный в стиле брендбука" (Anastasiia, 22
+ * сен 2026) — every course/поток starting soon, at a glance, so she doesn't
+ * have to open «Курсы» and cross-reference «Участницы» by hand for each one.
+ *
+ * Styled with the same WI Red family already used everywhere else on this
+ * page (the funnel gradient, the "Требует внимания" panels) rather than a
+ * new palette: `--accent-soft`/`--accent-strong` mark a start date inside
+ * the next 3 days, exactly the "скоро" emphasis the funnel/heatmap already
+ * use for "this is the one to look at first".
+ */
+function UpcomingEventsPanel({ events, showClub }: { events: UpcomingCohort[]; showClub?: boolean }) {
+  const { t } = useLocale();
+  return (
+    <div className="rounded-xl border border-border bg-background shadow-card">
+      <div className="border-b border-border px-5 py-4">
+        <h2 className="text-sm font-semibold text-foreground">{t("headingUpcomingEvents")}</h2>
+        <p className="mt-0.5 text-xs text-muted">{t("subheadingUpcomingEvents", { days: 30 })}</p>
+      </div>
+      {events.length === 0 ? (
+        <p className="p-5 text-sm text-muted">{t("emptyNoUpcomingEvents")}</p>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[640px] text-left text-sm">
+            <thead className="border-b border-border text-xs uppercase tracking-wide text-muted">
+              <tr>
+                <th className="px-5 py-3 font-medium">{t("colCourse")}</th>
+                {showClub && <th className="px-5 py-3 font-medium">{t("colClub")}</th>}
+                <th className="px-5 py-3 font-medium">{t("colStream")}</th>
+                <th className="px-5 py-3 text-right font-medium">{t("colEnrolled")}</th>
+                <th className="px-5 py-3 text-right font-medium">{t("colPaidShort")}</th>
+                <th className="px-5 py-3 text-right font-medium">{t("colRevenue")}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {events.map((e) => {
+                const soon = e.daysUntil <= 3;
+                return (
+                  <tr key={e.key} className="border-b border-border last:border-0">
+                    <td className="px-5 py-3 font-medium text-foreground">{e.courseName ?? t("productDeleted")}</td>
+                    {showClub && <td className="px-5 py-3 text-muted">{e.partnerName ?? "—"}</td>}
+                    <td className="px-5 py-3">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="text-ink-2" style={{ fontVariantNumeric: "tabular-nums" }}>
+                          {formatDateRu(e.startDate)}
+                        </span>
+                        <span
+                          className={`whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] font-medium ${
+                            soon ? "bg-accent-soft text-accent-strong" : "bg-surface-2 text-muted"
+                          }`}
+                        >
+                          {daysUntilLabel(e.daysUntil, t)}
+                        </span>
+                      </div>
+                    </td>
+                    <td className="px-5 py-3 text-right font-medium text-foreground" style={{ fontVariantNumeric: "tabular-nums" }}>
+                      {e.enrolledCount}
+                    </td>
+                    <td className="px-5 py-3 text-right text-muted" style={{ fontVariantNumeric: "tabular-nums" }}>
+                      {e.paidCount}
+                    </td>
+                    <td className="px-5 py-3 text-right font-semibold text-foreground">
+                      <Money amountEur={e.revenue} />
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function DashboardBoard({
   totals,
   fourthTile,
@@ -532,6 +619,7 @@ export default function DashboardBoard({
   royalty,
   productsPeriod,
   productsAllTime,
+  upcomingCohorts,
 }: {
   totals: Totals;
   /** The 4th all-time tile — "Клубов в сети" on the network view, "Курсов"
@@ -573,6 +661,12 @@ export default function DashboardBoard({
   royalty: { amount: number; percent: number };
   productsPeriod: ProductCount[];
   productsAllTime: ProductCount[];
+  /** "Ближайшие события" — every course/поток starting in the next 30 days,
+   * independent of the period filter above (a start date next week matters
+   * regardless of which past month is selected). `partnerName` on each row
+   * is only set (and only rendered as its own column) on the network-wide
+   * Главная — see upcomingCohorts in lib/dashboard.ts. */
+  upcomingCohorts: UpcomingCohort[];
 }) {
   const { locale, t } = useLocale();
   const maxFunnel = Math.max(1, ...funnel.map((s) => s.count));
@@ -593,6 +687,8 @@ export default function DashboardBoard({
           {decliningClubs && <DecliningClubsPanel decliningClubs={decliningClubs} />}
         </AttentionGrid>
       )}
+
+      <UpcomingEventsPanel events={upcomingCohorts} showClub={!!clubs} />
 
       <p className="text-sm text-muted">
         {t("metricsForPrefix")} <span className="font-medium text-foreground">{periodLabel(period, locale)}</span>

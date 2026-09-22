@@ -534,6 +534,101 @@ export function findDecliningClubs(
 }
 
 // ---------------------------------------------------------------------------
+// "Ближайшие события" — a Главная widget: every course/поток (product_cohorts
+// row) starting within the next N days, with how many are on it, how many of
+// those have actually paid, and the real revenue collected so far.
+// "давай добавим на главну виджет по ближайшим событиям (в ближайшие 30
+// дней) курс - поток (дата) - записалось кол-во - оплатили кол-во - выручка"
+// (Anastasiia, 22 сен 2026).
+//
+// A cohort has no id of its own on either leads or member_enrollments — both
+// only ever store (product_id, start_date) as plain columns, matched by
+// value (see round 19's own note on this) — so this groups the SAME way
+// every other stream-scoped figure in the app already does (streamStats on
+// «Участницы», the когортный анализ tables): by that exact pair, never by
+// product_cohorts.id.
+
+export type UpcomingCohort = {
+  key: string;
+  productId: string;
+  /** Null when the course itself has since been deleted — the cohort row
+   * (and any real enrollments on it) still exist and are still shown, same
+   * "never silently drop a real row" rule as ProductCount's "deleted"
+   * bucket above; the UI falls back to a translated placeholder label. */
+  courseName: string | null;
+  startDate: string;
+  /** 0 = starts today; never negative — cohorts already in the past are
+   * filtered out before this is computed. */
+  daysUntil: number;
+  enrolledCount: number;
+  paidCount: number;
+  /** EUR, like every other revenue figure on this page — render through
+   * <Money amountEur=.../> for the currently selected display currency. */
+  revenue: number;
+  /** Only set when this list spans more than one club (the network-wide
+   * Главная) — omitted for a single club's own dashboard, where every row
+   * is obviously that same club's. */
+  partnerName?: string;
+};
+
+/**
+ * Every product_cohorts row whose start_date falls within [today, today +
+ * windowDays] (inclusive of today, so a course starting this morning still
+ * shows), soonest first. `enrollments` should carry every status (sAwaiting
+ * included) — "записалось" counts all of them, same convention as the
+ * countLabel/filtered.length readout on «Участницы»; "оплатили"/revenue
+ * narrow to sPaid/sCompleted, same as streamStats there.
+ */
+export function upcomingCohorts({
+  cohorts,
+  enrollments,
+  productNamesById,
+  partnerNamesById,
+  windowDays = 30,
+  now = new Date(),
+}: {
+  cohorts: { product_id: string; start_date: string; partner_id?: string }[];
+  enrollments: { product_id: string | null; start_date: string | null; status: string; price: number; partner_id?: string }[];
+  productNamesById: Map<string, string>;
+  /** Pass only for a multi-club (network-wide) list — adds `partnerName` to
+   * each row and scopes the enrollment match to the same club as the
+   * cohort, so two different clubs' identically-named/dated courses never
+   * cross-count each other's enrollments. */
+  partnerNamesById?: Map<string, string>;
+  windowDays?: number;
+  now?: Date;
+}): UpcomingCohort[] {
+  const msPerDay = 24 * 60 * 60 * 1000;
+  const today = now.toISOString().slice(0, 10);
+  const endDate = new Date(now.getTime() + windowDays * msPerDay).toISOString().slice(0, 10);
+  const todayMs = new Date(today).getTime();
+
+  return cohorts
+    .filter((c) => c.start_date >= today && c.start_date <= endDate)
+    .map((c) => {
+      const matching = enrollments.filter(
+        (e) =>
+          e.product_id === c.product_id &&
+          e.start_date === c.start_date &&
+          (c.partner_id === undefined || e.partner_id === c.partner_id)
+      );
+      const paid = matching.filter((e) => e.status === "sPaid" || e.status === "sCompleted");
+      return {
+        key: `${c.partner_id ?? ""}:${c.product_id}:${c.start_date}`,
+        productId: c.product_id,
+        courseName: productNamesById.get(c.product_id) ?? null,
+        startDate: c.start_date,
+        daysUntil: Math.round((new Date(c.start_date).getTime() - todayMs) / msPerDay),
+        enrolledCount: matching.length,
+        paidCount: paid.length,
+        revenue: paid.reduce((sum, e) => sum + Number(e.price), 0),
+        partnerName: partnerNamesById ? partnerNamesById.get(c.partner_id ?? "") : undefined,
+      };
+    })
+    .sort((a, b) => a.startDate.localeCompare(b.startDate) || (a.courseName ?? "").localeCompare(b.courseName ?? "", "ru"));
+}
+
+// ---------------------------------------------------------------------------
 // "Участницы по продуктам" — how many members are on each course/product.
 // Members with no product_id are bucketed separately rather than silently
 // dropped, so the counts always add up to the real total. A real product's

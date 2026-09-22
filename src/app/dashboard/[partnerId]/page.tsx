@@ -12,6 +12,7 @@ import {
   monthsWithActivity,
   parsePeriodParams,
   paymentAttributionDate,
+  upcomingCohorts,
   yearsWithActivity,
 } from "@/lib/dashboard";
 import { currencyForCountry } from "@/lib/currency";
@@ -52,16 +53,20 @@ export default async function ClubDashboardPage({
     .single();
   if (!partner) notFound();
 
-  const [{ data: leads }, { data: members }, { data: enrollments }, { data: payments }, { data: products }] =
+  const [{ data: leads }, { data: members }, { data: enrollments }, { data: payments }, { data: products }, { data: cohorts }] =
     await Promise.all([
       supabase.from("leads").select("stage, source, added_date, cohort_start_date").eq("partner_id", partnerId),
       supabase.from("members").select("created_at").eq("partner_id", partnerId),
-      supabase.from("member_enrollments").select("product_id, created_at, start_date").eq("partner_id", partnerId),
+      supabase
+        .from("member_enrollments")
+        .select("product_id, created_at, start_date, status, price")
+        .eq("partner_id", partnerId),
       supabase
         .from("payments")
         .select("amount, status, paid_date, member_enrollments(start_date, created_at), leads(cohort_start_date, added_date)")
         .eq("partner_id", partnerId),
       supabase.from("products").select("id, name").eq("partner_id", partnerId),
+      supabase.from("product_cohorts").select("product_id, start_date").eq("partner_id", partnerId),
     ]);
 
   const clubLeads = leads ?? [];
@@ -76,6 +81,14 @@ export default async function ClubDashboardPage({
     lead: (p as { leads?: { cohort_start_date: string | null; added_date: string } | null }).leads ?? null,
   }));
   const productNamesById = new Map((products ?? []).map((p) => [p.id, p.name]));
+  // "Ближайшие события" — this one club's own upcoming streams (see
+  // src/app/page.tsx's network branch for the multi-club version with a
+  // "Клуб" column).
+  const upcomingEvents = upcomingCohorts({
+    cohorts: cohorts ?? [],
+    enrollments: clubEnrollments,
+    productNamesById,
+  });
 
   const period = parsePeriodParams(searchParamsResolved);
   const monthOptions = monthsWithActivity(clubLeads, clubEnrollments, clubPayments);
@@ -142,6 +155,7 @@ export default async function ClubDashboardPage({
         royalty={metrics.royalty}
         productsPeriod={countByProduct(enrollmentsInPeriod, productNamesById)}
         productsAllTime={countByProduct(clubEnrollments, productNamesById)}
+        upcomingCohorts={upcomingEvents}
       />
     </AppShell>
   );

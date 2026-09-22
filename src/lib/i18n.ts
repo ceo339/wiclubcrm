@@ -185,6 +185,24 @@ export const DICT: Record<string, Entry> = {
   deltaAllTime: { ru: "за всё время", bg: "за цялото време" },
   deltaNotPaidYet: { ru: "ещё не оплачено", bg: "все още не е платено" },
 
+  // ---- dashboard: "Ближайшие события" widget (Anastasiia, 22 сен 2026) ----
+  headingUpcomingEvents: { ru: "Ближайшие события", bg: "Предстоящи събития" },
+  subheadingUpcomingEvents: {
+    ru: "Курсы и потоки, которые стартуют в ближайшие {days} дней",
+    bg: "Курсове и потоци, които стартират в следващите {days} дни",
+  },
+  colStream: { ru: "Поток", bg: "Поток" },
+  colEnrolled: { ru: "Записалось", bg: "Записани" },
+  colPaidShort: { ru: "Оплатили", bg: "Платили" },
+  colRevenue: { ru: "Выручка", bg: "Приходи" },
+  emptyNoUpcomingEvents: {
+    ru: "В ближайшие 30 дней новых стартов не запланировано.",
+    bg: "В следващите 30 дни не са планирани нови стартове.",
+  },
+  eventStartsToday: { ru: "сегодня", bg: "днес" },
+  eventStartsTomorrow: { ru: "завтра", bg: "утре" },
+  eventStartsInDays: { ru: "через {n} дн.", bg: "след {n} дни" },
+
   // ---- dashboard: funnel / breakdown headings ----
   headingFunnel: { ru: "Воронка лидов за период", bg: "Фуния на запитванията за периода" },
   funnelStart: { ru: "начало пути", bg: "начало на пътя" },

@@ -18,6 +18,7 @@ import {
   monthlyRevenue,
   monthsWithActivity,
   parsePeriodParams,
+  upcomingCohorts,
   yearsWithActivity,
 } from "@/lib/dashboard";
 import CurrencySwitcher from "@/components/currency/CurrencySwitcher";
@@ -129,16 +130,17 @@ export default async function Home({
   // pre-aggregated, everything computed live from the real
   // leads/members/payments rows so it can't hide anything).
   if (networkView && !scopePartnerId) {
-    const [{ data: partners }, { data: leads }, { data: members }, { data: enrollments }, { data: payments }, { data: products }] =
+    const [{ data: partners }, { data: leads }, { data: members }, { data: enrollments }, { data: payments }, { data: products }, { data: cohorts }] =
       await Promise.all([
         supabase.from("partners").select("id, name").order("name"),
         supabase.from("leads").select("id, name, partner_id, stage, source, added_date, cohort_start_date, updated_at"),
         supabase.from("members").select("partner_id, created_at"),
-        supabase.from("member_enrollments").select("partner_id, product_id, created_at, start_date"),
+        supabase.from("member_enrollments").select("partner_id, product_id, created_at, start_date, status, price"),
         supabase
           .from("payments")
           .select("partner_id, amount, status, paid_date, member_enrollments(start_date, created_at), leads(cohort_start_date, added_date)"),
         supabase.from("products").select("id, name"),
+        supabase.from("product_cohorts").select("partner_id, product_id, start_date"),
       ]);
 
     const allLeads = leads ?? [];
@@ -157,6 +159,16 @@ export default async function Home({
     }));
     const productNamesById = new Map((products ?? []).map((p) => [p.id, p.name]));
     const partnerNamesById = new Map((partners ?? []).map((p) => [p.id, p.name]));
+
+    // "виджет по ближайшим событиям (в ближайшие 30 дней)" (Anastasiia, 22
+    // сен 2026) — network-wide, so every club's own upcoming streams show up
+    // here, each labeled with its club (see showClub on DashboardBoard).
+    const upcomingEvents = upcomingCohorts({
+      cohorts: cohorts ?? [],
+      enrollments: allEnrollments,
+      productNamesById,
+      partnerNamesById,
+    });
 
     const staleLeads = findStaleLeads(allLeads, partnerNamesById);
     const decliningClubs = findDecliningClubs(partners ?? [], allPayments);
@@ -254,6 +266,7 @@ export default async function Home({
           royalty={metrics.royalty}
           productsPeriod={countByProduct(enrollmentsInPeriod, productNamesById)}
           productsAllTime={countByProduct(allEnrollments, productNamesById)}
+          upcomingCohorts={upcomingEvents}
         />
       </AppShell>
     );
@@ -295,16 +308,20 @@ export default async function Home({
     .eq("id", partnerId)
     .single();
 
-  const [{ data: leads }, { data: members }, { data: enrollments }, { data: payments }, { data: products }] =
+  const [{ data: leads }, { data: members }, { data: enrollments }, { data: payments }, { data: products }, { data: cohorts }] =
     await Promise.all([
       supabase.from("leads").select("stage, source, added_date, cohort_start_date").eq("partner_id", partnerId),
       supabase.from("members").select("created_at").eq("partner_id", partnerId),
-      supabase.from("member_enrollments").select("product_id, created_at, start_date").eq("partner_id", partnerId),
+      supabase
+        .from("member_enrollments")
+        .select("product_id, created_at, start_date, status, price")
+        .eq("partner_id", partnerId),
       supabase
         .from("payments")
         .select("amount, status, paid_date, member_enrollments(start_date, created_at), leads(cohort_start_date, added_date)")
         .eq("partner_id", partnerId),
       supabase.from("products").select("id, name").eq("partner_id", partnerId),
+      supabase.from("product_cohorts").select("product_id, start_date").eq("partner_id", partnerId),
     ]);
 
   const clubLeads = leads ?? [];
@@ -318,6 +335,13 @@ export default async function Home({
     lead: (p as { leads?: { cohort_start_date: string | null; added_date: string } | null }).leads ?? null,
   }));
   const productNamesById = new Map((products ?? []).map((p) => [p.id, p.name]));
+  // "Ближайшие события" — one club, so no partnerNamesById/showClub column
+  // needed (see the network branch above for the multi-club version).
+  const upcomingEvents = upcomingCohorts({
+    cohorts: cohorts ?? [],
+    enrollments: clubEnrollments,
+    productNamesById,
+  });
 
   const period = parsePeriodParams(params);
   const monthOptions = monthsWithActivity(clubLeads, clubEnrollments, clubPayments);
@@ -389,6 +413,7 @@ export default async function Home({
         royalty={metrics.royalty}
         productsPeriod={countByProduct(enrollmentsInPeriod, productNamesById)}
         productsAllTime={countByProduct(clubEnrollments, productNamesById)}
+        upcomingCohorts={upcomingEvents}
       />
     </AppShell>
   );
