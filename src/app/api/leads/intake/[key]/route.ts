@@ -63,6 +63,18 @@ const EMAIL_ALIASES = ["email", "почта", "mail", "e-mail"];
 // not a поток" — the стрим itself still gets picked by hand in the lead
 // card, same as any lead without a landing page.
 const PRODUCT_ALIASES = ["product", "course", "продукт", "курс", "course_name", "product_name"];
+// "нужно с лендинга передавать не только название курса, но и дату старта
+// потока" (Anastasiia, 23 сен 2026) — round 34. Same idea as PRODUCT_ALIASES
+// above: the landing page already promotes one specific course AND
+// (usually) one specific поток of it, so it can send that поток's start
+// date as one more hidden field. Matched (see below, after the product
+// itself resolves) against this club's own `product_cohorts` — never
+// trusted blindly, so a typo/deleted поток just leaves cohort_start_date
+// empty rather than attaching the lead to the wrong stream. This is also
+// what makes round 33's "поток обязателен перед Оплатой" a non-issue for
+// landing leads that pass a real cohort date — the lead already has both
+// course and поток the moment it lands in Лиды.
+const COHORT_ALIASES = ["cohort", "cohort_date", "start_date", "поток", "дата_старта", "дата старта"];
 // "нужно создавать лид с продуктом, который на лендинге... Как реализовать,
 // чтоб четко продукт передавался и цена?" (Anastasiia, 16 сен 2026) — the
 // landing page can send its own explicit price as one more hidden field
@@ -73,6 +85,26 @@ const PRODUCT_ALIASES = ["product", "course", "продукт", "курс", "cou
 // same way as PRODUCT_ALIASES above — so "продукт передаётся точно" already
 // carries its price with it, with zero extra setup on the landing page.
 const PRICE_ALIASES = ["price", "цена", "value", "сумма", "amount"];
+
+// Accepts the two formats a hidden landing-page field is realistically
+// filled in with by hand: the same "YYYY-MM-DD" that <input type="date">
+// (and product_cohorts.start_date itself) already uses everywhere else in
+// this app, or a plain "DD.MM.YYYY"/"D.M.YYYY" a person might type without
+// thinking about it. Anything else comes back null — never guessed — so an
+// unrecognized format just leaves the lead without a поток, same as a
+// product name that doesn't match anything.
+function normalizeDateInput(raw: string): string | null {
+  const iso = raw.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (iso) return raw;
+
+  const dmy = raw.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})$/);
+  if (dmy) {
+    const [, d, m, y] = dmy;
+    return `${y}-${m.padStart(2, "0")}-${d.padStart(2, "0")}`;
+  }
+
+  return null;
+}
 
 function pick(fields: Record<string, unknown>, aliases: string[]): string | null {
   const lower = new Map(Object.entries(fields).map(([k, v]) => [k.toLowerCase(), v]));
@@ -214,6 +246,30 @@ export async function POST(request: Request, { params }: { params: Promise<{ key
     matchedProductPrice = match?.price ?? null;
   }
 
+  // Same idea as the product resolution above, one level down: only
+  // meaningful once a product has actually resolved (a поток without a
+  // course makes no sense), and only ever an already-existing
+  // product_cohorts date for THIS club's THIS course — never an arbitrary
+  // typed date, same rule moveLeadToCohort already enforces for a manual
+  // edit. Unrecognized format, no matching поток, or no product resolved
+  // at all → cohortStartDate stays null, exactly like an unmatched product
+  // name — never blocks the lead.
+  const cohortRaw = pick(fields, COHORT_ALIASES);
+  let cohortStartDate: string | null = null;
+  if (cohortRaw && productId) {
+    const normalized = normalizeDateInput(cohortRaw);
+    if (normalized) {
+      const { data: cohort } = await admin
+        .from("product_cohorts")
+        .select("start_date")
+        .eq("partner_id", partner.id)
+        .eq("product_id", productId)
+        .eq("start_date", normalized)
+        .maybeSingle();
+      cohortStartDate = cohort?.start_date ?? null;
+    }
+  }
+
   // Explicit price from the landing page's own hidden field wins (see
   // PRICE_ALIASES above); otherwise fall back to the matched course's own
   // price so a resolved product never leaves the lead's value at 0.
@@ -286,6 +342,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ key
     landing_url: landingUrl,
     note,
     product_id: productId,
+    cohort_start_date: cohortStartDate,
     value,
   });
 
