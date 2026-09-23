@@ -101,7 +101,18 @@ export default function LeadDetailModal({
     // her to discover the course field is only in "Редактировать". Round 19
     // extends the same prompt to "Выставлен счет" (invoiced) — a lead can
     // reach that stage without ever having gone through "Записалась" first.
-    if ((next === "presented" || next === "invoiced") && !lead.product_id) {
+    //
+    // Round 33: "Перевела в статус оплаты, но участницей автоматом не
+    // стала. Потому что не выбран был поток?" (Анастасия 23 сен 2026, реальный
+    // случай — лид с лендинга уже имел product_id из раунда 20, но БЕЗ
+    // потока; promotePaidLead требует и то, и другое). Раньше проверка
+    // смотрела только на product_id и никогда не срабатывала при переходе
+    // на «Оплата» — теперь она также ловит переход на «Оплата» и случай
+    // «курс выбран, а поток — нет».
+    if (
+      (next === "presented" || next === "invoiced" || next === "paid") &&
+      (!lead.product_id || !lead.cohort_start_date)
+    ) {
       setCoursePendingStage(next);
       setShowCourseModal(true);
       return;
@@ -235,6 +246,8 @@ export default function LeadDetailModal({
           leadName={lead.name}
           products={products}
           cohorts={cohorts}
+          initialProductId={lead.product_id}
+          initialCohortDate={lead.cohort_start_date}
           onCancel={() => setShowCourseModal(false)}
           onConfirm={handleCourseConfirm}
         />
@@ -245,6 +258,8 @@ export default function LeadDetailModal({
           leadName={lead.name}
           products={products}
           cohorts={cohorts}
+          initialProductId={lead.product_id}
+          initialCohortDate={lead.cohort_start_date}
           onCancel={() => setShowAssignCourseModal(false)}
           onConfirm={handleAssignCourseConfirm}
         />
@@ -365,8 +380,14 @@ function ReadView({
           stage dropdown above is a no-op when its value isn't actually
           changing). This callout is that way back in, and it's also what
           makes the missing seat visible at a glance instead of a silent
-          no-op. */}
-      {(lead.stage === "presented" || lead.stage === "invoiced") && !lead.product_id && canEdit && (
+          no-op.
+          Round 33: extended to "Оплата" and to "course chosen but поток
+          isn't" — this exact banner would have made "Денис Палова" (курс
+          есть, поток нет, уже стоит на «Оплата») visible instead of a
+          silent no-op (Анастасия 23 сен 2026). */}
+      {(lead.stage === "presented" || lead.stage === "invoiced" || lead.stage === "paid") &&
+        (!lead.product_id || !lead.cohort_start_date) &&
+        canEdit && (
         <div className="mt-4 flex flex-wrap items-center gap-2 rounded-lg bg-warn-soft px-3 py-2 text-xs text-warn">
           <span className="font-medium">{t("noticeNoCourseYet")}</span>
           <button

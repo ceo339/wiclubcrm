@@ -52,18 +52,47 @@ export async function syncEnrollmentPayment(
   }
 ): Promise<void> {
   const { partnerId, memberId, enrollmentId, productId, price, status } = params;
+
+  // "если в контактах меняется статус на возврат, то в оплатах нужно
+  // фиксировать это" (coach marina, Анастасия 23 сен 2026) — раньше эта
+  // функция реагировала только на sPaid/sCompleted и просто выходила на
+  // любом другом статусе, так что перевод курса на «Возврат» (sRefunded) в
+  // карточке контакта/участницы (updateEnrollment) никогда не трогал уже
+  // существующий платёж — он молча оставался «Оплачено» в «Оплатах» и в
+  // итогах выручки. Теперь: если для этого enrollment уже есть платёж —
+  // он переводится в payments.status = "refunded" (сумма не меняется, это
+  // исторический факт того, сколько реально было получено до возврата).
+  if (status === "sRefunded") {
+    const { data: existingPayment } = await supabase
+      .from("payments")
+      .select("id, status")
+      .eq("enrollment_id", enrollmentId)
+      .maybeSingle();
+    if (existingPayment && existingPayment.status !== "refunded") {
+      await supabase.from("payments").update({ status: "refunded" }).eq("id", existingPayment.id);
+    }
+    return;
+  }
+
   if (status !== "sPaid" && status !== "sCompleted") return;
   if (price <= 0) return;
 
   const { data: existingPayment } = await supabase
     .from("payments")
-    .select("id, amount")
+    .select("id, amount, status")
     .eq("enrollment_id", enrollmentId)
     .maybeSingle();
 
   if (existingPayment) {
-    if (existingPayment.amount !== price) {
-      await supabase.from("payments").update({ amount: price }).eq("id", existingPayment.id);
+    // Симметрично п. выше — если статус курса вернули с «Возврат» обратно
+    // на «Оплачено»/«Курс пройден» (например, ошиблись и исправили), сам
+    // платёж тоже должен выйти из "refunded" обратно в "paid", а не
+    // остаться зависшим возвратом навсегда.
+    const patch: { amount?: number; status?: string } = {};
+    if (existingPayment.amount !== price) patch.amount = price;
+    if (existingPayment.status !== "paid") patch.status = "paid";
+    if (Object.keys(patch).length > 0) {
+      await supabase.from("payments").update(patch).eq("id", existingPayment.id);
     }
     return;
   }

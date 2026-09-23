@@ -85,7 +85,12 @@ export default function KanbanBoard({
       setDeclineTarget(lead);
       return;
     }
-    if ((stage === "presented" || stage === "invoiced") && !lead.product_id) {
+    // Round 33: extended to "Оплата" и к случаю "курс есть, поток — нет"
+    // (см. LeadDetailModal — тот же реальный случай "Денис Палова").
+    if (
+      (stage === "presented" || stage === "invoiced" || stage === "paid") &&
+      (!lead.product_id || !lead.cohort_start_date)
+    ) {
       setCourseTargetStage(stage);
       setCourseTarget(lead);
       return;
@@ -213,6 +218,8 @@ export default function KanbanBoard({
           leadName={courseTarget.name}
           products={products}
           cohorts={cohorts}
+          initialProductId={courseTarget.product_id}
+          initialCohortDate={courseTarget.cohort_start_date}
           onCancel={() => setCourseTarget(null)}
           onConfirm={handleCourseConfirm}
         />

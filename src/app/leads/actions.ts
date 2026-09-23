@@ -768,17 +768,28 @@ export async function assignLeadProductAndReserve(
   // already sitting on "Выставлен счет" — same reasoning as updateLeadStage
   // above, this is the "Выбрать курс" banner's server call, used when a
   // lead is stuck on a course-requiring stage with none chosen yet.
-  if (
-    updated &&
-    updated.partner_id &&
-    (updated.stage === "presented" || updated.stage === "invoiced") &&
-    updated.product_id
-  ) {
-    await reserveAwaitingEnrollment(supabase, updated);
+  //
+  // Round 33: extended to "Оплата" too — "Перевела в статус оплаты, но
+  // участницей автоматом не стала. Потому что не выбран был поток?"
+  // (Анастасия 23 сен 2026, реальный случай — лид с лендинга уже имел
+  // product_id из раунда 20, но без потока). Раньше эта функция вообще не
+  // знала про стадию «Оплата» — банер «Выбрать курс» лишь дописывал
+  // product_id/cohort_start_date лиду, но никогда не вызывал promotePaidLead,
+  // так что дозаполнение потока на уже оплаченном лиде молча ничего не
+  // создавало в «Участницах». Теперь дозаполнение курса/потока на лиде,
+  // который уже стоит на «Оплата», доводит дело до конца тем же путём, что
+  // и updateLeadStage при обычном переходе на эту стадию.
+  if (updated && updated.partner_id) {
+    if ((updated.stage === "presented" || updated.stage === "invoiced") && updated.product_id) {
+      await reserveAwaitingEnrollment(supabase, updated);
+    } else if (updated.stage === "paid") {
+      await promotePaidLead(supabase, leadId, updated.partner_id, updated);
+    }
   }
 
   revalidatePath("/leads");
   revalidatePath("/members");
+  revalidatePath("/payments");
   revalidatePath("/");
   return { error: null };
 }

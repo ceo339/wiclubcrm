@@ -23,28 +23,52 @@ export default function CourseModal({
   leadName,
   products,
   cohorts,
+  initialProductId,
+  initialCohortDate,
   onCancel,
   onConfirm,
 }: {
   leadName: string;
   products: Product[];
   cohorts: Cohort[];
+  // Round 33: "Перевела в статус оплаты, но участницей автоматом не стала.
+  // Потому что не выбран был поток?" (Анастасия 23 сен 2026) — модалка
+  // теперь может открываться и для лида, у которого курс УЖЕ выбран, а не
+  // хватает только потока (см. LeadDetailModal/KanbanBoard). Без этих двух
+  // необязательных пропов селекты стартовали бы пустыми, и подтверждение
+  // без прикосновения к ним стёрло бы уже выбранный курс — см. onConfirm
+  // ниже, где вместо lead.product_id/cohort_start_date раньше всегда
+  // подставлялась пустая строка.
+  initialProductId?: string | null;
+  initialCohortDate?: string | null;
   onCancel: () => void;
   onConfirm: (productId: string | null, cohortDate: string | null) => void;
 }) {
   const t = useT();
-  const [productId, setProductId] = useState("");
-  const [cohortDate, setCohortDate] = useState("");
+  const [productId, setProductId] = useState(initialProductId ?? "");
+  const [cohortDate, setCohortDate] = useState(initialCohortDate ?? "");
 
   const productCohorts = useMemo(
     () => cohorts.filter((c) => c.product_id === productId),
     [cohorts, productId]
   );
 
+  // Тот же курс, что и раньше — поток при смене продукта сбрасывать не
+  // нужно, если это просто первичная инициализация с уже подобранной парой.
   function handleProductChange(id: string) {
     setProductId(id);
     setCohortDate("");
   }
+
+  // Round 33: "может тогда сразу нужно заставить выбрать поток?" — курс
+  // считается настоящим на своём этапе (см. courseModalSubtitle: место в
+  // «Участницах» резервируется), только для случая, когда для выбранного
+  // курса вообще СУЩЕСТВУЕТ хотя бы один поток — тогда его выбор
+  // обязателен. Если у курса потоков ещё нет вовсе (`emptyNoCohorts`), это
+  // остаётся как и раньше — необязательным, форсировать выбор из ничего
+  // некуда.
+  const cohortRequired = Boolean(productId) && productCohorts.length > 0;
+  const canConfirm = !cohortRequired || Boolean(cohortDate);
 
   return (
     <div
@@ -93,6 +117,9 @@ export default function CourseModal({
             ) : (
               <p className="text-xs text-muted">{t("emptyNoCohorts")}</p>
             )}
+            {cohortRequired && !cohortDate && (
+              <p className="text-xs text-warn">{t("hintCohortRequired")}</p>
+            )}
           </label>
         )}
 
@@ -105,7 +132,8 @@ export default function CourseModal({
           </button>
           <button
             onClick={() => onConfirm(productId || null, productId ? cohortDate || null : null)}
-            className="rounded-lg bg-foreground px-4 py-2 text-sm font-medium text-background"
+            disabled={!canConfirm}
+            className="rounded-lg bg-foreground px-4 py-2 text-sm font-medium text-background disabled:cursor-not-allowed disabled:opacity-40"
           >
             {t("btnConfirm")}
           </button>
