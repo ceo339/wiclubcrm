@@ -106,6 +106,22 @@ export async function resetViewerPassword(viewerId: string): Promise<ActionResul
   if (!profile) return { error: "errNotAuthorized" };
   if (profile.role !== "hq") return { error: "errHqOnlyManageViewers" };
 
+  // Security audit (23 сен, раунд 36): viewerId comes straight from the
+  // client, so an admin-client call here must not trust it — verify it
+  // really names a "viewer" profile first (same pattern already used by
+  // resetPartnerPassword, which checks role = "partner" before touching
+  // Auth). Without this, any authenticated HQ account could reset the
+  // password of ANY Supabase Auth user by id, not just a viewer's — e.g.
+  // a partner login or another HQ login.
+  const supabase = await createClient();
+  const { data: viewerProfile } = await supabase
+    .from("profiles")
+    .select("id")
+    .eq("id", viewerId)
+    .eq("role", "viewer")
+    .maybeSingle();
+  if (!viewerProfile) return { error: "errViewerNotFound" };
+
   let admin;
   try {
     admin = createAdminClient();
@@ -131,6 +147,18 @@ export async function deleteViewerAccess(viewerId: string): Promise<{ error: str
   const profile = await getCurrentProfile();
   if (!profile) return { error: "errNotAuthorized" };
   if (profile.role !== "hq") return { error: "errHqOnlyManageViewers" };
+
+  // Same reasoning as resetViewerPassword above (security audit, 23 сен,
+  // раунд 36) — never call admin.auth.admin.deleteUser on a client-supplied
+  // id without confirming it's actually a viewer account first.
+  const supabase = await createClient();
+  const { data: viewerProfile } = await supabase
+    .from("profiles")
+    .select("id")
+    .eq("id", viewerId)
+    .eq("role", "viewer")
+    .maybeSingle();
+  if (!viewerProfile) return { error: "errViewerNotFound" };
 
   let admin;
   try {

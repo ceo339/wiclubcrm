@@ -877,6 +877,7 @@ export const DICT: Record<string, Entry> = {
   btnDeleteViewerConfirm: { ru: "Да, отозвать", bg: "Да, отнеми" },
   btnRevokeViewer: { ru: "Отозвать", bg: "Отнемане" },
   errHqOnlyManageViewers: { ru: "Управлять этим доступом может только HQ", bg: "Този достъп може да управлява само централният офис" },
+  errViewerNotFound: { ru: "Этот доступ на просмотр не найден", bg: "Този достъп за преглед не е намерен" },
   errEnterViewerName: { ru: "Укажите имя", bg: "Въведете име" },
   roleLabelViewer: { ru: "Только просмотр", bg: "Само преглед" },
   cityScopeLabel: { ru: "Город", bg: "Град" },
