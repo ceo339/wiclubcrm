@@ -505,6 +505,7 @@ export type Database = {
         Row: {
           amount: number
           created_at: string
+          dsk_order_id: string | null
           enrollment_id: string | null
           id: string
           lead_id: string | null
@@ -518,6 +519,7 @@ export type Database = {
         Insert: {
           amount: number
           created_at?: string
+          dsk_order_id?: string | null
           enrollment_id?: string | null
           id?: string
           lead_id?: string | null
@@ -531,6 +533,7 @@ export type Database = {
         Update: {
           amount?: number
           created_at?: string
+          dsk_order_id?: string | null
           enrollment_id?: string | null
           id?: string
           lead_id?: string | null
