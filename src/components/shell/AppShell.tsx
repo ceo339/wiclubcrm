@@ -28,6 +28,7 @@ const ROLE_LABEL_KEYS: Record<string, string> = {
   staff: "roleLabelStaff",
   hq: "roleLabelHq",
   viewer: "roleLabelViewer",
+  franchise: "roleLabelFranchise",
 };
 
 type NavItem = {
@@ -46,16 +47,24 @@ function navItemsForProfile(profile: Profile): NavItem[] {
   // left for a second nav item to point to.
   const items: NavItem[] = [{ href: "/", labelKey: "navHome", icon: <IconHome /> }];
 
-  items.push(
-    { href: "/contacts", labelKey: "navContacts", icon: <IconContact /> },
-    { href: "/leads", labelKey: "navLeads", icon: <IconFunnel /> },
-    { href: "/members", labelKey: "navMembers", icon: <IconUsers /> },
-    { href: "/attendance", labelKey: "navAttendance", icon: <IconCalendar />, matchPrefix: true },
-    { href: "/products", labelKey: "navCourses", icon: <IconBook /> },
-    { href: "/payments", labelKey: "navPayments", icon: <IconWallet /> },
-    { href: "/cohorts", labelKey: "navCohorts", icon: <IconChart /> },
-    { href: "/email", labelKey: "navEmail", icon: <IconMail /> }
-  );
+  // Round 37 (24 сен 2026): a "franchise" account (МПП — works only the
+  // future «Франчайзи» pipeline, franchise_access — see profiles table)
+  // has zero access to any club's data (can_view_network() only matches
+  // hq/viewer, and it has no partner_id of its own either) — showing it
+  // these club-scoped tabs would just be a wall of dead-end pages until
+  // the Франчайзи section itself exists. Skip straight to Главная.
+  if (profile.role !== "franchise") {
+    items.push(
+      { href: "/contacts", labelKey: "navContacts", icon: <IconContact /> },
+      { href: "/leads", labelKey: "navLeads", icon: <IconFunnel /> },
+      { href: "/members", labelKey: "navMembers", icon: <IconUsers /> },
+      { href: "/attendance", labelKey: "navAttendance", icon: <IconCalendar />, matchPrefix: true },
+      { href: "/products", labelKey: "navCourses", icon: <IconBook /> },
+      { href: "/payments", labelKey: "navPayments", icon: <IconWallet /> },
+      { href: "/cohorts", labelKey: "navCohorts", icon: <IconChart /> },
+      { href: "/email", labelKey: "navEmail", icon: <IconMail /> }
+    );
+  }
 
   if (profile.role === "hq") {
     items.push({ href: "/partners", labelKey: "navPartners", icon: <IconBuilding /> });

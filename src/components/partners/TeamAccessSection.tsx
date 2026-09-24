@@ -2,39 +2,59 @@
 
 import { useActionState, useState, useTransition } from "react";
 import {
-  createViewerAccess,
-  resetViewerPassword,
-  deleteViewerAccess,
-  type ViewerAccount,
+  createTeamAccess,
+  resetTeamAccessPassword,
+  deleteTeamAccess,
+  TEAM_ACCESS_TYPES,
+  type TeamAccessType,
+  type TeamAccount,
 } from "@/app/partners/viewer-actions";
 import type { ActionResult } from "@/app/partners/actions";
 import { useLocale } from "@/components/i18n/LocaleProvider";
 
 const initialState: ActionResult = { error: null };
 
+const ACCESS_TYPE_LABEL_KEYS: Record<TeamAccessType, string> = {
+  network_view: "accessTypeNetworkViewLabel",
+  network_and_franchise_view: "accessTypeNetworkAndFranchiseViewLabel",
+  franchise_edit: "accessTypeFranchiseEditLabel",
+};
+
 /**
  * "Мне нужно создать доступ для таргетолога для просмотра по городам без
- * прав на изменения в базе и в лидах" (Anastasiia, 15 сен 2026) — Round 18.
- * A viewer account sees every club on every board (same as hq — she chose
- * "все города сразу" when asked) but can never create/edit/delete
- * anything and has no access to this Партнёры page itself (enforced both
- * by can_view_network() vs is_hq() in RLS, and by this page redirecting
- * anyone who isn't role==="hq" — see partners/page.tsx).
+ * прав на изменения в базе и в лидах" (Anastasiia, 15 сен 2026) — Round 18,
+ * originally just the one "viewer" preset. Round 37 (24 сен 2026) added two
+ * more presets when Anastasiia described the access the future «Франчайзи»
+ * section needs: someone who sees the network AND the franchise pipeline
+ * read-only, and "МПП" who works ONLY the franchise pipeline and should
+ * never see any club's leads/members/payments. All three presets share
+ * this one management screen — same account lifecycle (create/reset
+ * password/revoke), just a different (role, franchise_access) pair
+ * underneath (see viewer-actions.ts).
  */
-export default function ViewerAccessSection({ initialViewers }: { initialViewers: ViewerAccount[] }) {
+export default function TeamAccessSection({ initialAccounts }: { initialAccounts: TeamAccount[] }) {
   const { locale, t } = useLocale();
-  const [viewers, setViewers] = useState(initialViewers);
+  const [accounts, setAccounts] = useState(initialAccounts);
   const [showNew, setShowNew] = useState(false);
   const [credentials, setCredentials] = useState<{ email: string; password: string } | null>(null);
   const [copied, setCopied] = useState(false);
 
   const [state, formAction, pending] = useActionState(async (_prev: ActionResult, formData: FormData) => {
-    const result = await createViewerAccess(formData);
+    const result = await createTeamAccess(formData);
     if (!result.error && result.tempPassword) {
       setCredentials({ email: result.resetEmail ?? "", password: result.tempPassword });
       setShowNew(false);
-      setViewers((prev) => [
-        { id: crypto.randomUUID(), full_name: String(formData.get("full_name") || ""), email: result.resetEmail ?? null, created_at: new Date().toISOString() },
+      const accessType = String(formData.get("access_type") || "") as TeamAccessType;
+      setAccounts((prev) => [
+        {
+          id: crypto.randomUUID(),
+          full_name: String(formData.get("full_name") || ""),
+          email: result.resetEmail ?? null,
+          created_at: new Date().toISOString(),
+          role: accessType === "franchise_edit" ? "franchise" : "viewer",
+          franchise_access: accessType === "network_view" ? "none" : accessType === "franchise_edit" ? "edit" : "view",
+          access_type: accessType,
+        },
         ...prev,
       ]);
     }
@@ -57,8 +77,8 @@ export default function ViewerAccessSection({ initialViewers }: { initialViewers
     <div className="flex flex-col gap-3">
       <div className="flex items-center justify-between">
         <div>
-          <h3 className="text-sm font-semibold text-foreground">{t("headingViewerAccess")}</h3>
-          <p className="text-xs text-muted">{t("viewerAccessSubtitle")}</p>
+          <h3 className="text-sm font-semibold text-foreground">{t("headingTeamAccess")}</h3>
+          <p className="text-xs text-muted">{t("teamAccessSubtitle")}</p>
         </div>
         <button
           type="button"
@@ -69,24 +89,30 @@ export default function ViewerAccessSection({ initialViewers }: { initialViewers
         </button>
       </div>
 
-      {viewers.length === 0 ? (
+      {accounts.length === 0 ? (
         <p className="rounded-lg border border-dashed border-border p-4 text-center text-xs text-muted">
           {t("emptyNoViewers")}
         </p>
       ) : (
         <div className="overflow-x-auto rounded-xl border border-border bg-background shadow-card">
-          <table className="w-full min-w-[420px] text-left text-sm">
+          <table className="w-full min-w-[540px] text-left text-sm">
             <thead className="border-b border-border text-xs uppercase tracking-wide text-muted">
               <tr>
                 <th className="px-4 py-3 font-medium">{t("colName")}</th>
                 <th className="px-4 py-3 font-medium">{t("fieldEmailForLogin")}</th>
+                <th className="px-4 py-3 font-medium">{t("colAccessType")}</th>
                 <th className="px-4 py-3 font-medium">{t("colAdded")}</th>
                 <th className="px-4 py-3 font-medium" />
               </tr>
             </thead>
             <tbody>
-              {viewers.map((v) => (
-                <ViewerRow key={v.id} viewer={v} locale={locale} onRemoved={() => setViewers((prev) => prev.filter((x) => x.id !== v.id))} />
+              {accounts.map((a) => (
+                <TeamAccountRow
+                  key={a.id}
+                  account={a}
+                  locale={locale}
+                  onRemoved={() => setAccounts((prev) => prev.filter((x) => x.id !== a.id))}
+                />
               ))}
             </tbody>
           </table>
@@ -118,6 +144,21 @@ export default function ViewerAccessSection({ initialViewers }: { initialViewers
                     required
                     className="rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-accent focus:ring-1 focus:ring-accent"
                   />
+                </label>
+                <label className="flex flex-col gap-1.5 text-sm">
+                  <span className="font-medium text-ink-2">{t("fieldAccessType")}</span>
+                  <select
+                    name="access_type"
+                    required
+                    defaultValue={TEAM_ACCESS_TYPES[0]}
+                    className="rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-accent focus:ring-1 focus:ring-accent"
+                  >
+                    {TEAM_ACCESS_TYPES.map((type) => (
+                      <option key={type} value={type}>
+                        {t(ACCESS_TYPE_LABEL_KEYS[type])}
+                      </option>
+                    ))}
+                  </select>
                 </label>
               </div>
               {state.error && (
@@ -189,12 +230,12 @@ export default function ViewerAccessSection({ initialViewers }: { initialViewers
   );
 }
 
-function ViewerRow({
-  viewer,
+function TeamAccountRow({
+  account,
   locale,
   onRemoved,
 }: {
-  viewer: ViewerAccount;
+  account: TeamAccount;
   locale: string;
   onRemoved: () => void;
 }) {
@@ -208,19 +249,19 @@ function ViewerRow({
   function handleReset() {
     setError(null);
     startTransition(async () => {
-      const result = await resetViewerPassword(viewer.id);
+      const result = await resetTeamAccessPassword(account.id);
       if (result.error || !result.tempPassword) {
         setError(result.error ?? "errCreateLoginFailed");
         return;
       }
-      setResetResult({ email: result.resetEmail ?? viewer.email ?? "", password: result.tempPassword });
+      setResetResult({ email: result.resetEmail ?? account.email ?? "", password: result.tempPassword });
     });
   }
 
   function handleDelete() {
     setError(null);
     startTransition(async () => {
-      const result = await deleteViewerAccess(viewer.id);
+      const result = await deleteTeamAccess(account.id);
       if (result.error) {
         setError(result.error);
         return;
@@ -243,10 +284,13 @@ function ViewerRow({
 
   return (
     <tr className="border-b border-border last:border-0 align-top">
-      <td className="px-4 py-3 font-medium text-foreground">{viewer.full_name ?? "—"}</td>
-      <td className="px-4 py-3 text-muted">{viewer.email ?? "—"}</td>
+      <td className="px-4 py-3 font-medium text-foreground">{account.full_name ?? "—"}</td>
+      <td className="px-4 py-3 text-muted">{account.email ?? "—"}</td>
       <td className="px-4 py-3 text-muted">
-        {new Date(viewer.created_at).toLocaleDateString(locale === "bg" ? "bg-BG" : "ru-RU")}
+        {account.access_type ? t(ACCESS_TYPE_LABEL_KEYS[account.access_type]) : "—"}
+      </td>
+      <td className="px-4 py-3 text-muted">
+        {new Date(account.created_at).toLocaleDateString(locale === "bg" ? "bg-BG" : "ru-RU")}
       </td>
       <td className="px-4 py-3">
         {resetResult ? (

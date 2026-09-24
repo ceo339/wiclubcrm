@@ -656,6 +656,7 @@ export type Database = {
       profiles: {
         Row: {
           created_at: string
+          franchise_access: string
           full_name: string | null
           id: string
           partner_id: string | null
@@ -663,6 +664,7 @@ export type Database = {
         }
         Insert: {
           created_at?: string
+          franchise_access?: string
           full_name?: string | null
           id: string
           partner_id?: string | null
@@ -670,6 +672,7 @@ export type Database = {
         }
         Update: {
           created_at?: string
+          franchise_access?: string
           full_name?: string | null
           id?: string
           partner_id?: string | null
@@ -760,6 +763,8 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      can_edit_franchise: { Args: never; Returns: boolean }
+      can_view_franchise: { Args: never; Returns: boolean }
       current_partner_id: { Args: never; Returns: string }
       is_hq: { Args: never; Returns: boolean }
     }

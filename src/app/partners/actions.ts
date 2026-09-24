@@ -9,7 +9,7 @@ export type ActionResult = {
   tempPassword?: string;
   /** Only set when error === "errCreateLoginFailed" — see createClubPartner below. */
   errorDetail?: string;
-  /** Only set by resetPartnerPassword/createViewerAccess — the login email
+  /** Only set by resetPartnerPassword/createTeamAccess — the login email
    * the fresh tempPassword above belongs to, so the confirmation screen
    * can show both together even though this form never asked for it. */
   resetEmail?: string | null;

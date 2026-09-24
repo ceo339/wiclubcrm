@@ -7,8 +7,8 @@ import LocaleSwitcher from "@/components/i18n/LocaleSwitcher";
 import LocaleScope from "@/components/i18n/LocaleScope";
 import T from "@/components/i18n/T";
 import PartnersBoard from "@/components/partners/PartnersBoard";
-import ViewerAccessSection from "@/components/partners/ViewerAccessSection";
-import { listViewerAccounts } from "@/app/partners/viewer-actions";
+import TeamAccessSection from "@/components/partners/TeamAccessSection";
+import { listTeamAccounts } from "@/app/partners/viewer-actions";
 import AppShell from "@/components/shell/AppShell";
 
 export default async function PartnersPage() {
@@ -17,9 +17,9 @@ export default async function PartnersPage() {
   if (profile.role !== "hq") redirect("/");
 
   const supabase = await createClient();
-  const [{ data: partners, error }, viewers] = await Promise.all([
+  const [{ data: partners, error }, teamAccounts] = await Promise.all([
     supabase.from("partners").select("*").order("created_at", { ascending: false }),
-    listViewerAccounts(),
+    listTeamAccounts(),
   ]);
 
   return (
@@ -45,7 +45,7 @@ export default async function PartnersPage() {
         )}
 
         <hr className="border-border" />
-        <ViewerAccessSection initialViewers={viewers} />
+        <TeamAccessSection initialAccounts={teamAccounts} />
       </div>
     </AppShell>
   );

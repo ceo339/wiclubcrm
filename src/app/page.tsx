@@ -36,6 +36,7 @@ const ROLE_LABEL_KEYS: Record<string, string> = {
   staff: "roleLabelStaff",
   hq: "roleLabelHq",
   viewer: "roleLabelViewer",
+  franchise: "roleLabelFranchise",
 };
 
 /**
