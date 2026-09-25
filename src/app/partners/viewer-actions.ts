@@ -5,6 +5,14 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentProfile } from "@/lib/auth";
 import type { ActionResult } from "./actions";
+import { TEAM_ACCESS_TYPES, type TeamAccessType } from "@/lib/teamAccess";
+
+// Re-exported as a type only (erased at compile time, so this doesn't count
+// as this "use server" file exporting a non-function value) — kept so the
+// rest of the app can still `import type { TeamAccessType } from
+// "@/app/partners/viewer-actions"` without knowing it now lives in
+// `@/lib/teamAccess`.
+export type { TeamAccessType };
 
 const PASSWORD_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789";
 
@@ -30,11 +38,9 @@ function generateTempPassword(length = 12): string {
  * this codebase for a future, unrelated "club employee" account type).
  * Exposing this as three named presets (rather than two raw dropdowns)
  * keeps the form foolproof: there is no way to accidentally create a
- * combination nobody asked for.
+ * combination nobody asked for. (The list itself, `TEAM_ACCESS_TYPES`,
+ * lives in `@/lib/teamAccess` — see the comment there for why.)
  */
-export const TEAM_ACCESS_TYPES = ["network_view", "network_and_franchise_view", "franchise_edit"] as const;
-export type TeamAccessType = (typeof TEAM_ACCESS_TYPES)[number];
-
 const ACCESS_TYPE_TO_ROLE: Record<TeamAccessType, string> = {
   network_view: "viewer",
   network_and_franchise_view: "viewer",

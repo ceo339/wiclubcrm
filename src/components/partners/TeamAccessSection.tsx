@@ -5,10 +5,9 @@ import {
   createTeamAccess,
   resetTeamAccessPassword,
   deleteTeamAccess,
-  TEAM_ACCESS_TYPES,
-  type TeamAccessType,
   type TeamAccount,
 } from "@/app/partners/viewer-actions";
+import { TEAM_ACCESS_TYPES, type TeamAccessType } from "@/lib/teamAccess";
 import type { ActionResult } from "@/app/partners/actions";
 import { useLocale } from "@/components/i18n/LocaleProvider";
 
