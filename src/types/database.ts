@@ -228,6 +228,189 @@ export type Database = {
           },
         ]
       }
+      franchise_candidate_comments: {
+        Row: {
+          author_id: string | null
+          author_name: string
+          body: string
+          candidate_id: string
+          created_at: string
+          id: string
+        }
+        Insert: {
+          author_id?: string | null
+          author_name: string
+          body: string
+          candidate_id: string
+          created_at?: string
+          id?: string
+        }
+        Update: {
+          author_id?: string | null
+          author_name?: string
+          body?: string
+          candidate_id?: string
+          created_at?: string
+          id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "franchise_candidate_comments_author_id_fkey"
+            columns: ["author_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "franchise_candidate_comments_candidate_id_fkey"
+            columns: ["candidate_id"]
+            isOneToOne: false
+            referencedRelation: "franchise_candidates"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      franchise_candidates: {
+        Row: {
+          birth_date: string | null
+          budget: string | null
+          content_description: string | null
+          country: string | null
+          created_at: string
+          email: string | null
+          experience: string | null
+          fears: string | null
+          followers: string | null
+          id: string
+          instagram_url: string | null
+          internal_note: string | null
+          interview_scheduled_at: string | null
+          knows_method: string | null
+          name: string
+          occupation: string | null
+          phone: string | null
+          questions: string | null
+          ready_when: string | null
+          reject_reason: string | null
+          source: string | null
+          stage: string
+          submitted_at: string
+          target_city: string | null
+          telegram: string | null
+          train_or_hire: string | null
+          updated_at: string
+          why_city: string | null
+          zoom_recording_url: string | null
+        }
+        Insert: {
+          birth_date?: string | null
+          budget?: string | null
+          content_description?: string | null
+          country?: string | null
+          created_at?: string
+          email?: string | null
+          experience?: string | null
+          fears?: string | null
+          followers?: string | null
+          id?: string
+          instagram_url?: string | null
+          internal_note?: string | null
+          interview_scheduled_at?: string | null
+          knows_method?: string | null
+          name: string
+          occupation?: string | null
+          phone?: string | null
+          questions?: string | null
+          ready_when?: string | null
+          reject_reason?: string | null
+          source?: string | null
+          stage?: string
+          submitted_at?: string
+          target_city?: string | null
+          telegram?: string | null
+          train_or_hire?: string | null
+          updated_at?: string
+          why_city?: string | null
+          zoom_recording_url?: string | null
+        }
+        Update: {
+          birth_date?: string | null
+          budget?: string | null
+          content_description?: string | null
+          country?: string | null
+          created_at?: string
+          email?: string | null
+          experience?: string | null
+          fears?: string | null
+          followers?: string | null
+          id?: string
+          instagram_url?: string | null
+          internal_note?: string | null
+          interview_scheduled_at?: string | null
+          knows_method?: string | null
+          name?: string
+          occupation?: string | null
+          phone?: string | null
+          questions?: string | null
+          ready_when?: string | null
+          reject_reason?: string | null
+          source?: string | null
+          stage?: string
+          submitted_at?: string
+          target_city?: string | null
+          telegram?: string | null
+          train_or_hire?: string | null
+          updated_at?: string
+          why_city?: string | null
+          zoom_recording_url?: string | null
+        }
+        Relationships: []
+      }
+      franchise_stage_history: {
+        Row: {
+          candidate_id: string
+          created_at: string
+          created_by: string | null
+          id: string
+          note: string | null
+          occurred_at: string
+          stage: string
+        }
+        Insert: {
+          candidate_id: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          note?: string | null
+          occurred_at?: string
+          stage: string
+        }
+        Update: {
+          candidate_id?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          note?: string | null
+          occurred_at?: string
+          stage?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "franchise_stage_history_candidate_id_fkey"
+            columns: ["candidate_id"]
+            isOneToOne: false
+            referencedRelation: "franchise_candidates"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "franchise_stage_history_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       leads: {
         Row: {
           added_date: string
@@ -765,6 +948,7 @@ export type Database = {
     Functions: {
       can_edit_franchise: { Args: never; Returns: boolean }
       can_view_franchise: { Args: never; Returns: boolean }
+      can_view_network: { Args: never; Returns: boolean }
       current_partner_id: { Args: never; Returns: string }
       is_hq: { Args: never; Returns: boolean }
     }

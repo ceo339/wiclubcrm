@@ -124,3 +124,16 @@ export function IconBuilding() {
     </svg>
   );
 }
+
+/** Round 38 — «Франчайзи» nav item: a handshake stands in for "bringing a
+ * new franchisee on board", distinct from IconBuilding's existing-club
+ * meaning ("Клубы сети"). */
+export function IconFranchise() {
+  return (
+    <svg {...iconProps()}>
+      <path d="M3.5 8.5 8 6l3 2.2L14 6l4.5 2.5" />
+      <path d="m3.5 8.5 3.2 6L11 16l4.3-1.5 3.2-6" />
+      <path d="M9.8 11.2 11 12.5l1.2-1.3" />
+    </svg>
+  );
+}

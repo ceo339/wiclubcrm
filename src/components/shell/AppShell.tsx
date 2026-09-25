@@ -21,6 +21,7 @@ import {
   IconBuilding,
   IconMenu,
   IconChart,
+  IconFranchise,
 } from "./icons";
 
 const ROLE_LABEL_KEYS: Record<string, string> = {
@@ -68,6 +69,17 @@ function navItemsForProfile(profile: Profile): NavItem[] {
 
   if (profile.role === "hq") {
     items.push({ href: "/partners", labelKey: "navPartners", icon: <IconBuilding /> });
+  }
+
+  // Round 38: the «Франчайзи» pipeline itself now exists, so a "franchise"
+  // account (skipped past every club-scoped tab above) needs a real
+  // destination beyond Главная — and any hq/viewer account with
+  // franchise_access also needs to reach it, same gating as the page's own
+  // canView check (src/app/franchise/page.tsx).
+  const hasFranchiseAccess =
+    profile.role === "hq" || profile.franchise_access === "view" || profile.franchise_access === "edit";
+  if (hasFranchiseAccess) {
+    items.push({ href: "/franchise", labelKey: "navFranchise", icon: <IconFranchise /> });
   }
 
   return items;

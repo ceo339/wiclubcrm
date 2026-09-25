@@ -309,6 +309,7 @@ export const DICT: Record<string, Entry> = {
     ru: "Добавить франчайзи — клуб и логин для входа",
     bg: "Добавяне на франчайзополучател — клуб и данни за вход",
   },
+  navFranchise: { ru: "Франчайзи", bg: "Франчайзополучатели" },
   navEmail: { ru: "Email", bg: "Имейл" },
   navEmailDesc: {
     ru: "Письма участницам и лидам, с реальной статистикой открытий",
@@ -338,6 +339,7 @@ export const DICT: Record<string, Entry> = {
   errLoadPaymentsFailed: { ru: "Не удалось загрузить оплаты", bg: "Неуспешно зареждане на плащанията" },
   errLoadClubsFailed: { ru: "Не удалось загрузить клубы", bg: "Неуспешно зареждане на клубовете" },
   errLoadStreamsFailed: { ru: "Не удалось загрузить потоки", bg: "Неуспешно зареждане на потоците" },
+  errLoadFranchiseFailed: { ru: "Не удалось загрузить кандидаток", bg: "Неуспешно зареждане на кандидатките" },
 
   // ---- attendance list page ----
   courseDeleted: { ru: "Курс удалён", bg: "Курсът е изтрит" },
@@ -863,7 +865,6 @@ export const DICT: Record<string, Entry> = {
   },
   errCreateLoginFailed: { ru: "Не удалось создать логин: {message}", bg: "Неуспешно създаване на вход: {message}" },
 
-  // ---- viewer access (Round 18, 15 сен 2026) ----
   // ---- viewer/team access (Round 18, 15 сен 2026; расширено Round 37, 24 сен 2026) ----
   headingViewerAccess: { ru: "Доступ только для просмотра", bg: "Достъп само за преглед" },
   headingTeamAccess: { ru: "Доступ команды", bg: "Достъп на екипа" },
@@ -989,6 +990,67 @@ export const DICT: Record<string, Entry> = {
 
   // ---- email board ----
   cLetters: { ru: "Письма", bg: "Писма" },
+
+  // ---- franchise (round 38) ----
+  fSearchPlaceholder: { ru: "Поиск по имени, телефону, городу…", bg: "Търсене по име, телефон, град…" },
+  fCandidatesCount: { ru: "{count} кандидаток", bg: "{count} кандидатки" },
+
+  fStageApplication: { ru: "Заявка", bg: "Заявление" },
+  fStageInProgress: { ru: "В работе", bg: "В процес" },
+  fStageInterviewScheduled: { ru: "Собеседование назначено", bg: "Насрочено интервю" },
+  fStageInterviewDone: { ru: "Собеседование пройдено", bg: "Проведено интервю" },
+  fStageFinModelSent: { ru: "Фин. модель отправлена", bg: "Изпратен финансов модел" },
+  fStageKristinaScheduled: { ru: "Встреча с Кристиной назначена", bg: "Насрочена среща с Кристина" },
+  fStageKristinaDone: { ru: "Встреча с Кристиной пройдена", bg: "Проведена среща с Кристина" },
+  fStageLyudmilaScheduled: { ru: "Встреча с Людмилой назначена", bg: "Насрочена среща с Людмила" },
+  fStageLyudmilaDone: { ru: "Встреча с Людмилой пройдена", bg: "Проведена среща с Людмила" },
+  fStageContractSent: { ru: "Договор отправлен", bg: "Изпратен договор" },
+  fStageContractSigned: { ru: "Договор подписан", bg: "Подписан договор" },
+  fStageInvoiced: { ru: "Счёт выставлен", bg: "Издадена фактура" },
+  fStageInvoicePaid: { ru: "Счёт оплачен", bg: "Платена фактура" },
+  fStageTraining: { ru: "Обучение", bg: "Обучение" },
+  fStageActive: { ru: "Активна", bg: "Активна" },
+  fStageDeclined: { ru: "Отказ", bg: "Отказ" },
+  fStagePaused: { ru: "Пауза", bg: "Пауза" },
+
+  fReasonModalTitleDeclined: { ru: "Причина отказа", bg: "Причина за отказ" },
+  fReasonModalTitlePaused: { ru: "Причина паузы", bg: "Причина за пауза" },
+  fReasonModalSubtitle: { ru: "Кандидатка: {name}", bg: "Кандидатка: {name}" },
+  fFieldReason: { ru: "Причина", bg: "Причина" },
+
+  fHeadingJourney: { ru: "Путь кандидатки", bg: "Път на кандидатката" },
+  fEmptyNoHistory: { ru: "Пока нет истории", bg: "Все още няма история" },
+  fSubmittedAt: { ru: "Заявка подана", bg: "Заявлението е подадено" },
+
+  fHeadingActions: { ru: "Действия", bg: "Действия" },
+  fFieldStage: { ru: "Этап", bg: "Етап" },
+  fFieldInterviewDate: { ru: "Дата собеседования", bg: "Дата на интервюто" },
+  fFieldZoomUrl: { ru: "Ссылка на запись Zoom", bg: "Линк към записа в Zoom" },
+  fOpenZoomRecording: { ru: "Открыть запись", bg: "Отвори записа" },
+
+  fHeadingApplication: { ru: "Анкета", bg: "Анкета" },
+  fFieldEmail: { ru: "Email", bg: "Имейл" },
+  fFieldPhone: { ru: "Телефон", bg: "Телефон" },
+  fFieldTelegram: { ru: "Telegram", bg: "Telegram" },
+  fFieldCountry: { ru: "Страна", bg: "Държава" },
+  fFieldTargetCity: { ru: "Желаемый город", bg: "Желан град" },
+  fFieldBirthDate: { ru: "Дата рождения", bg: "Дата на раждане" },
+  fFieldInstagram: { ru: "Instagram", bg: "Instagram" },
+  fFieldFollowers: { ru: "Подписчики", bg: "Последователи" },
+  fFieldSource: { ru: "Источник", bg: "Източник" },
+  fFieldKnowsMethod: { ru: "Знакома с методикой", bg: "Запозната с методиката" },
+  fFieldTrainOrHire: { ru: "Сама вести или нанять тренера", bg: "Сама ще води или ще наеме треньор" },
+  fFieldReadyWhen: { ru: "Готова начать", bg: "Готова да започне" },
+  fFieldBudget: { ru: "Бюджет", bg: "Бюджет" },
+  fFieldOccupation: { ru: "Род занятий", bg: "Занятие" },
+  fFieldExperience: { ru: "Опыт", bg: "Опит" },
+  fFieldContentDescription: { ru: "О себе / контент", bg: "За себе си / съдържание" },
+  fFieldWhyCity: { ru: "Почему этот город", bg: "Защо този град" },
+  fFieldFears: { ru: "Опасения", bg: "Опасения" },
+  fFieldQuestions: { ru: "Вопросы", bg: "Въпроси" },
+  fFieldInternalNote: { ru: "Внутренняя заметка", bg: "Вътрешна бележка" },
+
+  fHeadingComments: { ru: "Комментарии", bg: "Коментари" },
 };
 
 /**
