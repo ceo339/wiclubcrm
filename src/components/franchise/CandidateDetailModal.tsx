@@ -41,9 +41,12 @@ export default function CandidateDetailModal({
   const [rejectReason, setRejectReason] = useState(candidate.reject_reason);
   const [reasonPromptStage, setReasonPromptStage] = useState<"declined" | "paused" | null>(null);
   const [zoomUrl, setZoomUrl] = useState(candidate.zoom_recording_url ?? "");
-  const [interviewDate, setInterviewDate] = useState(
-    candidate.interview_scheduled_at ? candidate.interview_scheduled_at.slice(0, 16) : ""
-  );
+  // interview_scheduled_at is a UTC timestamp; <input type="datetime-local">
+  // wants LOCAL wall-clock "YYYY-MM-DDTHH:mm". Round 41 fix: this used to be
+  // iso.slice(0,16) — i.e. UTC shown as if local (12:00 Madrid showed 10:00)
+  // and a naive string sent back that the DB then read as UTC.
+  const initialInterviewDate = isoToLocalInput(candidate.interview_scheduled_at);
+  const [interviewDate, setInterviewDate] = useState(initialInterviewDate);
   const [stageError, setStageError] = useState<string | null>(null);
   const [, startTransition] = useTransition();
 
@@ -85,15 +88,21 @@ export default function CandidateDetailModal({
     });
   }
 
+  // Save on blur only if the value was actually edited — otherwise just
+  // clicking into a field would write back the (possibly stale) value this
+  // modal was opened with, overwriting a date/recording link that Calendly or
+  // Zoom set in the meantime.
   function handleZoomSave() {
+    if (zoomUrl === (candidate.zoom_recording_url ?? "")) return;
     startTransition(async () => {
       await setCandidateZoomUrl(candidate.id, zoomUrl || null);
     });
   }
 
   function handleInterviewDateSave() {
+    if (interviewDate === initialInterviewDate) return;
     startTransition(async () => {
-      await setCandidateInterviewDate(candidate.id, interviewDate || null);
+      await setCandidateInterviewDate(candidate.id, interviewDate ? new Date(interviewDate).toISOString() : null);
     });
   }
 
@@ -355,4 +364,12 @@ function CommentsSection({
       </div>
     </div>
   );
+}
+
+function isoToLocalInput(iso: string | null | undefined): string {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return "";
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
