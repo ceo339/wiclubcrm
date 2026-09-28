@@ -165,6 +165,57 @@ export async function createTeamAccess(formData: FormData): Promise<ActionResult
   return { error: null, tempPassword, resetEmail: email };
 }
 
+/**
+ * HQ-only: changes an existing team-access account's preset in place —
+ * "Мне нужно редактиррвать права у текущих пользователей" (Anastasiia, 28
+ * сен 2026): round 37 only let her pick a preset once, at creation, with no
+ * way back short of deleting and recreating the whole login (losing its
+ * "Добавлен" date and forcing a new temp password on someone who might
+ * already be using the old one). This just re-points the same profiles row
+ * at a different (role, franchise_access) pair — the Auth user itself
+ * (email, password) is untouched, so the person keeps logging in the same
+ * way, they just see a different set of tabs afterward. Same
+ * confirm-the-row-is-actually-a-team-account guard as reset/delete above.
+ */
+export async function updateTeamAccessType(accountId: string, accessType: string): Promise<ActionResult> {
+  const profile = await getCurrentProfile();
+  if (!profile) return { error: "errNotAuthorized" };
+  if (profile.role !== "hq") return { error: "errHqOnlyManageViewers" };
+  if (!TEAM_ACCESS_TYPES.includes(accessType as TeamAccessType)) return { error: "errNotAuthorized" };
+  const newType = accessType as TeamAccessType;
+
+  // profiles only has an RLS SELECT policy (hq can read every row) — no
+  // UPDATE policy lets hq touch another profile's role/franchise_access, so
+  // this still confirms the row with the caller's own RLS-scoped client
+  // first (same guard as resetTeamAccessPassword/deleteTeamAccess), but the
+  // write itself has to go through the admin client or it would silently
+  // affect zero rows instead of erroring.
+  const supabase = await createClient();
+  const { data: account } = await supabase
+    .from("profiles")
+    .select("id")
+    .eq("id", accountId)
+    .in("role", ["viewer", "franchise"])
+    .maybeSingle();
+  if (!account) return { error: "errViewerNotFound" };
+
+  let admin;
+  try {
+    admin = createAdminClient();
+  } catch {
+    return { error: "errSupabaseServiceKeyMissing" };
+  }
+
+  const { error } = await admin
+    .from("profiles")
+    .update({ role: ACCESS_TYPE_TO_ROLE[newType], franchise_access: ACCESS_TYPE_TO_FRANCHISE[newType] })
+    .eq("id", accountId);
+  if (error) return { error: error.message };
+
+  revalidatePath("/partners");
+  return { error: null };
+}
+
 /** HQ-only: same reset-password mechanics as resetPartnerPassword, for a
  * team-access login (viewer or franchise role) instead of a club login. */
 export async function resetTeamAccessPassword(accountId: string): Promise<ActionResult> {

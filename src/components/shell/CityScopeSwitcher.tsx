@@ -15,7 +15,19 @@ import { VIEW_SCOPE_COOKIE } from "@/lib/role";
  * (RLS already decides what this account may see), so it's a plain cookie
  * set directly from the browser — no server round trip needed to change
  * it, just a refresh so every Server Component re-reads the new value.
+ *
+ * Round 38 follow-up (28 сен 2026 — "на главной нужно выбирать клубы и
+ * франчайзи отображать"): rather than teaching every club-scoped page
+ * (Лиды, Участницы, Оплаты…) what a "Франчайзи" scope would even mean, this
+ * adds it here purely as a quick-nav entry — picking it just routes
+ * straight to /franchise instead of writing the scope cookie, so every
+ * other tab's own club-filtering logic is untouched. /franchise itself
+ * renders this same switcher (see its page.tsx) with FRANCHISE_SCOPE_VALUE
+ * passed as activeClubId, so the dropdown correctly shows "Франчайзи"
+ * selected while you're actually there.
  */
+export const FRANCHISE_SCOPE_VALUE = "franchise";
+
 export default function CityScopeSwitcher({
   clubs,
   activeClubId,
@@ -27,6 +39,10 @@ export default function CityScopeSwitcher({
   const t = useT();
 
   function handleChange(value: string) {
+    if (value === FRANCHISE_SCOPE_VALUE) {
+      router.push("/franchise");
+      return;
+    }
     document.cookie = `${VIEW_SCOPE_COOKIE}=${value}; path=/; max-age=31536000; samesite=lax`;
     router.refresh();
   }
@@ -46,6 +62,7 @@ export default function CityScopeSwitcher({
           {c.name}
         </option>
       ))}
+      <option value={FRANCHISE_SCOPE_VALUE}>{t("navFranchise")}</option>
     </select>
   );
 }

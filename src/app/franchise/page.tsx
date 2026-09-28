@@ -1,9 +1,11 @@
 import { redirect } from "next/navigation";
 import { getCurrentProfile } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
+import { isNetworkRole } from "@/lib/role";
 import T from "@/components/i18n/T";
 import FranchiseBoard from "@/components/franchise/FranchiseBoard";
 import AppShell from "@/components/shell/AppShell";
+import { FRANCHISE_SCOPE_VALUE } from "@/components/shell/CityScopeSwitcher";
 
 /**
  * «Франчайзи» — round 38's franchise-candidate pipeline, deferred out of
@@ -31,8 +33,22 @@ export default async function FranchisePage() {
     .select("*")
     .order("submitted_at", { ascending: false });
 
+  // Round 38 follow-up — an hq/viewer account also gets the club switcher
+  // here (same header widget every other network page shows), pre-selected
+  // to "Франчайзи" (see CityScopeSwitcher) so it reflects where they
+  // actually are instead of reverting to "Все клубы"/silently showing
+  // nothing selected.
+  const { data: switcherClubs } = isNetworkRole(profile.role)
+    ? await supabase.from("partners").select("id, name").order("name")
+    : { data: [] };
+
   return (
-    <AppShell profile={profile} title={<T k="navFranchise" />}>
+    <AppShell
+      profile={profile}
+      title={<T k="navFranchise" />}
+      clubs={switcherClubs ?? []}
+      activeClubId={FRANCHISE_SCOPE_VALUE}
+    >
       {error ? (
         <p className="rounded-lg bg-accent/10 px-4 py-3 text-sm text-accent-strong">
           <T k="errLoadFranchiseFailed" />: {error.message}

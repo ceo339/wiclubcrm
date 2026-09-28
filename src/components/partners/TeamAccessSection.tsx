@@ -5,6 +5,7 @@ import {
   createTeamAccess,
   resetTeamAccessPassword,
   deleteTeamAccess,
+  updateTeamAccessType,
   type TeamAccount,
 } from "@/app/partners/viewer-actions";
 import { TEAM_ACCESS_TYPES, type TeamAccessType } from "@/lib/teamAccess";
@@ -111,6 +112,21 @@ export default function TeamAccessSection({ initialAccounts }: { initialAccounts
                   account={a}
                   locale={locale}
                   onRemoved={() => setAccounts((prev) => prev.filter((x) => x.id !== a.id))}
+                  onAccessTypeChanged={(accessType) =>
+                    setAccounts((prev) =>
+                      prev.map((x) =>
+                        x.id === a.id
+                          ? {
+                              ...x,
+                              access_type: accessType,
+                              role: accessType === "franchise_edit" ? "franchise" : "viewer",
+                              franchise_access:
+                                accessType === "network_view" ? "none" : accessType === "franchise_edit" ? "edit" : "view",
+                            }
+                          : x
+                      )
+                    )
+                  }
                 />
               ))}
             </tbody>
@@ -233,10 +249,12 @@ function TeamAccountRow({
   account,
   locale,
   onRemoved,
+  onAccessTypeChanged,
 }: {
   account: TeamAccount;
   locale: string;
   onRemoved: () => void;
+  onAccessTypeChanged: (accessType: TeamAccessType) => void;
 }) {
   const { t } = useLocale();
   const [pending, startTransition] = useTransition();
@@ -244,6 +262,20 @@ function TeamAccountRow({
   const [resetResult, setResetResult] = useState<{ email: string; password: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [accessPending, startAccessTransition] = useTransition();
+
+  function handleAccessTypeChange(next: TeamAccessType) {
+    const previous = account.access_type;
+    setError(null);
+    onAccessTypeChanged(next); // optimistic — reverted below on error
+    startAccessTransition(async () => {
+      const result = await updateTeamAccessType(account.id, next);
+      if (result.error && previous) {
+        onAccessTypeChanged(previous);
+        setError(result.error);
+      }
+    });
+  }
 
   function handleReset() {
     setError(null);
@@ -286,7 +318,19 @@ function TeamAccountRow({
       <td className="px-4 py-3 font-medium text-foreground">{account.full_name ?? "—"}</td>
       <td className="px-4 py-3 text-muted">{account.email ?? "—"}</td>
       <td className="px-4 py-3 text-muted">
-        {account.access_type ? t(ACCESS_TYPE_LABEL_KEYS[account.access_type]) : "—"}
+        <select
+          value={account.access_type ?? ""}
+          disabled={accessPending}
+          onChange={(e) => handleAccessTypeChange(e.target.value as TeamAccessType)}
+          className="rounded-lg border border-border bg-background px-2 py-1.5 text-xs outline-none focus:border-accent focus:ring-1 focus:ring-accent disabled:opacity-50"
+        >
+          {!account.access_type && <option value="">—</option>}
+          {TEAM_ACCESS_TYPES.map((type) => (
+            <option key={type} value={type}>
+              {t(ACCESS_TYPE_LABEL_KEYS[type])}
+            </option>
+          ))}
+        </select>
       </td>
       <td className="px-4 py-3 text-muted">
         {new Date(account.created_at).toLocaleDateString(locale === "bg" ? "bg-BG" : "ru-RU")}
