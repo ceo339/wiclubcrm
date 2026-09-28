@@ -1,18 +1,26 @@
 #!/bin/bash
 # Подписывает CRM на события Calendly (invitee.created / invitee.canceled).
-# Запуск из Terminal:  bash docs/calendly-subscribe.sh
-# Токен вводится скрыто и никуда не сохраняется.
-set -e
+# Запуск:  bash docs/calendly-subscribe.sh
 URL="${CRM_URL:-https://wiclubcrm.vercel.app}/api/calendly/webhook"
-read -s -p "Calendly Personal Access Token: " TOKEN; echo
+echo "Вставьте токен Calendly (Cmd+V) и нажмите Enter. Символы не отображаются."
+read -r -s -p "Токен: " TOKEN; echo
+TOKEN=$(echo "$TOKEN" | tr -d '[:space:]')
+if [ -z "$TOKEN" ]; then echo "Токен пустой — запустите ещё раз."; exit 1; fi
+echo "Токен получен (${#TOKEN} символов). Шаг 1/2: проверяю аккаунт Calendly..."
+ME=$(curl -sS --max-time 20 -H "Authorization: Bearer $TOKEN" https://api.calendly.com/users/me) || { echo "Нет связи с api.calendly.com"; exit 1; }
+USER_URI=$(echo "$ME" | python3 -c 'import sys,json;print(json.load(sys.stdin)["resource"]["uri"])' 2>/dev/null)
+ORG_URI=$(echo "$ME" | python3 -c 'import sys,json;print(json.load(sys.stdin)["resource"]["current_organization"])' 2>/dev/null)
+if [ -z "$USER_URI" ]; then echo "Calendly не принял токен. Ответ:"; echo "$ME"; exit 1; fi
+echo "Аккаунт найден. Шаг 2/2: создаю подписку..."
 KEY=$(openssl rand -hex 32)
-ME=$(curl -s -H "Authorization: Bearer $TOKEN" https://api.calendly.com/users/me)
-USER_URI=$(echo "$ME" | python3 -c 'import sys,json;print(json.load(sys.stdin)["resource"]["uri"])')
-ORG_URI=$(echo "$ME" | python3 -c 'import sys,json;print(json.load(sys.stdin)["resource"]["current_organization"])')
-RES=$(curl -s -X POST https://api.calendly.com/webhook_subscriptions \
+RES=$(curl -sS --max-time 20 -X POST https://api.calendly.com/webhook_subscriptions \
   -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
   -d "{\"url\":\"$URL\",\"events\":[\"invitee.created\",\"invitee.canceled\"],\"organization\":\"$ORG_URI\",\"user\":\"$USER_URI\",\"scope\":\"user\",\"signing_key\":\"$KEY\"}")
-echo "$RES" | python3 -m json.tool
-echo
-echo "Если выше нет ошибки — добавьте в Vercel переменную:"
-echo "CALENDLY_WEBHOOK_SIGNING_KEY=$KEY"
+if echo "$RES" | grep -q '"resource"'; then
+  echo
+  echo "Готово! Добавьте в Vercel переменную:"
+  echo "  Key:   CALENDLY_WEBHOOK_SIGNING_KEY"
+  echo "  Value: $KEY"
+else
+  echo "Calendly вернул ошибку:"; echo "$RES"
+fi
