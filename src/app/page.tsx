@@ -3,8 +3,11 @@ import { getCurrentProfile } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { scopeForProfile, currencyForCountry } from "@/lib/currency";
 import { localeScopeForProfile, localeForCountry } from "@/lib/i18n";
-import { isNetworkRole, getViewScopePartnerId } from "@/lib/viewScope";
+import { isNetworkRole, getViewScopePartnerId, getViewMode } from "@/lib/viewScope";
 import { sortOpenTasks, type OpenTask } from "@/lib/tasks";
+import { QUALIFYING_STAGES, computeQualifiedIds } from "@/lib/franchise";
+import { computeInterviewStats } from "@/lib/franchiseDashboard";
+import FranchiseHomeDashboard from "@/components/franchise/FranchiseHomeDashboard";
 import {
   computeCoreMetrics,
   countByProduct,
@@ -65,6 +68,7 @@ export default async function Home({
   const supabase = await createClient();
 
   const networkView = isNetworkRole(profile.role);
+  const viewMode = await getViewMode(profile);
   const scopePartnerId = await getViewScopePartnerId(profile);
   // The club whose own dashboard we render below: a partner/staff account's
   // own club, or — for hq/viewer — whichever club is picked in the header
@@ -76,6 +80,52 @@ export default async function Home({
   const { data: switcherClubs } = networkView
     ? await supabase.from("partners").select("id, name").order("name")
     : { data: [] };
+
+  // ---------------------------------------------------------------------
+  // Round 42 (28 сен 2026): "по умолчанию главная — это франчайзи... если
+  // выбрана франчайзи, то на главной аналитика франчайзи, лидов, участниц,
+  // курсов, посещаемости, оплат, когортного анализа, имейлов НЕТ. Все
+  // появляется только когда выбираются города." An hq/viewer account
+  // defaults to this branch (see getViewMode) and stays here until "Клубы"
+  // is picked in the header switcher — none of the club-scoped data below
+  // (tasks, leads, members, payments…) is even fetched in this branch, it
+  // has no bearing on a franchise view.
+  if (networkView && viewMode === "franchise") {
+    const [{ data: candidates, error }, { data: qualifyingHistory }, { data: interviewHistory }] = await Promise.all([
+      supabase.from("franchise_candidates").select("*").order("submitted_at", { ascending: false }),
+      supabase.from("franchise_stage_history").select("candidate_id").in("stage", QUALIFYING_STAGES),
+      supabase.from("franchise_stage_history").select("candidate_id, occurred_at").eq("stage", "interview_done"),
+    ]);
+
+    const allCandidates = candidates ?? [];
+    const qualifiedIds = computeQualifiedIds(allCandidates, (qualifyingHistory ?? []).map((r) => r.candidate_id));
+    const interviewStats = computeInterviewStats(interviewHistory ?? []);
+
+    return (
+      <AppShell
+        profile={profile}
+        title={<T k="headingHome" />}
+        subtitle={<T k="navFranchise" />}
+        clubs={switcherClubs ?? []}
+        activeClubId={null}
+        viewMode={viewMode}
+        headerExtra={
+          <>
+            <LocaleScope scope="network" fallback="ru" />
+            <LocaleSwitcher />
+          </>
+        }
+      >
+        {error ? (
+          <p className="rounded-lg bg-accent/10 px-4 py-3 text-sm text-accent-strong">
+            <T k="errLoadFranchiseFailed" />: {error.message}
+          </p>
+        ) : (
+          <FranchiseHomeDashboard candidates={allCandidates} qualifiedIds={qualifiedIds} interviewStats={interviewStats} />
+        )}
+      </AppShell>
+    );
+  }
 
   // "Мои задачи" / "Задачи по сети" — every open (not done) task across a
   // partner's leads and members in one place; HQ gets the same list
@@ -235,6 +285,7 @@ export default async function Home({
         }
         clubs={switcherClubs ?? []}
         activeClubId={null}
+        viewMode={viewMode}
         headerExtra={
           <>
             <CurrencyScope scope="network" fallback="USD" />
@@ -284,6 +335,7 @@ export default async function Home({
         subtitle={<T k="noClubAttached" />}
         clubs={switcherClubs ?? []}
         activeClubId={scopePartnerId}
+        viewMode={viewMode}
         headerExtra={
           <>
             <CurrencyScope scope={scope} fallback={fallback} />
@@ -385,6 +437,7 @@ export default async function Home({
       }
       clubs={switcherClubs ?? []}
       activeClubId={scopePartnerId}
+      viewMode={viewMode}
       headerExtra={
         <>
           <CurrencyScope scope={scope} fallback={partner ? currencyForCountry(partner.country) : fallback} />

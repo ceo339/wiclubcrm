@@ -23,3 +23,12 @@ export function isNetworkRole(role: string): boolean {
  * import just the string without pulling in viewScope.ts's next/headers
  * dependency into the client bundle. */
 export const VIEW_SCOPE_COOKIE = "hqCityFilter";
+
+/**
+ * Round 42 (28 сен 2026) — the top-level "Франчайзи" / "Клубы" scope
+ * toggle, separate from VIEW_SCOPE_COOKIE (which city, if any, once
+ * "Клубы" is picked). Same reasoning as above for living here instead of
+ * viewScope.ts. Only ever consulted for hq/viewer accounts — see
+ * getViewMode in viewScope.ts, which defaults it to "franchise".
+ */
+export const VIEW_MODE_COOKIE = "hqViewMode";

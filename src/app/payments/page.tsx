@@ -3,7 +3,7 @@ import { getCurrentProfile } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { scopeForProfile } from "@/lib/currency";
 import { localeScopeForProfile } from "@/lib/i18n";
-import { isNetworkRole, getViewScopePartnerId } from "@/lib/viewScope";
+import { isNetworkRole, getViewScopePartnerId, getViewMode } from "@/lib/viewScope";
 import CurrencySwitcher from "@/components/currency/CurrencySwitcher";
 import CurrencyScope from "@/components/currency/CurrencyScope";
 import LocaleSwitcher from "@/components/i18n/LocaleSwitcher";
@@ -20,6 +20,7 @@ export default async function PaymentsPage() {
   const supabase = await createClient();
   const networkView = isNetworkRole(profile.role);
   const scopePartnerId = await getViewScopePartnerId(profile);
+  const viewMode = await getViewMode(profile);
 
   // RLS already scopes this to the caller's partner_id (or every partner
   // for hq/viewer) — the .eq below only narrows further, when an hq/viewer
@@ -77,6 +78,7 @@ export default async function PaymentsPage() {
       title={<T k="navPayments" />}
       clubs={clubs ?? []}
       activeClubId={scopePartnerId}
+      viewMode={viewMode}
       headerExtra={
         <>
           <CurrencyScope scope={scope} fallback={fallback} />

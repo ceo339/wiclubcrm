@@ -133,5 +133,43 @@ export function findStaleFranchiseCandidates(
     .sort((a, b) => b.daysSinceUpdate - a.daysSinceUpdate);
 }
 
+// ---------------------------------------------------------------------
+// Round 42 (28 сен 2026): "виджет новых за неделю заявок", "воронку
+// строить тоже за неделю", "сколько проведено интервью за неделю и за все
+// время" — a fixed rolling 7-day window from now, distinct from the
+// month/year period selector above (that one answers "what happened in
+// August"; this always answers "what happened in the last 7 days",
+// whatever day it is today).
+
+export const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
+
+export function isWithinLastWeek(dateStr: string, now: Date = new Date()): boolean {
+  return now.getTime() - new Date(dateStr).getTime() <= WEEK_MS;
+}
+
+export function weeklyFranchiseCandidates<T extends { submitted_at: string }>(
+  candidates: T[],
+  now: Date = new Date()
+): T[] {
+  return candidates.filter((c) => isWithinLastWeek(c.submitted_at, now));
+}
+
+export type InterviewStats = { week: number; allTime: number };
+
+/** Counts DISTINCT candidates who ever logged an "Собеседование пройдено"
+ * (interview_done) transition in franchise_stage_history — not raw rows,
+ * so a card that somehow re-crosses the same stage twice doesn't double an
+ * interview that only happened once. */
+export function computeInterviewStats(
+  interviewDoneHistory: { candidate_id: string; occurred_at: string }[],
+  now: Date = new Date()
+): InterviewStats {
+  const allTime = new Set(interviewDoneHistory.map((r) => r.candidate_id));
+  const week = new Set(
+    interviewDoneHistory.filter((r) => isWithinLastWeek(r.occurred_at, now)).map((r) => r.candidate_id)
+  );
+  return { week: week.size, allTime: allTime.size };
+}
+
 export { franchiseStageLabel };
 export type { Locale };

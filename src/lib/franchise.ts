@@ -97,3 +97,23 @@ export const QUALIFYING_STAGES: FranchiseStageId[] = FRANCHISE_STAGES
   .slice(FRANCHISE_STAGES.findIndex((s) => s.id === "fin_model_sent"))
   .filter((s) => !s.lost)
   .map((s) => s.id);
+
+/**
+ * Shared by franchise/page.tsx's kanban ("Квалифицированные" tab) and the
+ * Главная franchise dashboard (round 42) so the two never compute this
+ * differently. Union of (a) candidates whose franchise_stage_history ever
+ * logged one of QUALIFYING_STAGES, and (b) candidates currently sitting on
+ * one — see QUALIFYING_STAGES above for why history matters here and not
+ * just the current stage.
+ */
+export function computeQualifiedIds(
+  candidates: { id: string; stage: string }[],
+  qualifyingHistoryCandidateIds: string[]
+): string[] {
+  return Array.from(
+    new Set([
+      ...qualifyingHistoryCandidateIds,
+      ...candidates.filter((c) => QUALIFYING_STAGES.includes(c.stage as FranchiseStageId)).map((c) => c.id),
+    ])
+  );
+}

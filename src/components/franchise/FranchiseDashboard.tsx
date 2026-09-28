@@ -6,6 +6,7 @@ import {
   franchiseStageLabel,
   type FranchiseFunnelStage,
   type FranchiseSourceBreakdown,
+  type InterviewStats,
   type MonthlyCount,
   type StaleFranchiseCandidate,
 } from "@/lib/franchiseDashboard";
@@ -25,10 +26,17 @@ import Sparkline from "@/components/dashboard/Sparkline";
  * `?scope=franchise` query param, driven by `<Link>`s for the month/year
  * switcher. That query param reproducibly failed to render in production
  * for reasons that resisted every fix tried (force-dynamic, ruling out
- * every cache layer) — Anastasiia asked for a simpler shape instead, so
- * this panel now lives as an "Аналитика" tab on /franchise itself (see
- * FranchiseBoard.tsx) and the period switcher below is driven by a plain
- * callback into the parent's own React state, not a URL at all.
+ * every cache layer), so it briefly moved to an "Аналитика" tab on
+ * /franchise instead, with the period switcher driven by a plain callback
+ * into the parent's own React state rather than a URL.
+ *
+ * Round 42 (28 сен 2026): moved again, this time to Главная itself as the
+ * default view for hq/viewer accounts ("по умолчанию главная — это
+ * франчайзи", see FranchiseHomeDashboard.tsx, the new parent that owns
+ * `period`). Also gained three new pieces: a fixed rolling-7-day "new this
+ * week" count, a funnel scoped to just that week's cohort ("воронку тоже
+ * за неделю, сколько из новых на каком этапе"), and how many candidates
+ * have ever had their interview marked done, this week and all time.
  */
 export default function FranchiseDashboard({
   period,
@@ -36,11 +44,14 @@ export default function FranchiseDashboard({
   yearOptions,
   onSelectPeriod,
   submittedCount,
+  weeklyCount,
   qualifiedCount,
   activeCount,
   conversion,
   submissionTrend,
   funnel,
+  weeklyFunnel,
+  interviewStats,
   sourceBreakdown,
   staleCandidates,
 }: {
@@ -49,16 +60,24 @@ export default function FranchiseDashboard({
   yearOptions: string[];
   onSelectPeriod: (period: Period) => void;
   submittedCount: number;
+  /** New candidates submitted in the last rolling 7 days — always "this
+   * week", independent of the month/year selector above. */
+  weeklyCount: number;
   qualifiedCount: number;
   activeCount: number;
   conversion: number | null;
   submissionTrend: MonthlyCount[];
   funnel: FranchiseFunnelStage[];
+  /** Same shape/logic as `funnel`, computed against just the candidates
+   * submitted in the last 7 days. */
+  weeklyFunnel: FranchiseFunnelStage[];
+  interviewStats: InterviewStats;
   sourceBreakdown: FranchiseSourceBreakdown[];
   staleCandidates: StaleFranchiseCandidate[];
 }) {
   const { locale, t } = useLocale();
   const maxFunnel = Math.max(1, ...funnel.map((s) => s.count));
+  const maxWeeklyFunnel = Math.max(1, ...weeklyFunnel.map((s) => s.count));
   const maxSource = Math.max(1, ...sourceBreakdown.map((s) => s.count));
   const [tab, setTab] = useState<"month" | "year">(period.mode === "year" ? "year" : "month");
   const tabOptions = tab === "month" ? monthOptions : yearOptions;
@@ -103,7 +122,7 @@ export default function FranchiseDashboard({
         <p className="mt-2 text-xs text-muted">{periodLabel(period, locale)}</p>
       </div>
 
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
         <div className="rounded-xl border border-border bg-background p-4 shadow-card">
           <div className="text-xs uppercase tracking-wide text-muted">{t("statFranchiseSubmitted")}</div>
           <div
@@ -114,6 +133,16 @@ export default function FranchiseDashboard({
           </div>
           <div className="mt-1 text-xs text-muted">{t("deltaForPeriod")}</div>
           <Sparkline values={submissionTrend.map((m) => m.value)} color="#7a0c1f" />
+        </div>
+        <div className="rounded-xl border border-border bg-background p-4 shadow-card">
+          <div className="text-xs uppercase tracking-wide text-muted">{t("statFranchiseWeeklyNew")}</div>
+          <div
+            className="mt-1 font-display text-[32px] leading-[1.05] tracking-[-0.02em] text-foreground"
+            style={{ fontVariantNumeric: "tabular-nums" }}
+          >
+            {weeklyCount}
+          </div>
+          <div className="mt-1 text-xs text-muted">{t("last7Days")}</div>
         </div>
         <div className="rounded-xl border border-border bg-background p-4 shadow-card">
           <div className="text-xs uppercase tracking-wide text-muted">{t("statFranchiseQualified")}</div>
@@ -145,6 +174,17 @@ export default function FranchiseDashboard({
           </div>
           <div className="mt-1 text-xs text-muted">{t("dash")}</div>
         </div>
+        <div className="rounded-xl border border-border bg-background p-4 shadow-card">
+          <div className="text-xs uppercase tracking-wide text-muted">{t("statFranchiseInterviewsDone")}</div>
+          <div
+            className="mt-1 font-display text-[32px] leading-[1.05] tracking-[-0.02em] text-foreground"
+            style={{ fontVariantNumeric: "tabular-nums" }}
+          >
+            {interviewStats.week}
+          </div>
+          <div className="mt-1 text-xs text-muted">{t("perWeek")}</div>
+          <div className="text-xs text-muted">{t("statInterviewsAllTime", { n: interviewStats.allTime })}</div>
+        </div>
       </div>
 
       <div className="rounded-xl border border-border bg-background shadow-card p-5">
@@ -173,6 +213,42 @@ export default function FranchiseDashboard({
             );
           })}
         </div>
+      </div>
+
+      <div className="rounded-xl border border-border bg-background shadow-card p-5">
+        <h2 className="text-sm font-semibold text-foreground">{t("headingFranchiseWeeklyFunnel")}</h2>
+        {weeklyFunnel.length === 0 || weeklyFunnel[0].count === 0 ? (
+          <p className="mt-3 text-sm text-muted">{t("emptyNoNewFranchiseCandidatesWeek")}</p>
+        ) : (
+          <div className="mt-4 flex flex-col gap-2.5">
+            {weeklyFunnel.map((s, i) => {
+              const widthPct = Math.max(8, (s.count / maxWeeklyFunnel) * 100);
+              const stageColor = interpolateHex(
+                "#e2515f",
+                "#7a0c1f",
+                weeklyFunnel.length > 1 ? i / (weeklyFunnel.length - 1) : 0
+              );
+              return (
+                <div key={s.id} className="grid grid-cols-[160px_1fr_112px] items-center gap-3 sm:grid-cols-[200px_1fr_120px]">
+                  <div className="truncate text-sm text-ink-2">{franchiseStageLabel(s.id, locale)}</div>
+                  <div
+                    className="flex h-[30px] min-w-[40px] items-center rounded-lg px-2.5 text-[13px] font-bold text-white transition-[width]"
+                    style={{ width: `${widthPct}%`, background: stageColor, fontVariantNumeric: "tabular-nums" }}
+                  >
+                    {s.count}
+                  </div>
+                  <div className="text-right text-xs text-muted">
+                    {i === 0
+                      ? t("funnelStart")
+                      : s.pctFromFirst === null
+                        ? t("dash")
+                        : t("funnelPctOfNew", { percent: s.pctFromFirst })}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       <div className="rounded-xl border border-border bg-background shadow-card p-5">

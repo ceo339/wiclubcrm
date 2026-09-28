@@ -1,12 +1,11 @@
 import { redirect } from "next/navigation";
 import { getCurrentProfile } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
-import { isNetworkRole } from "@/lib/role";
+import { isNetworkRole, getViewMode } from "@/lib/viewScope";
 import T from "@/components/i18n/T";
 import FranchiseBoard from "@/components/franchise/FranchiseBoard";
 import AppShell from "@/components/shell/AppShell";
-import { FRANCHISE_SCOPE_VALUE } from "@/components/shell/CityScopeSwitcher";
-import { QUALIFYING_STAGES } from "@/lib/franchise";
+import { QUALIFYING_STAGES, computeQualifiedIds } from "@/lib/franchise";
 
 /**
  * «Франчайзи» — round 38's franchise-candidate pipeline, deferred out of
@@ -46,28 +45,27 @@ export default async function FranchisePage() {
     .from("franchise_stage_history")
     .select("candidate_id")
     .in("stage", QUALIFYING_STAGES);
-  const qualifiedIds = Array.from(
-    new Set([
-      ...(qualifyingHistory ?? []).map((r) => r.candidate_id),
-      ...(candidates ?? []).filter((c) => QUALIFYING_STAGES.includes(c.stage as (typeof QUALIFYING_STAGES)[number])).map((c) => c.id),
-    ])
-  );
+  const qualifiedIds = computeQualifiedIds(candidates ?? [], (qualifyingHistory ?? []).map((r) => r.candidate_id));
 
   // Round 38 follow-up — an hq/viewer account also gets the club switcher
-  // here (same header widget every other network page shows), pre-selected
-  // to "Франчайзи" (see CityScopeSwitcher) so it reflects where they
-  // actually are instead of reverting to "Все клубы"/silently showing
-  // nothing selected.
-  const { data: switcherClubs } = isNetworkRole(profile.role)
-    ? await supabase.from("partners").select("id, name").order("name")
-    : { data: [] };
+  // here (same header widget every other network page shows). Round 42:
+  // the switcher's top toggle is now a genuine scope (see getViewMode),
+  // not something this page pins to "Франчайзи" itself — visiting the
+  // pipeline directly doesn't force that scope, it just reflects whatever
+  // it already was.
+  const isNetwork = isNetworkRole(profile.role);
+  const [{ data: switcherClubs }, viewMode] = await Promise.all([
+    isNetwork ? supabase.from("partners").select("id, name").order("name") : Promise.resolve({ data: [] }),
+    getViewMode(profile),
+  ]);
 
   return (
     <AppShell
       profile={profile}
       title={<T k="navFranchise" />}
       clubs={switcherClubs ?? []}
-      activeClubId={FRANCHISE_SCOPE_VALUE}
+      activeClubId={null}
+      viewMode={viewMode}
     >
       {error ? (
         <p className="rounded-lg bg-accent/10 px-4 py-3 text-sm text-accent-strong">

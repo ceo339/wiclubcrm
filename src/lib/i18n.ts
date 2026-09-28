@@ -905,6 +905,10 @@ export const DICT: Record<string, Entry> = {
   roleLabelViewer: { ru: "Только просмотр", bg: "Само преглед" },
   cityScopeLabel: { ru: "Город", bg: "Град" },
   cityScopeAll: { ru: "Все города", bg: "Всички градове" },
+  // "кнопки крупнее на главной же выбор показывать клубы или франчайзи"
+  // (round 42) — the other half of the top-level scope toggle, next to
+  // navFranchise (see CityScopeSwitcher).
+  scopeClubs: { ru: "Клубы", bg: "Клубове" },
 
   // ---- Email campaigns ----
   headingEmail: { ru: "Email", bg: "Имейл" },
@@ -1018,6 +1022,21 @@ export const DICT: Record<string, Entry> = {
   statFranchiseConversion: { ru: "Заявка → Активна", bg: "Заявление → Активен" },
   headingFranchiseFunnel: { ru: "Воронка франчайзи за период", bg: "Фуния на франчайза за периода" },
   headingFranchiseSourceBreakdown: { ru: "Откуда приходят кандидатки", bg: "Откъде идват кандидатите" },
+
+  // ---- franchise dashboard weekly widgets (round 42, 28 сен 2026 —
+  // "виджет новых за неделю заявок", "воронку тоже за неделю", "сколько
+  // проведено интервью за неделю и за все время") — a fixed rolling 7 days,
+  // independent of the month/year selector above.
+  statFranchiseWeeklyNew: { ru: "Заявок за неделю", bg: "Заявления тази седмица" },
+  last7Days: { ru: "за последние 7 дней", bg: "през последните 7 дни" },
+  headingFranchiseWeeklyFunnel: { ru: "Воронка за неделю (новые заявки)", bg: "Фуния за седмицата (нови заявления)" },
+  emptyNoNewFranchiseCandidatesWeek: {
+    ru: "Нет новых заявок за последние 7 дней.",
+    bg: "Няма нови заявления през последните 7 дни.",
+  },
+  statFranchiseInterviewsDone: { ru: "Интервью проведено", bg: "Проведени интервюта" },
+  perWeek: { ru: "за неделю", bg: "за седмицата" },
+  statInterviewsAllTime: { ru: "Всего: {n}", bg: "Общо: {n}" },
   colFranchiseCandidates: { ru: "Кандидаток", bg: "Кандидати" },
   colPctActive: { ru: "% стали «Активна»", bg: "% станали «Активен»" },
   headingStaleFranchiseCandidates: { ru: "Кандидатки без движения", bg: "Кандидати без движение" },

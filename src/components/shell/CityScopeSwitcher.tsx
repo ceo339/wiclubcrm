@@ -1,77 +1,83 @@
 "use client";
 
-import Link from "next/link";
-import { usePathname } from "next/navigation";
 import { useT } from "@/components/i18n/LocaleProvider";
-import { VIEW_SCOPE_COOKIE } from "@/lib/role";
+import { VIEW_MODE_COOKIE, VIEW_SCOPE_COOKIE } from "@/lib/role";
+
+export type ViewMode = "franchise" | "clubs";
 
 /**
- * "Можно ли в главном кабинете сделать на главной переключение по городам
- * + смотреть все города, чтоб видеть во всех вкладках данные по города
- * партнеров?" (Anastasiia, 15 сен 2026) — Round 18. Shown only to hq/viewer
- * accounts (see AppShell), narrows every tab — Главная, Лиды, Участницы,
- * Оплаты, Контакты, Курсы, Посещаемость — down to one club at a time.
+ * Round 18 (15 сен 2026): "Можно ли в главном кабинете сделать на главной
+ * переключение по городам + смотреть все города". Round 40 (28 сен 2026)
+ * briefly folded "Франчайзи" into the same city dropdown, alongside a
+ * `?scope=franchise` query param on Главная — that reproducibly failed in
+ * production (address bar updated, page never did), so it became a
+ * separate `<Link>` button to /franchise instead, with the franchise
+ * dashboard itself moved to live there as its own tab.
  *
- * The chosen club is just a display preference, not a security boundary
- * (RLS already decides what this account may see), so it's a plain cookie
- * set directly from the browser — no server round trip needed to change
- * it, just a refresh so every Server Component re-reads the new value.
+ * Round 42 (28 сен 2026): "кнопки крупнее... же выбор показывать клубы или
+ * франчайзи... по умолчанию главная это франчайзи... если выбрана
+ * франчайзи то на главной... лидов, участниц, курсов, посещаемости, оплат,
+ * когортного анализа, имейлов НЕТ... все появляется только когда
+ * выбираются города". This is now a genuine top-level scope switch, not a
+ * link to a page: a plain cookie (VIEW_MODE_COOKIE) read server-side by
+ * every page that renders AppShell, deciding both what Главная shows (see
+ * src/app/page.tsx) and which nav items even appear (see AppShell's
+ * navItemsForProfile — a page you can't see in the nav can still be
+ * reached by URL, there's just nothing pointing you to it). The
+ * franchise-candidate PIPELINE (kanban) still lives at its own /franchise
+ * route, reached via its own nav item — this toggle is only about Главная
+ * and the rest of the club-scoped nav.
  *
- * Round 40 (28 сен 2026) briefly folded "Франчайзи" into this same
- * dropdown as an extra option, alongside a `?scope=franchise` query param
- * on Главная to render a franchise dashboard in place. That combination
- * reproducibly failed in production — picking it updated the address bar
- * but never the page, in a private window, on a fresh full navigation,
- * even after ruling out every caching layer we could reach. Rather than
- * keep chasing an unexplained bug in that one specific code path,
- * Anastasiia asked for the simpler shape directly ("франчайзи отдельная
- * кнопка и по городам выпадающий список"): a plain `<Link>` to the
- * already-solid /franchise route (unchanged since round 38) instead of a
- * query param on "/", and a city `<select>` that only ever deals with
- * actual clubs. The franchise dashboard itself now lives at /franchise as
- * its own tab (see FranchiseBoard.tsx) instead of trying to appear on
- * Главная.
+ * The city dropdown only makes sense once "Клубы" is picked — a franchise
+ * candidate isn't scoped to any one city — so it's hidden entirely under
+ * "Франчайзи". Both controls just set a cookie and reload, same
+ * plain-cookie-plus-full-reload approach as the original round 18
+ * switcher (no client-side router involved, after round 40's saga of a
+ * same-route query-param update silently not re-rendering in production).
  */
-export const FRANCHISE_SCOPE_VALUE = "franchise";
-
 export default function CityScopeSwitcher({
   clubs,
   activeClubId,
+  viewMode,
 }: {
   clubs: { id: string; name: string }[];
   activeClubId: string | null;
+  viewMode: ViewMode;
 }) {
-  const pathname = usePathname();
   const t = useT();
-  const onFranchise = activeClubId === FRANCHISE_SCOPE_VALUE;
+
+  function handleModeChange(mode: ViewMode) {
+    if (mode === viewMode) return;
+    document.cookie = `${VIEW_MODE_COOKIE}=${mode}; path=/; max-age=31536000; samesite=lax`;
+    window.location.reload();
+  }
 
   function handleCityChange(value: string) {
     document.cookie = `${VIEW_SCOPE_COOKIE}=${value}; path=/; max-age=31536000; samesite=lax`;
-    if (pathname === "/franchise") {
-      // Coming from the franchise route, picking a real club/"Все города"
-      // means going back to Главная with that club now selected — staying
-      // on /franchise wouldn't reflect the choice at all.
-      window.location.href = "/";
-    } else {
-      window.location.reload();
-    }
+    window.location.reload();
   }
 
   return (
-    <div className="flex items-center gap-2">
-      <Link
-        href="/franchise"
-        className={`rounded-lg border px-3 py-1.5 text-sm font-medium transition-colors ${
-          onFranchise
-            ? "border-foreground bg-foreground text-background"
-            : "border-border bg-background text-ink-2 hover:bg-surface-2"
-        }`}
-      >
-        {t("navFranchise")}
-      </Link>
-      {clubs.length > 0 && (
+    <div className="flex flex-wrap items-center gap-2">
+      <div className="inline-flex items-center gap-1 rounded-xl border border-border-strong bg-surface-2 p-1">
+        {(["franchise", "clubs"] as const).map((mode) => (
+          <button
+            key={mode}
+            type="button"
+            onClick={() => handleModeChange(mode)}
+            className={`rounded-lg px-4 py-2 text-sm font-semibold transition-colors ${
+              viewMode === mode
+                ? "bg-foreground text-background shadow-card"
+                : "text-ink-2 hover:bg-surface-3"
+            }`}
+          >
+            {mode === "franchise" ? t("navFranchise") : t("scopeClubs")}
+          </button>
+        ))}
+      </div>
+      {viewMode === "clubs" && clubs.length > 0 && (
         <select
-          value={onFranchise ? "all" : activeClubId ?? "all"}
+          value={activeClubId ?? "all"}
           onChange={(e) => handleCityChange(e.target.value)}
           aria-label={t("cityScopeLabel")}
           className="rounded-lg border border-border bg-background px-2 py-1.5 text-sm text-ink-2 hover:bg-surface-2"

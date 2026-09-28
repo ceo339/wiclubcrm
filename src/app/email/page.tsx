@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { getCurrentProfile } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
+import { getViewMode } from "@/lib/viewScope";
 import { localeScopeForProfile } from "@/lib/i18n";
 import LocaleSwitcher from "@/components/i18n/LocaleSwitcher";
 import LocaleScope from "@/components/i18n/LocaleScope";
@@ -32,11 +33,13 @@ export default async function EmailPage() {
   }
 
   const localeScope = localeScopeForProfile(profile);
+  const viewMode = await getViewMode(profile);
 
   return (
     <AppShell
       profile={profile}
       title={<T k="headingEmail" />}
+      viewMode={viewMode}
       headerExtra={
         <>
           <LocaleScope scope={localeScope.scope} fallback={localeScope.fallback} />

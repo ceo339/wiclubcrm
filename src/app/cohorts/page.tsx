@@ -3,7 +3,7 @@ import { getCurrentProfile } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { scopeForProfile } from "@/lib/currency";
 import { localeScopeForProfile } from "@/lib/i18n";
-import { isNetworkRole, getViewScopePartnerId } from "@/lib/viewScope";
+import { isNetworkRole, getViewScopePartnerId, getViewMode } from "@/lib/viewScope";
 import type { CohortContactInput, CohortPaymentInput } from "@/lib/cohorts";
 import CurrencySwitcher from "@/components/currency/CurrencySwitcher";
 import CurrencyScope from "@/components/currency/CurrencyScope";
@@ -36,6 +36,7 @@ export default async function CohortsPage() {
   const supabase = await createClient();
   const networkView = isNetworkRole(profile.role);
   const scopePartnerId = await getViewScopePartnerId(profile);
+  const viewMode = await getViewMode(profile);
 
   let contactsQuery = supabase
     .from("contacts")
@@ -120,6 +121,7 @@ export default async function CohortsPage() {
       title={<T k="navCohorts" />}
       clubs={clubs ?? []}
       activeClubId={scopePartnerId}
+      viewMode={viewMode}
       headerExtra={
         <>
           <CurrencyScope scope={scope} fallback={fallback} />

@@ -8,7 +8,7 @@ import { isNetworkRole } from "@/lib/role";
 import T from "@/components/i18n/T";
 import { useT } from "@/components/i18n/LocaleProvider";
 import { signOut } from "@/app/login/actions";
-import CityScopeSwitcher from "./CityScopeSwitcher";
+import CityScopeSwitcher, { type ViewMode } from "./CityScopeSwitcher";
 import {
   IconHome,
   IconFunnel,
@@ -41,7 +41,7 @@ type NavItem = {
   matchPrefix?: boolean;
 };
 
-function navItemsForProfile(profile: Profile): NavItem[] {
+function navItemsForProfile(profile: Profile, viewMode: ViewMode): NavItem[] {
   // Главная now covers what used to be a separate "Сводка"/"Моя сводка"
   // nav entry — HQ's network dashboard and a partner's own club dashboard
   // both render on "/" itself (see src/app/page.tsx), so there's nothing
@@ -55,16 +55,26 @@ function navItemsForProfile(profile: Profile): NavItem[] {
   // these club-scoped tabs would just be a wall of dead-end pages until
   // the Франчайзи section itself exists. Skip straight to Главная.
   if (profile.role !== "franchise") {
-    items.push(
-      { href: "/contacts", labelKey: "navContacts", icon: <IconContact /> },
-      { href: "/leads", labelKey: "navLeads", icon: <IconFunnel /> },
-      { href: "/members", labelKey: "navMembers", icon: <IconUsers /> },
-      { href: "/attendance", labelKey: "navAttendance", icon: <IconCalendar />, matchPrefix: true },
-      { href: "/products", labelKey: "navCourses", icon: <IconBook /> },
-      { href: "/payments", labelKey: "navPayments", icon: <IconWallet /> },
-      { href: "/cohorts", labelKey: "navCohorts", icon: <IconChart /> },
-      { href: "/email", labelKey: "navEmail", icon: <IconMail /> }
-    );
+    items.push({ href: "/contacts", labelKey: "navContacts", icon: <IconContact /> });
+
+    // Round 42 (28 сен 2026): "если выбрана франчайзи, то на главной...
+    // лидов, участниц, курсов, посещаемости, оплат, когортного анализа,
+    // имейлов НЕТ. Все появляется только когда выбираются города." — an
+    // hq/viewer account that's toggled to "Франчайзи" (the default) has no
+    // use for any of these club-scoped tabs until it switches to "Клубы"
+    // (see CityScopeSwitcher). Контакты stays put — it already has its own
+    // Клиенты/Франчайзи tab inside (round 40), so it's relevant either way.
+    if (viewMode !== "franchise") {
+      items.push(
+        { href: "/leads", labelKey: "navLeads", icon: <IconFunnel /> },
+        { href: "/members", labelKey: "navMembers", icon: <IconUsers /> },
+        { href: "/attendance", labelKey: "navAttendance", icon: <IconCalendar />, matchPrefix: true },
+        { href: "/products", labelKey: "navCourses", icon: <IconBook /> },
+        { href: "/payments", labelKey: "navPayments", icon: <IconWallet /> },
+        { href: "/cohorts", labelKey: "navCohorts", icon: <IconChart /> },
+        { href: "/email", labelKey: "navEmail", icon: <IconMail /> }
+      );
+    }
   }
 
   if (profile.role === "hq") {
@@ -126,6 +136,7 @@ export default function AppShell({
   headerExtra,
   clubs,
   activeClubId,
+  viewMode = "clubs",
   children,
 }: {
   profile: Profile;
@@ -145,11 +156,17 @@ export default function AppShell({
    * nothing extra here. */
   clubs?: { id: string; name: string }[];
   activeClubId?: string | null;
+  /** Round 42 top-level "Франчайзи"/"Клубы" scope (see getViewMode in
+   * src/lib/viewScope.ts) — decides which nav items even appear below.
+   * Defaults to "clubs" for the handful of pages that don't bother passing
+   * it (ones only ever reachable while already in that scope), so nothing
+   * has to opt in just to keep its current nav. */
+  viewMode?: ViewMode;
   children: ReactNode;
 }) {
   const pathname = usePathname();
   const t = useT();
-  const items = navItemsForProfile(profile);
+  const items = navItemsForProfile(profile, viewMode);
   const roleLabelKey = ROLE_LABEL_KEYS[profile.role];
   // Round 19 mobile pass ("Нужно сделать оптимизацию под мобильный
   // телефон", Anastasiia, 15 сен 2026) — the sidebar used to be a fixed
@@ -286,7 +303,7 @@ export default function AppShell({
           </div>
           <div className="flex flex-wrap items-center gap-2">
             {isNetworkRole(profile.role) && clubs && clubs.length > 0 && (
-              <CityScopeSwitcher clubs={clubs} activeClubId={activeClubId ?? null} />
+              <CityScopeSwitcher clubs={clubs} activeClubId={activeClubId ?? null} viewMode={viewMode} />
             )}
             {headerExtra}
           </div>
