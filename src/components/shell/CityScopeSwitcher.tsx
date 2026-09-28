@@ -1,6 +1,6 @@
 "use client";
 
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
 import { useT } from "@/components/i18n/LocaleProvider";
 import { VIEW_SCOPE_COOKIE } from "@/lib/role";
 
@@ -37,6 +37,20 @@ import { VIEW_SCOPE_COOKIE } from "@/lib/role";
  * every club-scoped page's own query (getViewScopePartnerId), so writing
  * "franchise" into it would silently break Лиды/Участницы/Оплаты/Контакты
  * the moment you left Главная with it still set.
+ *
+ * Round 40 bugfix (28 сен 2026 — Anastasiia: "я переключаю, но ничего не
+ * происходит", then confirmed the URL bar did gain `?scope=franchise`
+ * while the dashboard on screen stayed the club one): a same-route,
+ * query-only `router.push()` fired from outside a `<Link>` is the one
+ * navigation shape nothing else in this app had ever done before this
+ * switcher — every other `router.push` call here either goes to a
+ * different route (`/franchise`) or is a plain `router.refresh()`. That
+ * turned out to be the one case that silently failed to re-render in
+ * production even though it did update the address bar. Switching to a
+ * full `window.location` navigation sidesteps the client router
+ * entirely, so the server always re-runs page.tsx with the new
+ * searchParams — a little less "instant" than a soft transition, but this
+ * toggle is flipped rarely enough that correctness matters more here.
  */
 export const FRANCHISE_SCOPE_VALUE = "franchise";
 
@@ -47,24 +61,22 @@ export default function CityScopeSwitcher({
   clubs: { id: string; name: string }[];
   activeClubId: string | null;
 }) {
-  const router = useRouter();
   const pathname = usePathname();
   const t = useT();
   const onHome = pathname === "/";
 
   function handleChange(value: string) {
     if (value === FRANCHISE_SCOPE_VALUE) {
-      router.push(onHome ? "/?scope=franchise" : "/franchise");
+      window.location.href = onHome ? "/?scope=franchise" : "/franchise";
       return;
     }
     document.cookie = `${VIEW_SCOPE_COOKIE}=${value}; path=/; max-age=31536000; samesite=lax`;
     // On Главная, picking an actual club/"Все города" while a leftover
     // ?scope=franchise is still in the URL must drop it — otherwise the
     // page would keep showing the franchise dashboard no matter which club
-    // the cookie now points to. A plain refresh() can't do that (same
-    // URL); push() to the bare path can.
-    if (onHome) router.push("/");
-    else router.refresh();
+    // the cookie now points to. A full navigation to the bare path clears it.
+    if (onHome) window.location.href = "/";
+    else window.location.reload();
   }
 
   if (clubs.length === 0) return null;
