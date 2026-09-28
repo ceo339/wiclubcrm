@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useState } from "react";
 import { monthLabel, periodLabel, type Period } from "@/lib/dashboard";
 import {
@@ -21,11 +20,21 @@ import Sparkline from "@/components/dashboard/Sparkline";
  * franchise_candidates instead of leads/members/payments. No revenue/
  * royalty tiles here — a franchise candidate isn't a payment, so those
  * club-only numbers have no honest equivalent to show.
+ *
+ * Round 40 follow-up: this originally lived on Главная behind a
+ * `?scope=franchise` query param, driven by `<Link>`s for the month/year
+ * switcher. That query param reproducibly failed to render in production
+ * for reasons that resisted every fix tried (force-dynamic, ruling out
+ * every cache layer) — Anastasiia asked for a simpler shape instead, so
+ * this panel now lives as an "Аналитика" tab on /franchise itself (see
+ * FranchiseBoard.tsx) and the period switcher below is driven by a plain
+ * callback into the parent's own React state, not a URL at all.
  */
 export default function FranchiseDashboard({
   period,
   monthOptions,
   yearOptions,
+  onSelectPeriod,
   submittedCount,
   qualifiedCount,
   activeCount,
@@ -38,6 +47,7 @@ export default function FranchiseDashboard({
   period: Period;
   monthOptions: string[];
   yearOptions: string[];
+  onSelectPeriod: (period: Period) => void;
   submittedCount: number;
   qualifiedCount: number;
   activeCount: number;
@@ -75,9 +85,10 @@ export default function FranchiseDashboard({
             const isActive =
               tab === "month" ? period.mode === "month" && period.month === key : period.mode === "year" && period.year === key;
             return (
-              <Link
+              <button
                 key={key}
-                href={tab === "month" ? `/?scope=franchise&month=${key}` : `/?scope=franchise&year=${key}`}
+                type="button"
+                onClick={() => onSelectPeriod(tab === "month" ? { mode: "month", month: key } : { mode: "year", year: key })}
                 className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
                   isActive
                     ? "border-foreground bg-foreground text-background"
@@ -85,7 +96,7 @@ export default function FranchiseDashboard({
                 }`}
               >
                 {tab === "month" ? monthLabel(key, locale) : key}
-              </Link>
+              </button>
             );
           })}
         </div>
@@ -226,11 +237,6 @@ export default function FranchiseDashboard({
             </table>
           </div>
         )}
-        <div className="border-t border-border px-5 py-3">
-          <Link href="/franchise" className="text-sm text-muted hover:text-ink-2 hover:underline">
-            {t("linkViewAllFranchise")} →
-          </Link>
-        </div>
       </div>
     </div>
   );

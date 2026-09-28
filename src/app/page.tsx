@@ -30,29 +30,6 @@ import DashboardBoard from "@/components/dashboard/DashboardBoard";
 import type { ClubRow } from "@/components/dashboard/DashboardBoard";
 import T from "@/components/i18n/T";
 import AppShell from "@/components/shell/AppShell";
-import { FRANCHISE_SCOPE_VALUE } from "@/components/shell/CityScopeSwitcher";
-import FranchiseDashboard from "@/components/franchise/FranchiseDashboard";
-import {
-  computeFranchiseFunnel,
-  computeFranchiseSourceBreakdown,
-  findStaleFranchiseCandidates,
-  franchiseConversionRate,
-  franchiseMonthsWithActivity,
-  franchiseYearsWithActivity,
-  monthlyFranchiseSubmissions,
-} from "@/lib/franchiseDashboard";
-import { QUALIFYING_STAGES } from "@/lib/franchise";
-
-// Round 40 bugfix (28 сен 2026): Anastasiia's scope=franchise switch was
-// reproducibly serving the club/network dashboard instead, even from a
-// fresh full-page navigation in a private window — the one explanation
-// left standing once a client-side cache was ruled out is that Vercel's
-// edge was treating this route as cacheable and serving an old render
-// regardless of the query string. cookies() usage already makes this
-// dynamic in principle, but forcing it explicitly removes any ambiguity
-// for Vercel's automatic static/dynamic detection to get wrong.
-export const dynamic = "force-dynamic";
-export const revalidate = 0;
 
 const ROLE_LABEL_KEYS: Record<string, string> = {
   partner: "roleLabelPartner",
@@ -76,7 +53,7 @@ const ROLE_LABEL_KEYS: Record<string, string> = {
 export default async function Home({
   searchParams,
 }: {
-  searchParams: Promise<{ month?: string; year?: string; from?: string; to?: string; scope?: string }>;
+  searchParams: Promise<{ month?: string; year?: string; from?: string; to?: string }>;
 }) {
   const profile = await getCurrentProfile();
   if (!profile) redirect("/login");
@@ -147,57 +124,6 @@ export default async function Home({
       canEdit={!!profile.partner_id}
     />
   );
-
-  // ---------------------------------------------------------------------
-  // "Главную сделать с той же аналитикой, что и для клубов и так же выбор
-  // показывать клубы или франчайзи" (Anastasiia, 28 сен 2026) — an hq/
-  // viewer account picking "Франчайзи" in the header switcher while on
-  // Главная (see CityScopeSwitcher's onHome branch) lands here via
-  // ?scope=franchise, ahead of the club-scoped branches below since this
-  // has nothing to do with scopePartnerId/the club cookie at all — same
-  // "network-wide, not per-club" reasoning as /franchise itself.
-  if (networkView && params.scope === FRANCHISE_SCOPE_VALUE) {
-    const [{ data: candidates }, { data: qualifyingHistory }] = await Promise.all([
-      supabase.from("franchise_candidates").select("id, name, stage, source, submitted_at, updated_at"),
-      supabase.from("franchise_stage_history").select("candidate_id").in("stage", QUALIFYING_STAGES),
-    ]);
-    const allCandidates = candidates ?? [];
-    const qualifiedIds = new Set([
-      ...(qualifyingHistory ?? []).map((r) => r.candidate_id),
-      ...allCandidates.filter((c) => QUALIFYING_STAGES.includes(c.stage as (typeof QUALIFYING_STAGES)[number])).map((c) => c.id),
-    ]);
-
-    const period = parsePeriodParams(params);
-    const inPeriodCandidates = allCandidates.filter((c) => inPeriod(period, c.submitted_at));
-
-    return (
-      <AppShell
-        profile={profile}
-        title={<T k="headingHome" />}
-        subtitle={
-          <>
-            {profile.partner_name ?? <T k="noClubAttached" />} · {roleLabelKey ? <T k={roleLabelKey} /> : profile.role}
-          </>
-        }
-        clubs={switcherClubs ?? []}
-        activeClubId={FRANCHISE_SCOPE_VALUE}
-      >
-        <FranchiseDashboard
-          period={period}
-          monthOptions={franchiseMonthsWithActivity(allCandidates)}
-          yearOptions={franchiseYearsWithActivity(allCandidates)}
-          submittedCount={inPeriodCandidates.length}
-          qualifiedCount={qualifiedIds.size}
-          activeCount={allCandidates.filter((c) => c.stage === "active").length}
-          conversion={franchiseConversionRate(allCandidates)}
-          submissionTrend={monthlyFranchiseSubmissions(allCandidates)}
-          funnel={computeFranchiseFunnel(allCandidates)}
-          sourceBreakdown={computeFranchiseSourceBreakdown(inPeriodCandidates)}
-          staleCandidates={findStaleFranchiseCandidates(allCandidates)}
-        />
-      </AppShell>
-    );
-  }
 
   // ---------------------------------------------------------------------
   // HQ/viewer with no single city picked: network-wide dashboard (same

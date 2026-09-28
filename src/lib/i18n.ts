@@ -1003,6 +1003,8 @@ export const DICT: Record<string, Entry> = {
   // потом получили «Отказ»/«Пауза».
   fTabAll: { ru: "Все", bg: "Всички" },
   fTabQualified: { ru: "Квалифицированные", bg: "Квалифицирани" },
+  fTabKanban: { ru: "Канбан", bg: "Канбан" },
+  fTabAnalytics: { ru: "Аналитика", bg: "Анализи" },
 
   // "В контактах так же сделать выбор франчайзи" (round 40)
   contactsTabClients: { ru: "Клиенты", bg: "Клиенти" },
