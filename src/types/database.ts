@@ -277,6 +277,8 @@ export type Database = {
         Row: {
           birth_date: string | null
           budget: string | null
+          calendly_event_uri: string | null
+          calendly_invitee_uri: string | null
           content_description: string | null
           country: string | null
           created_at: string
@@ -303,11 +305,14 @@ export type Database = {
           train_or_hire: string | null
           updated_at: string
           why_city: string | null
+          zoom_meeting_id: string | null
           zoom_recording_url: string | null
         }
         Insert: {
           birth_date?: string | null
           budget?: string | null
+          calendly_event_uri?: string | null
+          calendly_invitee_uri?: string | null
           content_description?: string | null
           country?: string | null
           created_at?: string
@@ -334,11 +339,14 @@ export type Database = {
           train_or_hire?: string | null
           updated_at?: string
           why_city?: string | null
+          zoom_meeting_id?: string | null
           zoom_recording_url?: string | null
         }
         Update: {
           birth_date?: string | null
           budget?: string | null
+          calendly_event_uri?: string | null
+          calendly_invitee_uri?: string | null
           content_description?: string | null
           country?: string | null
           created_at?: string
@@ -365,7 +373,41 @@ export type Database = {
           train_or_hire?: string | null
           updated_at?: string
           why_city?: string | null
+          zoom_meeting_id?: string | null
           zoom_recording_url?: string | null
+        }
+        Relationships: []
+      }
+      integration_events: {
+        Row: {
+          candidate_id: string | null
+          created_at: string
+          detail: string | null
+          event_type: string
+          id: string
+          payload: Json | null
+          source: string
+          status: string
+        }
+        Insert: {
+          candidate_id?: string | null
+          created_at?: string
+          detail?: string | null
+          event_type: string
+          id?: string
+          payload?: Json | null
+          source: string
+          status: string
+        }
+        Update: {
+          candidate_id?: string | null
+          created_at?: string
+          detail?: string | null
+          event_type?: string
+          id?: string
+          payload?: Json | null
+          source?: string
+          status?: string
         }
         Relationships: []
       }
