@@ -43,6 +43,17 @@ import {
 } from "@/lib/franchiseDashboard";
 import { QUALIFYING_STAGES } from "@/lib/franchise";
 
+// Round 40 bugfix (28 сен 2026): Anastasiia's scope=franchise switch was
+// reproducibly serving the club/network dashboard instead, even from a
+// fresh full-page navigation in a private window — the one explanation
+// left standing once a client-side cache was ruled out is that Vercel's
+// edge was treating this route as cacheable and serving an old render
+// regardless of the query string. cookies() usage already makes this
+// dynamic in principle, but forcing it explicitly removes any ambiguity
+// for Vercel's automatic static/dynamic detection to get wrong.
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 const ROLE_LABEL_KEYS: Record<string, string> = {
   partner: "roleLabelPartner",
   staff: "roleLabelStaff",
