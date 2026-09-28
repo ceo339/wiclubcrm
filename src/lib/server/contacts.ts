@@ -21,6 +21,10 @@ export type ContactPerson = {
   city?: string | null;
   birthday?: string | null;
   country?: string | null;
+  /** "мессенджер" (round 40, 28 сен 2026) — free-text, e.g. "WhatsApp
+   * +34...", "Telegram @nick". Mirrored onto contacts the same way as
+   * phone/email/city/birthday. */
+  messenger?: string | null;
   /**
    * First-touch attribution (round 27, 16 сен 2026 — "Да! Давай так как ты
    * предложила. По первому касанию считать"), for the "Когорты" report.
@@ -74,6 +78,7 @@ export async function findOrCreateContact(
       city: person.city ?? null,
       birthday: person.birthday ?? null,
       country: person.country ?? null,
+      messenger: person.messenger ?? null,
       first_source: person.source ?? null,
       first_utm_source: person.utmSource ?? null,
       first_utm_medium: person.utmMedium ?? null,

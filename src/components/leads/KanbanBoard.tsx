@@ -180,6 +180,15 @@ export default function KanbanBoard({
                           </span>
                         )}
                         {showPartner && lead.partner_name && <span className="truncate">{lead.partner_name}</span>}
+                        {/* "В лиде нужно, чтоб было видно город и страна в
+                            кан бане" (Anastasiia, 28 сен 2026) — leads
+                            already carry city/country (round 19), just
+                            never surfaced on the card itself. */}
+                        {(lead.city || lead.country) && (
+                          <span className="truncate">
+                            {[lead.city, lead.country].filter(Boolean).join(", ")}
+                          </span>
+                        )}
                       </div>
                       {/* "добавить под источником комментарии (если они
                           есть)" (Anastasiia, 14 сен 2026) — just the latest

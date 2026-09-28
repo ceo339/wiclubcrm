@@ -182,6 +182,7 @@ export default function NewLeadModal({
           </label>
 
           <Field label={t("fieldBirthday")} name="birthday" type="date" />
+          <Field label={t("fieldMessenger")} name="messenger" />
 
           {products.length > 0 && (
             <label className="flex flex-col gap-1.5 text-sm">

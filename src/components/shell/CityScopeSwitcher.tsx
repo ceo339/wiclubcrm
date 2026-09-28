@@ -1,6 +1,6 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useT } from "@/components/i18n/LocaleProvider";
 import { VIEW_SCOPE_COOKIE } from "@/lib/role";
 
@@ -25,6 +25,18 @@ import { VIEW_SCOPE_COOKIE } from "@/lib/role";
  * renders this same switcher (see its page.tsx) with FRANCHISE_SCOPE_VALUE
  * passed as activeClubId, so the dropdown correctly shows "Франчайзи"
  * selected while you're actually there.
+ *
+ * Round 40 follow-up (28 сен 2026 — "Главную сделать с той же аналитикой,
+ * что и для клубов и так же выбор показывать клубы или франчайзи"): on the
+ * Главная page specifically, picking "Франчайзи" now stays right there and
+ * renders a franchise dashboard (via a `?scope=franchise` query param, see
+ * app/page.tsx) instead of navigating away to the /franchise kanban — every
+ * OTHER page still just routes to /franchise as before, since none of them
+ * know what a franchise scope would mean. Deliberately a query param, not
+ * the VIEW_SCOPE_COOKIE: that cookie is read as a literal partner_id by
+ * every club-scoped page's own query (getViewScopePartnerId), so writing
+ * "franchise" into it would silently break Лиды/Участницы/Оплаты/Контакты
+ * the moment you left Главная with it still set.
  */
 export const FRANCHISE_SCOPE_VALUE = "franchise";
 
@@ -36,15 +48,23 @@ export default function CityScopeSwitcher({
   activeClubId: string | null;
 }) {
   const router = useRouter();
+  const pathname = usePathname();
   const t = useT();
+  const onHome = pathname === "/";
 
   function handleChange(value: string) {
     if (value === FRANCHISE_SCOPE_VALUE) {
-      router.push("/franchise");
+      router.push(onHome ? "/?scope=franchise" : "/franchise");
       return;
     }
     document.cookie = `${VIEW_SCOPE_COOKIE}=${value}; path=/; max-age=31536000; samesite=lax`;
-    router.refresh();
+    // On Главная, picking an actual club/"Все города" while a leftover
+    // ?scope=franchise is still in the URL must drop it — otherwise the
+    // page would keep showing the franchise dashboard no matter which club
+    // the cookie now points to. A plain refresh() can't do that (same
+    // URL); push() to the bare path can.
+    if (onHome) router.push("/");
+    else router.refresh();
   }
 
   if (clubs.length === 0) return null;

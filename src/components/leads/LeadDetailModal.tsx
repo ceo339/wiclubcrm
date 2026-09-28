@@ -297,6 +297,7 @@ function ReadView({
         <Row label={t("fieldEmail")} value={lead.email} />
         <Row label={t("fieldCountry")} value={lead.country} />
         <Row label={t("fieldCity")} value={lead.city} />
+        <Row label={t("fieldMessenger")} value={lead.messenger} />
         <Row label={t("fieldBirthday")} value={lead.birthday} />
         <Row label={t("colAdded")} value={lead.added_date} />
         {lead.value ? (
@@ -974,6 +975,7 @@ function EditForm({
       </label>
 
       <Field label={t("fieldBirthday")} name="birthday" type="date" defaultValue={lead.birthday ?? ""} />
+      <Field label={t("fieldMessenger")} name="messenger" defaultValue={lead.messenger ?? ""} />
       <MoneyAmountField label={t("fieldAmount")} name="value" defaultAmountEur={lead.value ?? 0} />
 
       <label className="flex flex-col gap-1.5 text-sm">

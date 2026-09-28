@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { stageLabel } from "@/lib/leads";
 import { statusLabel } from "@/lib/members";
+import { franchiseStageLabel } from "@/lib/franchise";
 import Avatar from "@/components/ui/Avatar";
 import Money from "@/components/currency/Money";
 import { useLocale } from "@/components/i18n/LocaleProvider";
@@ -10,18 +11,33 @@ import MultiSelectFilter, { type MultiSelectOption } from "@/components/leads/Mu
 import { contactPaidTotal, type Contact } from "./types";
 import ContactDetailModal from "./ContactDetailModal";
 import ImportContactsModal from "./ImportContactsModal";
+import type { FranchiseCandidate } from "@/components/franchise/types";
+import CandidateDetailModal from "@/components/franchise/CandidateDetailModal";
 
 export default function ContactsBoard({
   initialContacts,
   isHq,
   canEdit,
+  franchiseCandidates,
+  canViewFranchise,
+  canEditFranchise,
 }: {
   initialContacts: Contact[];
   isHq: boolean;
   canEdit: boolean;
+  /** "В контактах так же сделать выбор франчайзи, чтоб видеть только
+   * франчайзи потенциальныз" (Anastasiia, 28 сен 2026) — a "Клиенты/
+   * Франчайзи" tab reusing the same page rather than a separate route,
+   * gated the same way /franchise itself is. */
+  franchiseCandidates: FranchiseCandidate[];
+  canViewFranchise: boolean;
+  canEditFranchise: boolean;
 }) {
   const { locale, t } = useLocale();
+  const [tab, setTab] = useState<"clients" | "franchise">("clients");
   const [search, setSearch] = useState("");
+  const [franchiseSearch, setFranchiseSearch] = useState("");
+  const [selectedFranchiseId, setSelectedFranchiseId] = useState<string | null>(null);
   // Round 29 — "сделай как на «Лидах»/«Когортах»" (Anastasiia, 17 сен
   // 2026): она уже спрашивала эти фильтры в раунде 6 (обычные одиночные
   // <select>), но с тех пор источник/кампания на «Лидах» и «Когортах»
@@ -114,8 +130,108 @@ export default function ContactsBoard({
 
   const selected = initialContacts.find((c) => c.id === selectedId) ?? null;
 
+  const filteredFranchise = useMemo(() => {
+    const q = franchiseSearch.trim().toLowerCase();
+    if (!q) return franchiseCandidates;
+    return franchiseCandidates.filter(
+      (c) =>
+        c.name.toLowerCase().includes(q) ||
+        (c.email ?? "").toLowerCase().includes(q) ||
+        (c.phone ?? "").toLowerCase().includes(q) ||
+        (c.target_city ?? "").toLowerCase().includes(q) ||
+        (c.country ?? "").toLowerCase().includes(q)
+    );
+  }, [franchiseCandidates, franchiseSearch]);
+
+  const selectedFranchise = franchiseCandidates.find((c) => c.id === selectedFranchiseId) ?? null;
+
   return (
     <div className="flex flex-1 flex-col gap-4">
+      {canViewFranchise && (
+        <div className="flex rounded-lg border border-border-strong bg-surface-2 p-0.5 text-sm self-start">
+          {(["clients", "franchise"] as const).map((v) => (
+            <button
+              key={v}
+              type="button"
+              onClick={() => setTab(v)}
+              className={`rounded-md px-3 py-1.5 font-medium transition-colors ${
+                tab === v ? "bg-background text-foreground shadow-card" : "text-muted hover:text-ink-2"
+              }`}
+            >
+              {v === "clients" ? t("contactsTabClients") : t("contactsTabFranchise")}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {tab === "franchise" ? (
+        <>
+          <div className="flex flex-wrap items-center gap-2">
+            <input
+              value={franchiseSearch}
+              onChange={(e) => setFranchiseSearch(e.target.value)}
+              placeholder={t("fSearchPlaceholder")}
+              className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-accent focus:ring-1 focus:ring-accent sm:w-64"
+            />
+            <span className="ml-auto text-xs text-muted">
+              {t("countTotalFranchiseCandidates", { count: String(filteredFranchise.length) })}
+            </span>
+          </div>
+
+          {filteredFranchise.length === 0 ? (
+            <p className="rounded-lg border border-dashed border-border p-8 text-center text-sm text-muted">
+              {t("emptyNoContacts")}
+            </p>
+          ) : (
+            <div className="overflow-x-auto rounded-xl border border-border bg-background shadow-card">
+              <table className="w-full min-w-[720px] text-left text-sm">
+                <thead className="border-b border-border text-xs uppercase tracking-wide text-muted">
+                  <tr>
+                    <th className="w-10 px-4 py-3 text-right font-medium">№</th>
+                    <th className="px-4 py-3 font-medium">{t("colName")}</th>
+                    <th className="px-4 py-3 font-medium">{t("fieldCity")}</th>
+                    <th className="px-4 py-3 font-medium">{t("colStage")}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredFranchise.map((c, index) => (
+                    <tr
+                      key={c.id}
+                      onClick={() => setSelectedFranchiseId(c.id)}
+                      className="cursor-pointer border-b border-border last:border-0 hover:bg-surface-2"
+                    >
+                      <td className="px-4 py-3 text-right text-muted">{index + 1}</td>
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-3">
+                          <Avatar name={c.name} />
+                          <div className="min-w-0">
+                            <div className="truncate font-medium text-foreground">{c.name}</div>
+                            <div className="truncate text-xs text-muted">{c.phone || c.email || "—"}</div>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-4 py-3 text-ink-2">
+                        {[c.target_city, c.country].filter(Boolean).join(", ") || "—"}
+                      </td>
+                      <td className="px-4 py-3 text-ink-2">{franchiseStageLabel(c.stage, locale)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {selectedFranchise && (
+            <CandidateDetailModal
+              key={selectedFranchise.id}
+              candidate={selectedFranchise}
+              canEdit={canEditFranchise}
+              onClose={() => setSelectedFranchiseId(null)}
+            />
+          )}
+        </>
+      ) : (
+        <>
       <div className="flex flex-wrap items-center gap-2">
         <input
           value={search}
@@ -253,6 +369,8 @@ export default function ContactsBoard({
       )}
 
       {showImport && <ImportContactsModal onClose={() => setShowImport(false)} />}
+        </>
+      )}
     </div>
   );
 }

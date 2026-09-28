@@ -17,18 +17,32 @@ import CandidateDetailModal from "./CandidateDetailModal";
 export default function FranchiseBoard({
   initialCandidates,
   canEdit,
+  qualifiedIds,
 }: {
   initialCandidates: FranchiseCandidate[];
   canEdit: boolean;
+  /** ids of candidates who ever reached "Фин. модель отправлена" or later
+   * (round 40) — see franchise/page.tsx for how this is computed. */
+  qualifiedIds: string[];
 }) {
   const { t } = useLocale();
   const [search, setSearch] = useState("");
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  // "сделать отдельно модуль «квалифицированные»" (Anastasiia, 28 сен
+  // 2026) — a tab alongside "Все" rather than a whole separate page, so it
+  // shares the same board/search/detail-modal plumbing already here.
+  const [view, setView] = useState<"all" | "qualified">("all");
+  const qualifiedIdSet = useMemo(() => new Set(qualifiedIds), [qualifiedIds]);
+
+  const byView = useMemo(
+    () => (view === "qualified" ? initialCandidates.filter((c) => qualifiedIdSet.has(c.id)) : initialCandidates),
+    [initialCandidates, view, qualifiedIdSet]
+  );
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
-    if (!q) return initialCandidates;
-    return initialCandidates.filter((c) => {
+    if (!q) return byView;
+    return byView.filter((c) => {
       return (
         c.name.toLowerCase().includes(q) ||
         (c.email ?? "").toLowerCase().includes(q) ||
@@ -37,13 +51,27 @@ export default function FranchiseBoard({
         (c.country ?? "").toLowerCase().includes(q)
       );
     });
-  }, [initialCandidates, search]);
+  }, [byView, search]);
 
   const selected = initialCandidates.find((c) => c.id === selectedId) ?? null;
 
   return (
     <div className="flex flex-1 flex-col gap-4">
       <div className="flex flex-wrap items-center gap-2">
+        <div className="flex rounded-lg border border-border-strong bg-surface-2 p-0.5 text-sm">
+          {(["all", "qualified"] as const).map((v) => (
+            <button
+              key={v}
+              type="button"
+              onClick={() => setView(v)}
+              className={`rounded-md px-3 py-1.5 font-medium transition-colors ${
+                view === v ? "bg-background text-foreground shadow-card" : "text-muted hover:text-ink-2"
+              }`}
+            >
+              {v === "all" ? t("fTabAll") : t("fTabQualified")}
+            </button>
+          ))}
+        </div>
         <input
           value={search}
           onChange={(e) => setSearch(e.target.value)}
@@ -51,9 +79,10 @@ export default function FranchiseBoard({
           className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-accent focus:ring-1 focus:ring-accent sm:w-64"
         />
         <span className="ml-auto text-xs text-muted">
-          {t("fCandidatesCount", { count: initialCandidates.length })}
+          {t("fCandidatesCount", { count: byView.length })}
         </span>
       </div>
+      {view === "qualified" && <p className="text-xs text-muted">{t("fQualifiedHint")}</p>}
 
       <KanbanBoard candidates={filtered} canEdit={canEdit} onSelect={setSelectedId} />
 

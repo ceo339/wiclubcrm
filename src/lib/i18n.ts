@@ -496,6 +496,7 @@ export const DICT: Record<string, Entry> = {
   fieldPhone: { ru: "Телефон", bg: "Телефон" },
   fieldCountry: { ru: "Страна", bg: "Държава" },
   fieldCity: { ru: "Город", bg: "Град" },
+  fieldMessenger: { ru: "Мессенджер", bg: "Месинджър" },
   fieldBirthday: { ru: "Дата рождения", bg: "Дата на раждане" },
   fieldInterestedIn: { ru: "Интересует", bg: "Интересува се от" },
   fieldCohortStart: { ru: "Начало потока", bg: "Начало на потока" },
@@ -994,6 +995,41 @@ export const DICT: Record<string, Entry> = {
   // ---- franchise (round 38) ----
   fSearchPlaceholder: { ru: "Поиск по имени, телефону, городу…", bg: "Търсене по име, телефон, град…" },
   fCandidatesCount: { ru: "{count} кандидаток", bg: "{count} кандидатки" },
+
+  // "сделать отдельно модуль «квалифицированные» - туда переносить всех, кто
+  // на стадии Фин. модель отправлена или прошел эту стадию" (Anastasiia, 28
+  // сен 2026) — по её решению, "прошёл" считается по истории (когда-либо
+  // достигла стадии), а не по текущей: попавшие сюда остаются, даже если
+  // потом получили «Отказ»/«Пауза».
+  fTabAll: { ru: "Все", bg: "Всички" },
+  fTabQualified: { ru: "Квалифицированные", bg: "Квалифицирани" },
+
+  // "В контактах так же сделать выбор франчайзи" (round 40)
+  contactsTabClients: { ru: "Клиенты", bg: "Клиенти" },
+  contactsTabFranchise: { ru: "Франчайзи", bg: "Франчайзополучатели" },
+  countTotalFranchiseCandidates: { ru: "{count} кандидаток", bg: "{count} кандидатки" },
+
+  // ---- franchise dashboard (round 40, Главная → «Франчайзи») ----
+  statFranchiseSubmitted: { ru: "Заявок франчайзи", bg: "Заявления за франчайз" },
+  statFranchiseQualified: { ru: "Квалифицированных", bg: "Квалифицирани" },
+  statFranchiseActive: { ru: "Активных франшиз", bg: "Активни франчайзи" },
+  statFranchiseConversion: { ru: "Заявка → Активна", bg: "Заявление → Активен" },
+  headingFranchiseFunnel: { ru: "Воронка франчайзи за период", bg: "Фуния на франчайза за периода" },
+  headingFranchiseSourceBreakdown: { ru: "Откуда приходят кандидатки", bg: "Откъде идват кандидатите" },
+  colFranchiseCandidates: { ru: "Кандидаток", bg: "Кандидати" },
+  colPctActive: { ru: "% стали «Активна»", bg: "% станали «Активен»" },
+  headingStaleFranchiseCandidates: { ru: "Кандидатки без движения", bg: "Кандидати без движение" },
+  emptyNoStaleFranchiseCandidates: {
+    ru: "Все кандидатки двигаются по воронке вовремя.",
+    bg: "Всички кандидати се движат навреме по фунията.",
+  },
+  emptyNoFranchiseCandidatesPeriod: { ru: "Нет заявок за этот период.", bg: "Няма заявления за този период." },
+  linkViewAllFranchise: { ru: "Смотреть всех кандидаток", bg: "Виж всички кандидати" },
+  colCandidate: { ru: "Кандидатка", bg: "Кандидат" },
+  fQualifiedHint: {
+    ru: "Кандидатки, когда-либо дошедшие до стадии «Фин. модель отправлена» или дальше — независимо от текущей стадии.",
+    bg: "Кандидатки, достигнали някога етап «Изпратен финансов модел» или по-нататък — независимо от текущия етап.",
+  },
 
   fStageApplication: { ru: "Заявка", bg: "Заявление" },
   fStageInProgress: { ru: "В работе", bg: "В процес" },

@@ -6,6 +6,7 @@ import T from "@/components/i18n/T";
 import FranchiseBoard from "@/components/franchise/FranchiseBoard";
 import AppShell from "@/components/shell/AppShell";
 import { FRANCHISE_SCOPE_VALUE } from "@/components/shell/CityScopeSwitcher";
+import { QUALIFYING_STAGES } from "@/lib/franchise";
 
 /**
  * «Франчайзи» — round 38's franchise-candidate pipeline, deferred out of
@@ -33,6 +34,25 @@ export default async function FranchisePage() {
     .select("*")
     .order("submitted_at", { ascending: false });
 
+  // "Квалифицированные" (round 40) — "туда переносить всех, кто на стадии
+  // Фин. модель отправлена или прошел эту стадию". Her decision when asked
+  // via AskUserQuestion: by HISTORY, not just current stage — someone who
+  // reached "Фин. модель отправлена" and later got "Отказ"/"Пауза" still
+  // counts. Union of two signals: (a) current stage is already
+  // fin_model_sent-or-later, and (b) franchise_stage_history has ever
+  // logged a transition into one of those stages (covers a since-declined/
+  // paused candidate whose current stage no longer shows it).
+  const { data: qualifyingHistory } = await supabase
+    .from("franchise_stage_history")
+    .select("candidate_id")
+    .in("stage", QUALIFYING_STAGES);
+  const qualifiedIds = Array.from(
+    new Set([
+      ...(qualifyingHistory ?? []).map((r) => r.candidate_id),
+      ...(candidates ?? []).filter((c) => QUALIFYING_STAGES.includes(c.stage as (typeof QUALIFYING_STAGES)[number])).map((c) => c.id),
+    ])
+  );
+
   // Round 38 follow-up — an hq/viewer account also gets the club switcher
   // here (same header widget every other network page shows), pre-selected
   // to "Франчайзи" (see CityScopeSwitcher) so it reflects where they
@@ -54,7 +74,7 @@ export default async function FranchisePage() {
           <T k="errLoadFranchiseFailed" />: {error.message}
         </p>
       ) : (
-        <FranchiseBoard initialCandidates={candidates ?? []} canEdit={canEdit} />
+        <FranchiseBoard initialCandidates={candidates ?? []} canEdit={canEdit} qualifiedIds={qualifiedIds} />
       )}
     </AppShell>
   );

@@ -442,6 +442,7 @@ export async function createLead(formData: FormData): Promise<CreateLeadResult> 
   const country = String(formData.get("country") || "").trim() || null;
   const city = String(formData.get("city") || "").trim() || null;
   const birthday = String(formData.get("birthday") || "").trim() || null;
+  const messenger = String(formData.get("messenger") || "").trim() || null;
   let productId = String(formData.get("product_id") || "").trim() || null;
   let cohortStartDate = String(formData.get("cohort_start_date") || "").trim() || null;
   const plan = String(formData.get("plan") || "").trim() || null;
@@ -475,6 +476,7 @@ export async function createLead(formData: FormData): Promise<CreateLeadResult> 
       country,
       city,
       birthday,
+      messenger,
       product_id: productId,
       cohort_start_date: cohortStartDate,
       plan,
@@ -492,6 +494,7 @@ export async function createLead(formData: FormData): Promise<CreateLeadResult> 
     city,
     birthday,
     country,
+    messenger,
     // No utm_* here — the "Добавить лид" form only ever collects the
     // manually-picked source dropdown, never a real campaign; still a
     // genuine (if coarse) first-touch signal for the "Когорты" report.
@@ -891,6 +894,7 @@ export async function updateLead(leadId: string, formData: FormData): Promise<Ac
   const country = String(formData.get("country") || "").trim() || null;
   const city = String(formData.get("city") || "").trim() || null;
   const birthday = String(formData.get("birthday") || "").trim() || null;
+  const messenger = String(formData.get("messenger") || "").trim() || null;
   const note = String(formData.get("note") || "").trim() || null;
   const valueRaw = String(formData.get("value") || "0").replace(",", ".");
   const value = Number.isFinite(Number(valueRaw)) ? Number(valueRaw) : 0;
@@ -928,6 +932,7 @@ export async function updateLead(leadId: string, formData: FormData): Promise<Ac
       country,
       city,
       birthday,
+      messenger,
       note,
       value,
       product_id: productId,
@@ -948,7 +953,10 @@ export async function updateLead(leadId: string, formData: FormData): Promise<Ac
   // the canonical copy of the shared fields.
   await supabase.from("members").update({ name, phone, email, city, birthday }).eq("lead_id", leadId);
   if (updated?.contact_id) {
-    await supabase.from("contacts").update({ name, phone, email, city, birthday, country }).eq("id", updated.contact_id);
+    await supabase
+      .from("contacts")
+      .update({ name, phone, email, city, birthday, country, messenger })
+      .eq("id", updated.contact_id);
   }
 
   // "если уже прописан курс и поток и сумма и стадия оплата - чтоб

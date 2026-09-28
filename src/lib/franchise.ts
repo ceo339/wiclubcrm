@@ -83,3 +83,17 @@ export const franchiseStageLabel = (id: string, locale: Locale) => {
  * so both trigger the same reason prompt instead of silently losing why a
  * candidate was declined/paused. */
 export const FRANCHISE_TERMINAL_STAGES: FranchiseStageId[] = ["declined", "paused"];
+
+/**
+ * "Квалифицированные" (round 40, 28 сен 2026) — "туда переносить всех, кто
+ * на стадии Фин. модель отправлена или прошел эту стадию". Every working
+ * stage from fin_model_sent through active (declined/paused excluded here
+ * on purpose — a candidate who ever REACHED one of these stages still
+ * counts per Anastasiia's decision, but that's checked separately against
+ * franchise_stage_history, since her CURRENT stage may by then say
+ * declined/paused).
+ */
+export const QUALIFYING_STAGES: FranchiseStageId[] = FRANCHISE_STAGES
+  .slice(FRANCHISE_STAGES.findIndex((s) => s.id === "fin_model_sent"))
+  .filter((s) => !s.lost)
+  .map((s) => s.id);

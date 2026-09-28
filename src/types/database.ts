@@ -66,6 +66,7 @@ export type Database = {
           first_utm_source: string | null
           first_utm_term: string | null
           id: string
+          messenger: string | null
           name: string
           partner_id: string
           phone: string | null
@@ -84,6 +85,7 @@ export type Database = {
           first_utm_source?: string | null
           first_utm_term?: string | null
           id?: string
+          messenger?: string | null
           name: string
           partner_id: string
           phone?: string | null
@@ -102,6 +104,7 @@ export type Database = {
           first_utm_source?: string | null
           first_utm_term?: string | null
           id?: string
+          messenger?: string | null
           name?: string
           partner_id?: string
           phone?: string | null
@@ -426,6 +429,7 @@ export type Database = {
           email: string | null
           id: string
           landing_url: string | null
+          messenger: string | null
           name: string
           note: string | null
           partner_id: string
@@ -456,6 +460,7 @@ export type Database = {
           email?: string | null
           id?: string
           landing_url?: string | null
+          messenger?: string | null
           name: string
           note?: string | null
           partner_id: string
@@ -486,6 +491,7 @@ export type Database = {
           email?: string | null
           id?: string
           landing_url?: string | null
+          messenger?: string | null
           name?: string
           note?: string | null
           partner_id?: string

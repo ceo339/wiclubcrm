@@ -45,6 +45,18 @@ export default async function ContactsPage() {
     ? await supabase.from("partners").select("id, name").order("name")
     : { data: [] };
 
+  // "В контактах так же сделать выбор франчайзи, чтоб видеть только
+  // франчайзи потенциальныз" (Anastasiia, 28 сен 2026) — same
+  // role/franchise_access gate as /franchise itself (see that page), so
+  // this tab only ever shows up for someone who could open /franchise
+  // anyway; franchise_candidates has nothing to do with partner_id, so no
+  // scopePartnerId filter applies here the way it does for contacts.
+  const canEditFranchise = profile.role === "hq" || profile.franchise_access === "edit";
+  const canViewFranchise = canEditFranchise || profile.franchise_access === "view";
+  const { data: franchiseCandidates } = canViewFranchise
+    ? await supabase.from("franchise_candidates").select("*").order("submitted_at", { ascending: false })
+    : { data: [] };
+
   const { scope, fallback } = scopeForProfile(profile);
   const localeScope = localeScopeForProfile(profile);
   const canEdit = !!profile.partner_id;
@@ -125,6 +137,9 @@ export default async function ContactsPage() {
           })}
           isHq={networkView && !scopePartnerId}
           canEdit={canEdit}
+          franchiseCandidates={franchiseCandidates ?? []}
+          canViewFranchise={canViewFranchise}
+          canEditFranchise={canEditFranchise}
         />
       )}
     </AppShell>
