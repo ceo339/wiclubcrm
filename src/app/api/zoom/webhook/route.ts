@@ -50,7 +50,7 @@ function withPasscode(shareUrl: string, playPasscode?: string): string {
 }
 
 export async function POST(request: Request) {
-  const secret = process.env.ZOOM_WEBHOOK_SECRET_TOKEN;
+  const secret = process.env.ZOOM_WEBHOOK_SECRET_TOKEN?.trim();
   if (!secret) return NextResponse.json({ error: "ZOOM_WEBHOOK_SECRET_TOKEN is not configured" }, { status: 500 });
 
   const rawBody = await request.text();

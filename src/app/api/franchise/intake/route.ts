@@ -65,7 +65,7 @@ type IntakeBody = {
 };
 
 export async function POST(request: Request) {
-  const secret = process.env.FRANCHISE_INTAKE_SECRET;
+  const secret = process.env.FRANCHISE_INTAKE_SECRET?.trim();
   if (!secret) return NextResponse.json({ error: "FRANCHISE_INTAKE_SECRET is not configured" }, { status: 500 });
   const given = request.headers.get("x-intake-secret") ?? "";
   if (!safeEqual(given, secret)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });

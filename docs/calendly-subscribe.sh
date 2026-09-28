@@ -11,7 +11,14 @@ ME=$(curl -sS --max-time 20 -H "Authorization: Bearer $TOKEN" https://api.calend
 USER_URI=$(echo "$ME" | python3 -c 'import sys,json;print(json.load(sys.stdin)["resource"]["uri"])' 2>/dev/null)
 ORG_URI=$(echo "$ME" | python3 -c 'import sys,json;print(json.load(sys.stdin)["resource"]["current_organization"])' 2>/dev/null)
 if [ -z "$USER_URI" ]; then echo "Calendly не принял токен. Ответ:"; echo "$ME"; exit 1; fi
-echo "Аккаунт найден. Шаг 2/2: создаю подписку..."
+echo "Аккаунт найден. Удаляю старую подписку на этот адрес (если была)..."
+curl -sS --max-time 20 -G https://api.calendly.com/webhook_subscriptions -H "Authorization: Bearer $TOKEN" \
+  --data-urlencode "organization=$ORG_URI" --data-urlencode "user=$USER_URI" --data-urlencode "scope=user" \
+| python3 -c 'import sys,json
+for s in json.load(sys.stdin).get("collection",[]):
+    if s.get("callback_url")==sys.argv[1]: print(s["uri"])' "$URL" \
+| while read -r SUB; do curl -sS --max-time 20 -X DELETE "$SUB" -H "Authorization: Bearer $TOKEN" >/dev/null && echo "  старая подписка удалена"; done
+echo "Шаг 2/2: создаю подписку..."
 KEY=$(openssl rand -hex 32)
 RES=$(curl -sS --max-time 20 -X POST https://api.calendly.com/webhook_subscriptions \
   -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \

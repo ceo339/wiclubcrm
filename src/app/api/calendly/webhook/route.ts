@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { createHash } from "crypto";
 import { createAdminClient } from "@/lib/supabase/admin";
 import {
   addSystemComment,
@@ -90,11 +91,27 @@ function eventNameAllowed(name: string | undefined): boolean {
 }
 
 export async function POST(request: Request) {
-  const key = process.env.CALENDLY_WEBHOOK_SIGNING_KEY;
+  // .trim(): a value pasted into Vercel with a stray space/newline would
+  // otherwise silently fail every signature check.
+  const key = process.env.CALENDLY_WEBHOOK_SIGNING_KEY?.trim();
   if (!key) return NextResponse.json({ error: "CALENDLY_WEBHOOK_SIGNING_KEY is not configured" }, { status: 500 });
 
   const rawBody = await request.text();
-  if (!verify(request.headers.get("calendly-webhook-signature"), rawBody, key)) {
+  const sigHeader = request.headers.get("calendly-webhook-signature");
+  if (!verify(sigHeader, rawBody, key)) {
+    // Log rejected deliveries (without the body) so a key mismatch is
+    // visible in integration_events instead of silently disappearing.
+    // key_fp = first 8 hex of sha256(key) — identifies WHICH key is set
+    // without revealing it.
+    if (sigHeader) {
+      const t = Number(/t=(\d+)/.exec(sigHeader)?.[1] ?? 0);
+      await logIntegrationEvent(createAdminClient(), {
+        source: "calendly",
+        event_type: "signature_check",
+        status: "bad_signature",
+        detail: `key_fp=${createHash("sha256").update(key).digest("hex").slice(0, 8)} age_sec=${Math.round(Date.now() / 1000 - t)}`,
+      });
+    }
     return NextResponse.json({ error: "Invalid signature" }, { status: 401 });
   }
 
