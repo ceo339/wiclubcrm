@@ -50,7 +50,21 @@ export type FranchiseStageId =
  * distinct stages rather than one "Отказ/Пауза" bucket — both still use the
  * same free-text `reject_reason` field).
  */
-export const FRANCHISE_STAGES: { id: FranchiseStageId; labelKey: string; won?: boolean; lost?: boolean }[] = [
+export const FRANCHISE_STAGES: {
+  id: FranchiseStageId;
+  labelKey: string;
+  won?: boolean;
+  lost?: boolean;
+  /** Round 44 (29 сен 2026 — "убери стадию встреча с людмилой пройдена",
+   * "убери стадию обучение"): a retired stage stays in this array (so past
+   * franchise_stage_history rows still render a real label instead of the
+   * raw id — see franchiseStageLabel) but drops out of every *selectable*
+   * surface — kanban columns, the stage dropdown, the funnel — via
+   * VISIBLE_FRANCHISE_STAGES below. No candidate is currently sitting on
+   * either retired stage (checked in production before removing), so this
+   * is purely "stop offering it going forward", not a data migration. */
+  retired?: boolean;
+}[] = [
   { id: "application", labelKey: "fStageApplication" },
   { id: "in_progress", labelKey: "fStageInProgress" },
   { id: "interview_scheduled", labelKey: "fStageInterviewScheduled" },
@@ -59,16 +73,22 @@ export const FRANCHISE_STAGES: { id: FranchiseStageId; labelKey: string; won?: b
   { id: "kristina_scheduled", labelKey: "fStageKristinaScheduled" },
   { id: "kristina_done", labelKey: "fStageKristinaDone" },
   { id: "lyudmila_scheduled", labelKey: "fStageLyudmilaScheduled" },
-  { id: "lyudmila_done", labelKey: "fStageLyudmilaDone" },
+  { id: "lyudmila_done", labelKey: "fStageLyudmilaDone", retired: true },
   { id: "contract_sent", labelKey: "fStageContractSent" },
   { id: "contract_signed", labelKey: "fStageContractSigned" },
   { id: "invoiced", labelKey: "fStageInvoiced" },
   { id: "invoice_paid", labelKey: "fStageInvoicePaid" },
-  { id: "training", labelKey: "fStageTraining" },
+  { id: "training", labelKey: "fStageTraining", retired: true },
   { id: "active", labelKey: "fStageActive", won: true },
   { id: "declined", labelKey: "fStageDeclined", lost: true },
   { id: "paused", labelKey: "fStagePaused", lost: true },
 ];
+
+/** The stages a partner can actually pick going forward — every kanban
+ * column, every option in the stage dropdown, and the funnel are built from
+ * this, not FRANCHISE_STAGES directly (round 44 — see the `retired` note
+ * above). */
+export const VISIBLE_FRANCHISE_STAGES = FRANCHISE_STAGES.filter((s) => !s.retired);
 
 export const isFranchiseStage = (id: string): id is FranchiseStageId =>
   FRANCHISE_STAGES.some((s) => s.id === id);
@@ -77,6 +97,15 @@ export const franchiseStageLabel = (id: string, locale: Locale) => {
   const key = FRANCHISE_STAGES.find((s) => s.id === id)?.labelKey;
   return key ? t(locale, key) : id;
 };
+
+/**
+ * "Добавь вариант в отказе - игнор как причина отказа, тренер" (round 44) —
+ * a preset reasons list for the "Отказ" prompt only (Пауза stays free text,
+ * per Anastasiia's own scoping when asked). Dictionary keys, same convention
+ * as leads' own DECLINE_REASONS (lib/leads.ts) — "fDeclineReasonOther"
+ * reveals a free-text field in ReasonModal instead of being stored as-is.
+ */
+export const FRANCHISE_DECLINE_REASONS = ["fDeclineReasonIgnore", "fDeclineReasonTrainer", "fDeclineReasonOther"] as const;
 
 /** Stages that need a reason when a card lands on them (Отказ/Пауза) —
  * shared by the kanban drop handler and the detail modal's stage dropdown,
@@ -95,7 +124,7 @@ export const FRANCHISE_TERMINAL_STAGES: FranchiseStageId[] = ["declined", "pause
  */
 export const QUALIFYING_STAGES: FranchiseStageId[] = FRANCHISE_STAGES
   .slice(FRANCHISE_STAGES.findIndex((s) => s.id === "fin_model_sent"))
-  .filter((s) => !s.lost)
+  .filter((s) => !s.lost && !s.retired)
   .map((s) => s.id);
 
 /**

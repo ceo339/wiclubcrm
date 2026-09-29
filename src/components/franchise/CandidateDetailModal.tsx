@@ -11,7 +11,7 @@ import {
   updateCandidateStage,
   type FranchiseCandidateDetail,
 } from "@/app/franchise/actions";
-import { FRANCHISE_STAGES, FRANCHISE_TERMINAL_STAGES, franchiseStageLabel, type FranchiseStageId } from "@/lib/franchise";
+import { VISIBLE_FRANCHISE_STAGES, FRANCHISE_TERMINAL_STAGES, franchiseStageLabel, type FranchiseStageId } from "@/lib/franchise";
 import { useLocale, useT } from "@/components/i18n/LocaleProvider";
 import type { FranchiseCandidate } from "./types";
 import ReasonModal from "./ReasonModal";
@@ -177,7 +177,7 @@ export default function CandidateDetailModal({
                 onChange={(e) => handleStageChange(e.target.value as FranchiseStageId)}
                 className="rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-accent focus:ring-1 focus:ring-accent disabled:opacity-60"
               >
-                {FRANCHISE_STAGES.map((s) => (
+                {VISIBLE_FRANCHISE_STAGES.map((s) => (
                   <option key={s.id} value={s.id}>
                     {t(s.labelKey)}
                   </option>

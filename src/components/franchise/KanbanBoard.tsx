@@ -1,7 +1,7 @@
 "use client";
 
 import { useOptimistic, useState, useTransition } from "react";
-import { FRANCHISE_STAGES, FRANCHISE_TERMINAL_STAGES, type FranchiseStageId } from "@/lib/franchise";
+import { VISIBLE_FRANCHISE_STAGES, FRANCHISE_TERMINAL_STAGES, type FranchiseStageId } from "@/lib/franchise";
 import { updateCandidateStage } from "@/app/franchise/actions";
 import { useLocale } from "@/components/i18n/LocaleProvider";
 import type { FranchiseCandidate } from "./types";
@@ -61,7 +61,7 @@ export default function KanbanBoard({
   return (
     <>
       <div className="flex flex-1 gap-4 overflow-x-auto pb-2">
-        {FRANCHISE_STAGES.map((stage) => {
+        {VISIBLE_FRANCHISE_STAGES.map((stage) => {
           const stageCandidates = items.filter((c) => c.stage === stage.id);
           return (
             <div

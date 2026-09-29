@@ -1079,7 +1079,7 @@ export const DICT: Record<string, Entry> = {
   fStageFinModelSent: { ru: "Фин. модель отправлена", bg: "Изпратен финансов модел" },
   fStageKristinaScheduled: { ru: "Встреча с Кристиной назначена", bg: "Насрочена среща с Кристина" },
   fStageKristinaDone: { ru: "Встреча с Кристиной пройдена", bg: "Проведена среща с Кристина" },
-  fStageLyudmilaScheduled: { ru: "Встреча с Людмилой назначена", bg: "Насрочена среща с Людмила" },
+  fStageLyudmilaScheduled: { ru: "Встреча с Людмилой", bg: "Насрочена среща с Людмила" },
   fStageLyudmilaDone: { ru: "Встреча с Людмилой пройдена", bg: "Проведена среща с Людмила" },
   fStageContractSent: { ru: "Договор отправлен", bg: "Изпратен договор" },
   fStageContractSigned: { ru: "Договор подписан", bg: "Подписан договор" },
@@ -1094,6 +1094,12 @@ export const DICT: Record<string, Entry> = {
   fReasonModalTitlePaused: { ru: "Причина паузы", bg: "Причина за пауза" },
   fReasonModalSubtitle: { ru: "Кандидатка: {name}", bg: "Кандидатка: {name}" },
   fFieldReason: { ru: "Причина", bg: "Причина" },
+  // Round 44 ("Добавь вариант в отказе - игнор как причина отказа, тренер") —
+  // preset options for the "Отказ" reason dropdown only; Пауза stays free
+  // text, per Anastasiia's own scoping when asked.
+  fDeclineReasonIgnore: { ru: "Игнор", bg: "Игнориране" },
+  fDeclineReasonTrainer: { ru: "Тренер", bg: "Треньор" },
+  fDeclineReasonOther: { ru: "Другое", bg: "Друго" },
 
   fHeadingJourney: { ru: "Путь кандидатки", bg: "Път на кандидатката" },
   fEmptyNoHistory: { ru: "Пока нет истории", bg: "Все още няма история" },

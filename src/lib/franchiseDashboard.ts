@@ -7,7 +7,7 @@
 // money here (no "выручка"/"роялти" for a franchise candidate), so those
 // club-only pieces of CoreMetrics have no equivalent below.
 
-import { FRANCHISE_STAGES, franchiseStageLabel, type FranchiseStageId } from "@/lib/franchise";
+import { VISIBLE_FRANCHISE_STAGES, franchiseStageLabel, type FranchiseStageId } from "@/lib/franchise";
 import { currentMonthKey, lastNMonthKeys, monthKeyOf, pctOf, type Period } from "@/lib/dashboard";
 import type { Locale } from "@/lib/i18n";
 
@@ -42,7 +42,7 @@ export function computeFranchiseFunnel(
   candidates: { stage: string }[],
   fromStageId?: FranchiseStageId
 ): FranchiseFunnelStage[] {
-  const allForward = FRANCHISE_STAGES.filter((s) => !s.lost);
+  const allForward = VISIBLE_FRANCHISE_STAGES.filter((s) => !s.lost);
   const startIdx = fromStageId ? Math.max(0, allForward.findIndex((s) => s.id === fromStageId)) : 0;
   const forward = allForward.slice(startIdx);
   const counts = forward.map(
