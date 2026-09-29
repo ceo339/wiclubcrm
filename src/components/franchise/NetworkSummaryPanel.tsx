@@ -139,11 +139,9 @@ export default function NetworkSummaryPanel({
             {recentActivity.map((item) => {
               const rt = relativeTimeParts(item.lastActivityAt);
               const isTerminal = item.stage === "declined" || item.stage === "paused";
-              // "если там есть отказ, то показывай и причину отказа"
-              // (Anastasiia, round 46 part 2) — reject_reason instead of the
-              // city for a declined/paused row; falls back to the city when
-              // no reason was recorded, rather than showing nothing.
-              const secondaryText = isTerminal ? item.rejectReason ?? item.city : item.city;
+              // "нужен и город и причина отказа" (Anastasiia — both, not one
+              // replacing the other): city always shows when known, and a
+              // declined/paused row additionally shows its reject_reason.
               return (
                 <Link
                   key={item.id}
@@ -168,7 +166,10 @@ export default function NetworkSummaryPanel({
                       >
                         {franchiseStageLabel(item.stage, locale)}
                       </span>
-                      {secondaryText && <span className="truncate text-xs text-muted">· {secondaryText}</span>}
+                      {item.city && <span className="truncate text-xs text-muted">· {item.city}</span>}
+                      {isTerminal && item.rejectReason && (
+                        <span className="truncate text-xs text-muted">· {item.rejectReason}</span>
+                      )}
                     </div>
                   </div>
                   <div className="shrink-0 text-xs text-muted">{t(rt.key, rt.n !== undefined ? { n: rt.n } : undefined)}</div>
