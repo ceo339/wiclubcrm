@@ -15,6 +15,8 @@ import { interpolateHex } from "@/lib/leads";
 import { useLocale } from "@/components/i18n/LocaleProvider";
 import Sparkline from "@/components/dashboard/Sparkline";
 import TasksWidget from "@/components/home/TasksWidget";
+import NetworkSummaryPanel from "./NetworkSummaryPanel";
+import type { NetworkSummary, NetworkStructure, ApproxGeography, RecentActivityItem } from "@/lib/franchiseDashboard";
 
 /**
  * "Главную сделать с той же аналитикой, что и для клубов" (Anastasiia, 28
@@ -58,6 +60,10 @@ export default function FranchiseDashboard({
   staleCandidates,
   tasks,
   canEditTasks,
+  networkSummary,
+  networkStructure,
+  networkGeography,
+  recentActivity,
 }: {
   period: Period;
   monthOptions: string[];
@@ -83,6 +89,12 @@ export default function FranchiseDashboard({
    * задачи" widget does. */
   tasks: OpenTask[];
   canEditTasks: boolean;
+  /** Round 46 — «Дашборд партнёров», новый блок вверху (см.
+   * NetworkSummaryPanel.tsx для скоупа/логики). */
+  networkSummary: NetworkSummary;
+  networkStructure: NetworkStructure;
+  networkGeography: ApproxGeography;
+  recentActivity: RecentActivityItem[];
 }) {
   const { locale, t } = useLocale();
   const maxFunnel = Math.max(1, ...funnel.map((s) => s.count));
@@ -93,6 +105,13 @@ export default function FranchiseDashboard({
 
   return (
     <div className="flex flex-1 flex-col gap-4">
+      <NetworkSummaryPanel
+        summary={networkSummary}
+        structure={networkStructure}
+        geography={networkGeography}
+        recentActivity={recentActivity}
+      />
+
       <div className="rounded-xl border border-border bg-background shadow-card p-4">
         <div className="mb-2 inline-flex items-center gap-0.5 rounded-lg border border-border p-0.5">
           {(["month", "year"] as const).map((tb) => (

@@ -1072,6 +1072,47 @@ export const DICT: Record<string, Entry> = {
   headingQualifiedFunnel: { ru: "Воронка квалифицированных", bg: "Фуния на квалифицираните" },
   headingFranchiseTasks: { ru: "Задачи по кандидаткам", bg: "Задачи по кандидатите" },
 
+  // «Дашборд партнёров» (round 46) — новый блок вверху франчайзи-Главной.
+  // (Названо не headingNetworkSummary — этот ключ уже занят клубной
+  // «Сводкой по сети» на обычной Главной, это другой экран.)
+  headingPartnersDashboard: { ru: "Дашборд партнёров", bg: "Табло на партньорите" },
+  headingPartnersDashboardEm: { ru: "партнёров", bg: "партньорите" },
+  subheadingNetworkSummary: {
+    ru: "Воронка, география и активность — всё в одном окне.",
+    bg: "Фуния, география и активност — всичко на едно място.",
+  },
+  captionNetworkSummaryScope: {
+    ru: "Считаются кандидатки, дошедшие до «Собеседование пройдено» и дальше (включая отказ/паузу после этого).",
+    bg: "Броят се кандидатите, достигнали „Проведено интервю“ или по-нататък (включително отказ/пауза след това).",
+  },
+  statNetworkTotal: { ru: "Всего партнёров", bg: "Общо партньори" },
+  statNetworkTotalCaption: { ru: "с учётом отбора выше", bg: "според филтъра по-горе" },
+  statNetworkContractSigned: { ru: "Договор подписан", bg: "Подписан договор" },
+  statNetworkActiveClubs: { ru: "Активные клубы", bg: "Активни клубове" },
+  statNetworkCountries: { ru: "Стран", bg: "Държави" },
+  statNetworkCountriesCaption: { ru: "приблизительно", bg: "приблизително" },
+  pctOfNetworkTotal: { ru: "{percent}% от отбора", bg: "{percent}% от подбора" },
+  headingNetworkStructure: { ru: "Структура сети", bg: "Структура на мрежата" },
+  subheadingNetworkStructure: { ru: "До и после договора", bg: "Преди и след договора" },
+  structureBeforeContract: { ru: "До договора", bg: "Преди договор" },
+  structureContractPlus: { ru: "Договор +", bg: "Договор +" },
+  structureTerminal: { ru: "Отказ / пауза", bg: "Отказ / пауза" },
+  networkStructureTotalLabel: { ru: "всего", bg: "общо" },
+  headingGeography: { ru: "География", bg: "География" },
+  geographySummary: { ru: "{cities} городов · {countries} стран", bg: "{cities} града · {countries} държави" },
+  geographyCaption: {
+    ru: "Приблизительно, по тексту анкеты — не все ответы удалось распознать",
+    bg: "Приблизително, по текста от анкетата — не всички отговори са разпознати",
+  },
+  geographyMapLegend: { ru: "По количеству распознанных кандидаток", bg: "По брой разпознати кандидати" },
+  headingRecentActivity: { ru: "Недавняя активность", bg: "Скорошна активност" },
+  subheadingRecentActivity: { ru: "Последние изменения по стадиям", bg: "Последни промени по етапи" },
+  emptyNoRecentActivity: { ru: "Пока нет данных об изменениях", bg: "Все още няма данни за промени" },
+  relTimeJustNow: { ru: "только что", bg: "току-що" },
+  relTimeMinutes: { ru: "{n} мин", bg: "{n} мин" },
+  relTimeHours: { ru: "{n} ч", bg: "{n} ч" },
+  relTimeDays: { ru: "{n} дн", bg: "{n} дни" },
+
   fStageApplication: { ru: "Заявка", bg: "Заявление" },
   fStageInProgress: { ru: "В работе", bg: "В процес" },
   fStageInterviewScheduled: { ru: "Собеседование назначено", bg: "Насрочено интервю" },

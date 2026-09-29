@@ -7,8 +7,14 @@
 // money here (no "выручка"/"роялти" for a franchise candidate), so those
 // club-only pieces of CoreMetrics have no equivalent below.
 
-import { VISIBLE_FRANCHISE_STAGES, franchiseStageLabel, type FranchiseStageId } from "@/lib/franchise";
+import {
+  FRANCHISE_TERMINAL_STAGES,
+  VISIBLE_FRANCHISE_STAGES,
+  franchiseStageLabel,
+  type FranchiseStageId,
+} from "@/lib/franchise";
 import { currentMonthKey, lastNMonthKeys, monthKeyOf, pctOf, type Period } from "@/lib/dashboard";
+import { approximateLocation } from "@/lib/geo";
 import type { Locale } from "@/lib/i18n";
 
 export type FranchiseCandidateRow = {
@@ -185,3 +191,142 @@ export function computeInterviewStats(
 
 export { franchiseStageLabel };
 export type { Locale };
+
+// ---------------------------------------------------------------------
+// «Дашборд партнёров» (round 46) — новый блок вверху Главной, скоуп —
+// PARTNER_STAGES (кандидатки, дошедшие до «Собеседование пройдено» или
+// дальше, включая отказ/паузу после этого — см. PARTNER_STAGES в
+// lib/franchise.ts). Компонент NetworkSummaryPanel.tsx рендерит то, что
+// эти функции считают.
+
+const FORWARD_NONTERMINAL = VISIBLE_FRANCHISE_STAGES.filter((s) => !s.lost);
+const CONTRACT_SIGNED_IDX = FORWARD_NONTERMINAL.findIndex((s) => s.id === "contract_signed");
+
+function isContractOrLater(stage: string): boolean {
+  const idx = FORWARD_NONTERMINAL.findIndex((s) => s.id === stage);
+  return idx >= 0 && idx >= CONTRACT_SIGNED_IDX;
+}
+
+export type NetworkSummary = {
+  total: number;
+  /** Currently sitting at contract_signed or later (invoiced/invoice_paid/
+   * active) — not "ever signed", same simple current-stage rule the rest of
+   * this dashboard already uses for activeClubs below. */
+  contractPlus: number;
+  activeClubs: number;
+};
+
+export function computeNetworkSummary(candidates: { stage: string }[]): NetworkSummary {
+  return {
+    total: candidates.length,
+    contractPlus: candidates.filter((c) => isContractOrLater(c.stage)).length,
+    activeClubs: candidates.filter((c) => c.stage === "active").length,
+  };
+}
+
+export type NetworkStructure = { beforeContract: number; contractPlus: number; terminal: number };
+
+/** Донат «Структура сети» — три сегмента, которые в сумме всегда дают
+ * total (в отличие от исходного макета-референса, где «Стран» и
+ * «География» не сходились друг с другом). */
+export function computeNetworkStructure(candidates: { stage: string }[]): NetworkStructure {
+  const terminal = candidates.filter((c) => FRANCHISE_TERMINAL_STAGES.includes(c.stage as FranchiseStageId)).length;
+  const contractPlus = candidates.filter((c) => isContractOrLater(c.stage)).length;
+  const beforeContract = candidates.length - terminal - contractPlus;
+  return { beforeContract, contractPlus, terminal };
+}
+
+export type CountryBreakdownRow = { country: string; count: number };
+
+export type ApproxGeography = {
+  countries: CountryBreakdownRow[];
+  /** Число РАСПОЗНАННЫХ городов (не общее число target_city — то поле такое
+   * же "грязное" свободнотекстовое, как и country). */
+  citiesRecognized: number;
+  matchedCount: number;
+  unmatchedCount: number;
+};
+
+/** "Примерное сопоставление" (Anastasiia, round 46, после того как
+ * проверили реальные данные — country это не нормализованная страна, а
+ * свободный текст анкеты). Кандидатки, чей текст не удалось сопоставить ни
+ * с одной известной страной/городом, просто не попадают в разбивку —
+ * unmatchedCount существует именно чтобы это было видно, а не молчаливо
+ * терялось. */
+export function computeApproxGeography(candidates: { country: string | null }[]): ApproxGeography {
+  const byCountry = new Map<string, number>();
+  const cities = new Set<string>();
+  let matched = 0;
+  for (const c of candidates) {
+    const hit = approximateLocation(c.country);
+    if (!hit) continue;
+    matched += 1;
+    byCountry.set(hit.country, (byCountry.get(hit.country) ?? 0) + 1);
+    if (hit.city) cities.add(hit.city);
+  }
+  return {
+    countries: [...byCountry.entries()]
+      .map(([country, count]) => ({ country, count }))
+      .sort((a, b) => b.count - a.count),
+    citiesRecognized: cities.size,
+    matchedCount: matched,
+    unmatchedCount: candidates.length - matched,
+  };
+}
+
+export type RecentActivityItem = {
+  id: string;
+  name: string;
+  stage: string;
+  city: string | null;
+  lastActivityAt: string;
+};
+
+/** franchise_candidates.updated_at оказался бесполезен для «Недавней
+ * активности» — на проде это сплошные пачки по 30 строк в одну и ту же
+ * минуту (следы массового бэкафилла/импорта, не реальных действий).
+ * Настоящий сигнал — franchise_stage_history.occurred_at (реальная дата
+ * КАЖДОГО перехода по стадии), отсюда и отдельный параметр history вместо
+ * candidate.updated_at. */
+export function latestActivityByCandidate(history: { candidate_id: string; occurred_at: string }[]): Map<string, string> {
+  const map = new Map<string, string>();
+  for (const row of history) {
+    const prev = map.get(row.candidate_id);
+    if (!prev || new Date(row.occurred_at).getTime() > new Date(prev).getTime()) {
+      map.set(row.candidate_id, row.occurred_at);
+    }
+  }
+  return map;
+}
+
+export function computeRecentActivity(
+  candidates: { id: string; name: string; stage: string; target_city: string | null; submitted_at: string }[],
+  lastActivityById: Map<string, string>,
+  limit = 6
+): RecentActivityItem[] {
+  return candidates
+    .map((c) => ({
+      id: c.id,
+      name: c.name,
+      stage: c.stage,
+      city: c.target_city,
+      lastActivityAt: lastActivityById.get(c.id) ?? c.submitted_at,
+    }))
+    .sort((a, b) => new Date(b.lastActivityAt).getTime() - new Date(a.lastActivityAt).getTime())
+    .slice(0, limit);
+}
+
+export type RelativeTimeParts =
+  | { key: "relTimeJustNow"; n?: undefined }
+  | { key: "relTimeMinutes" | "relTimeHours" | "relTimeDays"; n: number };
+
+export function relativeTimeParts(dateStr: string, now: Date = new Date()): RelativeTimeParts {
+  const ms = Math.max(0, now.getTime() - new Date(dateStr).getTime());
+  const minutes = Math.floor(ms / 60000);
+  if (minutes < 1) return { key: "relTimeJustNow" };
+  if (minutes < 60) return { key: "relTimeMinutes", n: minutes };
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return { key: "relTimeHours", n: hours };
+  const days = Math.floor(hours / 24);
+  return { key: "relTimeDays", n: days };
+}

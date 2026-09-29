@@ -159,3 +159,37 @@ export function computeQualifiedIds(
     ])
   );
 }
+
+/**
+ * "Но начиная со стадии интервью пройдено" (Anastasiia, round 46) — the new
+ * «Дашборд партнёров» block on Главной (see NetworkSummaryPanel.tsx) only
+ * makes sense for candidates who are genuinely partner-track, not every raw
+ * application that never even reached an interview. Same forward-slice
+ * shape as QUALIFYING_STAGES, just starting one stage earlier
+ * (interview_done instead of fin_model_sent).
+ */
+export const PARTNER_STAGES: FranchiseStageId[] = FRANCHISE_STAGES
+  .slice(FRANCHISE_STAGES.findIndex((s) => s.id === "interview_done"))
+  .filter((s) => !s.lost && !s.retired)
+  .map((s) => s.id);
+
+/**
+ * Generalized version of computeQualifiedIds above — same "history OR
+ * current stage" union, parameterized by which stage set to check, so
+ * PARTNER_STAGES can reuse the exact same "declined-after-reaching-it still
+ * counts" logic without duplicating it. computeQualifiedIds is left as-is
+ * (still hardcoded to QUALIFYING_STAGES) since it's already wired into
+ * several call sites — no reason to touch working code for this round.
+ */
+export function computeStageReachedIds(
+  candidates: { id: string; stage: string }[],
+  stageSet: FranchiseStageId[],
+  historyCandidateIds: string[]
+): string[] {
+  return Array.from(
+    new Set([
+      ...historyCandidateIds,
+      ...candidates.filter((c) => stageSet.includes(c.stage as FranchiseStageId)).map((c) => c.id),
+    ])
+  );
+}

@@ -92,13 +92,27 @@ export default async function Home({
   // (tasks, leads, members, payments…) is even fetched in this branch, it
   // has no bearing on a franchise view.
   if (networkView && viewMode === "franchise") {
-    const [{ data: candidates, error }, { data: qualifyingHistory }, { data: interviewHistory }, { data: rawFranchiseTasks }] =
-      await Promise.all([
-        supabase.from("franchise_candidates").select("*").order("submitted_at", { ascending: false }),
-        supabase.from("franchise_stage_history").select("candidate_id").in("stage", QUALIFYING_STAGES),
-        supabase.from("franchise_stage_history").select("candidate_id, occurred_at").eq("stage", "interview_done"),
-        supabase.from("tasks").select("*").eq("entity_type", "franchise_candidate").eq("done", false),
-      ]);
+    const [
+      { data: candidates, error },
+      { data: qualifyingHistory },
+      { data: interviewHistory },
+      { data: rawFranchiseTasks },
+      { data: fullStageHistory },
+    ] = await Promise.all([
+      supabase.from("franchise_candidates").select("*").order("submitted_at", { ascending: false }),
+      supabase.from("franchise_stage_history").select("candidate_id").in("stage", QUALIFYING_STAGES),
+      supabase.from("franchise_stage_history").select("candidate_id, occurred_at").eq("stage", "interview_done"),
+      supabase.from("tasks").select("*").eq("entity_type", "franchise_candidate").eq("done", false),
+      // Round 46 — «Дашборд партнёров» needs (a) which candidates ever
+      // reached PARTNER_STAGES (same history-based logic as qualifiedIds
+      // below, just a different stage cutoff) and (b) a real per-candidate
+      // "last activity" timestamp (franchise_candidates.updated_at turned
+      // out to be a mass-backfill artifact, not real activity — see
+      // latestActivityByCandidate in lib/franchiseDashboard.ts). The table
+      // is small (a few hundred rows for the whole pipeline), so fetching
+      // it once, unfiltered, is simpler than two more targeted queries.
+      supabase.from("franchise_stage_history").select("candidate_id, stage, occurred_at"),
+    ]);
 
     const allCandidates = candidates ?? [];
     const qualifiedIds = computeQualifiedIds(allCandidates, (qualifyingHistory ?? []).map((r) => r.candidate_id));
@@ -148,6 +162,7 @@ export default async function Home({
             interviewStats={interviewStats}
             tasks={franchiseOpenTasks}
             canEditTasks={canEditFranchiseTasks}
+            stageHistory={fullStageHistory ?? []}
           />
         )}
       </AppShell>
