@@ -3,7 +3,6 @@
 import { useMemo, useState } from "react";
 import { inPeriod, type Period } from "@/lib/dashboard";
 import type { OpenTask } from "@/lib/tasks";
-import { PARTNER_STAGES, computeStageReachedIds } from "@/lib/franchise";
 import {
   computeFranchiseFunnel,
   computeFranchiseSourceBreakdown,
@@ -58,36 +57,26 @@ export default function FranchiseHomeDashboard({
   canEditTasks: boolean;
   /** Round 46 — full franchise_stage_history (candidate_id/stage/
    * occurred_at), fetched once in page.tsx. Powers the new «Дашборд
-   * партнёров» block: which candidates count as partner-track
-   * (PARTNER_STAGES, by history same as qualifiedIds above) and the real
-   * "last activity" timestamp per candidate (candidates.updated_at itself
-   * turned out to be useless for this — see latestActivityByCandidate). */
+   * партнёров» block's "last activity" timestamp per candidate
+   * (candidates.updated_at itself turned out to be a mass-backfill
+   * artifact, useless for this — see latestActivityByCandidate). */
   stageHistory: StageHistoryRow[];
 }) {
   const [period, setPeriod] = useState<Period>({ mode: "month", month: currentMonthKey() });
   const qualifiedIdSet = useMemo(() => new Set(qualifiedIds), [qualifiedIds]);
 
-  // «Но начиная со стадии интервью пройдено» (round 46) — the network
-  // summary panel only makes sense for candidates who are genuinely
-  // partner-track, not every raw application.
-  const partnerIds = useMemo(
-    () =>
-      computeStageReachedIds(
-        candidates,
-        PARTNER_STAGES,
-        stageHistory.filter((h) => PARTNER_STAGES.includes(h.stage as (typeof PARTNER_STAGES)[number])).map((h) => h.candidate_id)
-      ),
-    [candidates, stageHistory]
-  );
-  const partnerIdSet = useMemo(() => new Set(partnerIds), [partnerIds]);
-  const partnerCandidates = useMemo(() => candidates.filter((c) => partnerIdSet.has(c.id)), [candidates, partnerIdSet]);
+  // «Дашборд партнёров» (round 46) — runs on ALL candidates, all stages
+  // (Anastasiia's own words on the follow-up round: "всего заявок на всех
+  // стадиях", "структура сети — учитывая все стадии"). An earlier version
+  // scoped this to PARTNER_STAGES (interview_done+); that scoping was
+  // removed after this feedback rather than left dangling unused.
   const lastActivityById = useMemo(() => latestActivityByCandidate(stageHistory), [stageHistory]);
-  const networkSummary = useMemo(() => computeNetworkSummary(partnerCandidates), [partnerCandidates]);
-  const networkStructure = useMemo(() => computeNetworkStructure(partnerCandidates), [partnerCandidates]);
-  const networkGeography = useMemo(() => computeApproxGeography(partnerCandidates), [partnerCandidates]);
+  const networkSummary = useMemo(() => computeNetworkSummary(candidates), [candidates]);
+  const networkStructure = useMemo(() => computeNetworkStructure(candidates), [candidates]);
+  const networkGeography = useMemo(() => computeApproxGeography(candidates), [candidates]);
   const recentActivity = useMemo(
-    () => computeRecentActivity(partnerCandidates, lastActivityById),
-    [partnerCandidates, lastActivityById]
+    () => computeRecentActivity(candidates, lastActivityById),
+    [candidates, lastActivityById]
   );
 
   const inPeriodCandidates = useMemo(

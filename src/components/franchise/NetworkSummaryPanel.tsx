@@ -1,8 +1,8 @@
 "use client";
 
+import type { ReactNode } from "react";
 import { useLocale } from "@/components/i18n/LocaleProvider";
 import { franchiseStageLabel } from "@/lib/franchise";
-import { projectToPercent, COUNTRY_CENTROIDS } from "@/lib/geo";
 import {
   relativeTimeParts,
   type NetworkSummary,
@@ -22,24 +22,20 @@ const COLOR_TERMINAL = "#9e0c24";
 
 /**
  * «Дашборд партнёров» (Anastasiia, round 46) — визуальный референс со
- * скриншота (карточки-плитки, донат «Структура сети», блок «География» с
- * условной картой и лента «Недавняя активность»), но заново собранный на
- * реальных данных и реальных названиях стадий нашего пайплайна — сам макет
- * использовал чужую терминологию («Переговоры», «Глубинное интервью») и
- * числа, которые не сходились друг с другом («Стран: 39» vs «8 стран»), и
- * Anastasiia явно подтвердила, что нужно только оформление.
+ * скриншота (карточки-плитки, донат «Структура сети», блок «География» и
+ * лента «Недавняя активность»), но заново собранный на реальных данных и
+ * реальных названиях стадий нашего пайплайна.
  *
- * Скоуп — PARTNER_STAGES (кандидатки, дошедшие до «Собеседование
- * пройдено» и дальше — см. lib/franchise.ts), не весь пайплайн: «Всего
- * заявок» уже есть выше, в обычной франчайзи-аналитике, а этот блок — про
- * тех, кто дошёл дальше самого начала воронки.
+ * Скоуп — ВСЕ кандидатки, все стадии (Anastasiia явно уточнила это в
+ * фидбеке: «всего заявок на всех стадиях», «структура сети — учитывая все
+ * стадии»; более узкий скоуп по PARTNER_STAGES, который был здесь раньше,
+ * убран этим же раундом).
  *
- * Карта «Географии» — НЕ настоящие контуры континентов (это было бы либо
- * нарушением авторских прав на конкретный источник карты, либо неоправданно
- * большим объёмом работы ради решётки координат), а условная сетка с
- * точками по примерным центрам стран (lib/geo.ts) — намеренно абстрактная,
- * чтобы не выглядеть точнее, чем есть на самом деле (см. approximateLocation
- * и geographyCaption).
+ * «География» изначально была условной картой с точками — Anastasiia
+ * написала, что карта нечитаема, и попросила либо починить, либо убрать;
+ * заменено на обычный список стран-баров (тот же паттерн, что и
+ * «Откуда приходят кандидатки» в франчайзи-аналитике ниже) — гарантированно
+ * читаемо при любом количестве стран.
  */
 export default function NetworkSummaryPanel({
   summary,
@@ -63,26 +59,21 @@ export default function NetworkSummaryPanel({
           <em className="italic">{t("headingPartnersDashboardEm")}</em>
         </h2>
         <p className="mt-1 text-sm text-muted">{t("subheadingNetworkSummary")}</p>
-        <p className="mt-0.5 text-xs text-muted">{t("captionNetworkSummaryScope")}</p>
       </div>
 
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
         <StatTile
-          label={t("statNetworkTotal")}
-          value={summary.total}
-          caption={t("statNetworkTotalCaption")}
+          label={t("statNetworkTotalApplications")}
+          value={summary.totalAll}
+          caption={t("statNetworkTotalCaptionWeekly", { n: summary.weeklyAll })}
           borderColor={COLOR_TERMINAL}
-        />
-        <StatTile
-          label={t("statNetworkContractSigned")}
-          value={summary.contractPlus}
-          caption={t("pctOfNetworkTotal", { percent: summary.total ? Math.round((summary.contractPlus / summary.total) * 100) : 0 })}
-          borderColor={COLOR_CONTRACT}
         />
         <StatTile
           label={t("statNetworkActiveClubs")}
           value={summary.activeClubs}
-          caption={t("pctOfNetworkTotal", { percent: summary.total ? Math.round((summary.activeClubs / summary.total) * 100) : 0 })}
+          caption={t("pctOfNetworkTotal", {
+            percent: summary.totalAll ? Math.round((summary.activeClubs / summary.totalAll) * 100) : 0,
+          })}
           borderColor={COLOR_CONTRACT}
         />
         <StatTile
@@ -112,8 +103,8 @@ export default function NetworkSummaryPanel({
           <p className="text-xs text-muted">
             {t("geographySummary", { cities: geography.citiesRecognized, countries: geography.countries.length })}
           </p>
-          <GeoMap geography={geography} />
-          <p className="mt-2 text-xs text-muted">{t("geographyCaption")}</p>
+          <GeoBarList geography={geography} />
+          <p className="mt-3 text-xs text-muted">{t("geographyCaption")}</p>
         </div>
       </div>
 
@@ -170,16 +161,21 @@ function initials(name: string): string {
   return (parts[0].slice(0, 1) + parts[1].slice(0, 1)).toUpperCase();
 }
 
-function StatTile({
+/** Shared stat-tile look — exported so the franchise funnel tiles below
+ * (FranchiseDashboard.tsx) can use the exact same visual treatment
+ * (Anastasiia, round 46: "сделай нижние виджеты визуально как верхние"). */
+export function StatTile({
   label,
   value,
   caption,
   borderColor,
+  children,
 }: {
   label: string;
-  value: number;
+  value: number | string;
   caption: string;
   borderColor: string;
+  children?: ReactNode;
 }) {
   return (
     <div
@@ -194,6 +190,7 @@ function StatTile({
         {value}
       </div>
       <div className="mt-1 text-xs text-muted">{caption}</div>
+      {children}
     </div>
   );
 }
@@ -260,42 +257,40 @@ function NetworkDonut({ structure, total }: { structure: NetworkStructure; total
   );
 }
 
-/** Условная карта: не контуры континентов, а мягкая сетка широт/долгот с
- * точками по примерным центрам стран (lib/geo.ts) — см. файл-докстринг выше
- * для причины. Размер точки ~ число распознанных кандидаток в стране. */
-function GeoMap({ geography }: { geography: ApproxGeography }) {
+/** Список стран горизонтальными барами — тот же визуальный паттерн, что и
+ * «Откуда приходят кандидатки» ниже на этой же странице (FranchiseDashboard,
+ * headingFranchiseSourceBreakdown). Заменил собой условную карту с точками
+ * (Anastasiia, round 46: «не читабельно... не видна карта»,
+ * «или убери или сделай читабельной») — список читается при любом числе
+ * стран, в отличие от скопления точек на маленькой карте. */
+function GeoBarList({ geography }: { geography: ApproxGeography }) {
   const { t } = useLocale();
-  const maxCount = Math.max(1, ...geography.countries.map((c) => c.count));
-  const gridLines = [12.5, 25, 37.5, 50, 62.5, 75, 87.5];
+  const top = geography.countries.slice(0, 8);
+  const max = Math.max(1, ...top.map((c) => c.count));
+  if (top.length === 0) {
+    return <p className="mt-3 text-sm text-muted">{t("dash")}</p>;
+  }
   return (
-    <div
-      className="relative mt-3 aspect-[2/1] w-full overflow-hidden rounded-lg border border-border-strong"
-      style={{ background: "linear-gradient(180deg, #241019 0%, #1a0c12 60%, #150a0f 100%)" }}
-    >
-      <svg className="absolute inset-0 h-full w-full" viewBox="0 0 100 50" preserveAspectRatio="none">
-        {gridLines.map((x) => (
-          <line key={`v${x}`} x1={x} y1={0} x2={x} y2={50} stroke="#ffffff" strokeOpacity={0.06} strokeWidth={0.2} />
-        ))}
-        {[10, 20, 30, 40].map((y) => (
-          <line key={`h${y}`} x1={0} y1={y} x2={100} y2={y} stroke="#ffffff" strokeOpacity={0.06} strokeWidth={0.2} />
-        ))}
-        {geography.countries.map((c) => {
-          const centroid = COUNTRY_CENTROIDS[c.country];
-          if (!centroid) return null;
-          const { xPct, yPct } = projectToPercent(centroid[0], centroid[1]);
-          const r = 1.4 + (c.count / maxCount) * 2.6;
-          return (
-            <g key={c.country}>
-              <circle cx={xPct} cy={yPct * 0.5} r={r + 1.5} fill="#4ade80" fillOpacity={0.18} />
-              <circle cx={xPct} cy={yPct * 0.5} r={r} fill="#4ade80" fillOpacity={0.85} />
-            </g>
-          );
-        })}
-      </svg>
-      <div className="absolute bottom-2 left-2 flex items-center gap-1.5 rounded-full bg-black/30 px-2 py-1 text-[10px] text-white/80">
-        <span className="h-1.5 w-1.5 rounded-full bg-[#4ade80]" />
-        {t("geographyMapLegend")}
-      </div>
+    <div className="mt-3 flex flex-col gap-2.5">
+      {top.map((c) => (
+        <div key={c.country} className="flex items-center gap-3">
+          <div className="w-28 shrink-0 truncate text-sm text-ink-2">{c.country}</div>
+          <div className="h-2.5 flex-1 overflow-hidden rounded-full bg-surface-2">
+            <div
+              className="h-full rounded-full"
+              style={{ width: `${Math.max(4, (c.count / max) * 100)}%`, background: COLOR_CONTRACT }}
+            />
+          </div>
+          <div className="w-8 shrink-0 text-right text-sm font-medium text-ink-2">{c.count}</div>
+        </div>
+      ))}
+      {geography.unmatchedCount > 0 && (
+        <div className="mt-1 flex items-center gap-3 border-t border-border pt-2 text-xs text-muted">
+          <div className="w-28 shrink-0 truncate">{t("geoUnmatchedLabel")}</div>
+          <div className="flex-1" />
+          <div className="w-8 shrink-0 text-right">{geography.unmatchedCount}</div>
+        </div>
+      )}
     </div>
   );
 }

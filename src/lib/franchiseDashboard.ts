@@ -208,18 +208,18 @@ function isContractOrLater(stage: string): boolean {
 }
 
 export type NetworkSummary = {
-  total: number;
-  /** Currently sitting at contract_signed or later (invoiced/invoice_paid/
-   * active) — not "ever signed", same simple current-stage rule the rest of
-   * this dashboard already uses for activeClubs below. */
-  contractPlus: number;
+  /** "Всего заявок (на всех стадиях)" (Anastasiia, round 46, feedback on
+   * v1 of this panel) — every candidate, no PARTNER_STAGES-style narrowing
+   * (that narrower scope was tried first, then explicitly walked back). */
+  totalAll: number;
+  weeklyAll: number;
   activeClubs: number;
 };
 
-export function computeNetworkSummary(candidates: { stage: string }[]): NetworkSummary {
+export function computeNetworkSummary(candidates: { stage: string; submitted_at: string }[]): NetworkSummary {
   return {
-    total: candidates.length,
-    contractPlus: candidates.filter((c) => isContractOrLater(c.stage)).length,
+    totalAll: candidates.length,
+    weeklyAll: weeklyFranchiseCandidates(candidates).length,
     activeClubs: candidates.filter((c) => c.stage === "active").length,
   };
 }

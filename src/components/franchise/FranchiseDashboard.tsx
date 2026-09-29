@@ -15,8 +15,14 @@ import { interpolateHex } from "@/lib/leads";
 import { useLocale } from "@/components/i18n/LocaleProvider";
 import Sparkline from "@/components/dashboard/Sparkline";
 import TasksWidget from "@/components/home/TasksWidget";
-import NetworkSummaryPanel from "./NetworkSummaryPanel";
+import NetworkSummaryPanel, { StatTile } from "./NetworkSummaryPanel";
 import type { NetworkSummary, NetworkStructure, ApproxGeography, RecentActivityItem } from "@/lib/franchiseDashboard";
+
+// «Сделай нижние виджеты визуально как верхние» (Anastasiia, round 46) —
+// один и тот же брендовый цвет для всех шести плиток ниже: в отличие от
+// «Структуры сети» это не категориальный набор, которому нужны разные
+// цвета для различения, просто общий визуальный язык с новым блоком выше.
+const FUNNEL_TILE_COLOR = "#9e0c24";
 
 /**
  * "Главную сделать с той же аналитикой, что и для клубов" (Anastasiia, 28
@@ -152,69 +158,47 @@ export default function FranchiseDashboard({
 
       <TasksWidget tasks={tasks} headingKey="headingFranchiseTasks" canEdit={canEditTasks} />
 
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
-        <div className="rounded-xl border border-border bg-background p-4 shadow-card">
-          <div className="text-xs uppercase tracking-wide text-muted">{t("statFranchiseSubmitted")}</div>
-          <div
-            className="mt-1 font-display text-[32px] leading-[1.05] tracking-[-0.02em] text-foreground"
-            style={{ fontVariantNumeric: "tabular-nums" }}
-          >
-            {submittedCount}
-          </div>
-          <div className="mt-1 text-xs text-muted">{t("deltaForPeriod")}</div>
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+        <StatTile
+          label={t("statFranchiseSubmitted")}
+          value={submittedCount}
+          caption={t("deltaForPeriod")}
+          borderColor={FUNNEL_TILE_COLOR}
+        >
           <Sparkline values={submissionTrend.map((m) => m.value)} color="#7a0c1f" />
-        </div>
-        <div className="rounded-xl border border-border bg-background p-4 shadow-card">
-          <div className="text-xs uppercase tracking-wide text-muted">{t("statFranchiseWeeklyNew")}</div>
-          <div
-            className="mt-1 font-display text-[32px] leading-[1.05] tracking-[-0.02em] text-foreground"
-            style={{ fontVariantNumeric: "tabular-nums" }}
-          >
-            {weeklyCount}
-          </div>
-          <div className="mt-1 text-xs text-muted">{t("last7Days")}</div>
-        </div>
-        <div className="rounded-xl border border-border bg-background p-4 shadow-card">
-          <div className="text-xs uppercase tracking-wide text-muted">{t("statFranchiseQualified")}</div>
-          <div
-            className="mt-1 font-display text-[32px] leading-[1.05] tracking-[-0.02em] text-foreground"
-            style={{ fontVariantNumeric: "tabular-nums" }}
-          >
-            {qualifiedCount}
-          </div>
-          <div className="mt-1 text-xs text-muted">{t("dash")}</div>
-        </div>
-        <div className="rounded-xl border border-border bg-background p-4 shadow-card">
-          <div className="text-xs uppercase tracking-wide text-muted">{t("statFranchiseActive")}</div>
-          <div
-            className="mt-1 font-display text-[32px] leading-[1.05] tracking-[-0.02em] text-foreground"
-            style={{ fontVariantNumeric: "tabular-nums" }}
-          >
-            {activeCount}
-          </div>
-          <div className="mt-1 text-xs text-muted">{t("dash")}</div>
-        </div>
-        <div className="rounded-xl border border-border bg-background p-4 shadow-card">
-          <div className="text-xs uppercase tracking-wide text-muted">{t("statFranchiseConversion")}</div>
-          <div
-            className="mt-1 font-display text-[32px] leading-[1.05] tracking-[-0.02em] text-foreground"
-            style={{ fontVariantNumeric: "tabular-nums" }}
-          >
-            {conversion === null ? t("dash") : `${conversion}%`}
-          </div>
-          <div className="mt-1 text-xs text-muted">{t("dash")}</div>
-        </div>
-        <div className="rounded-xl border border-border bg-background p-4 shadow-card">
-          <div className="text-xs uppercase tracking-wide text-muted">{t("statFranchiseInterviewsDone")}</div>
-          <div
-            className="mt-1 font-display text-[32px] leading-[1.05] tracking-[-0.02em] text-foreground"
-            style={{ fontVariantNumeric: "tabular-nums" }}
-          >
-            {interviewStats.week}
-          </div>
-          <div className="mt-1 text-xs text-muted">{t("perWeek")}</div>
+        </StatTile>
+        <StatTile
+          label={t("statFranchiseWeeklyNew")}
+          value={weeklyCount}
+          caption={t("last7Days")}
+          borderColor={FUNNEL_TILE_COLOR}
+        />
+        <StatTile
+          label={t("statFranchiseQualified")}
+          value={qualifiedCount}
+          caption={t("dash")}
+          borderColor={FUNNEL_TILE_COLOR}
+        />
+        <StatTile
+          label={t("statFranchiseActive")}
+          value={activeCount}
+          caption={t("dash")}
+          borderColor={FUNNEL_TILE_COLOR}
+        />
+        <StatTile
+          label={t("statFranchiseConversion")}
+          value={conversion === null ? t("dash") : `${conversion}%`}
+          caption={t("dash")}
+          borderColor={FUNNEL_TILE_COLOR}
+        />
+        <StatTile
+          label={t("statFranchiseInterviewsDone")}
+          value={interviewStats.week}
+          caption={t("perWeek")}
+          borderColor={FUNNEL_TILE_COLOR}
+        >
           <div className="text-xs text-muted">{t("statInterviewsAllTime", { n: interviewStats.allTime })}</div>
-        </div>
+        </StatTile>
       </div>
 
       <div className="rounded-xl border border-border bg-background shadow-card p-5">
