@@ -1,6 +1,14 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { addSystemComment, hmacHex, logIntegrationEvent, safeEqual } from "@/lib/integrations/franchise";
+import {
+  addSystemComment,
+  hmacHex,
+  isTerminalStage,
+  logIntegrationEvent,
+  safeEqual,
+  setStage,
+  stageIndex,
+} from "@/lib/integrations/franchise";
 
 export const runtime = "nodejs";
 
@@ -89,7 +97,7 @@ export async function POST(request: Request) {
 
   const { data } = await admin
     .from("franchise_candidates")
-    .select("id, zoom_recording_url")
+    .select("id, zoom_recording_url, stage")
     .eq("zoom_meeting_id", meetingId)
     .order("updated_at", { ascending: false })
     .limit(1);
@@ -109,6 +117,14 @@ export async function POST(request: Request) {
   ];
   if (obj.password) lines.push(`Код доступа: ${obj.password}`);
   await addSystemComment(admin, candidate.id, lines.join("\n"));
+
+  // "как только запись появляется — переводить на «Собеседование пройдено»"
+  // (Anastasiia, 29 сен 2026). A finished recording of the interview meeting
+  // means the interview happened. Only moves FORWARD from an earlier stage;
+  // a candidate already further along, or declined/paused, is left as is.
+  if (!isTerminalStage(candidate.stage) && stageIndex(candidate.stage) < stageIndex("interview_done")) {
+    await setStage(admin, candidate.id, "interview_done", "Zoom: запись интервью готова");
+  }
   await logIntegrationEvent(admin, { source: "zoom", event_type: type, status: "matched", candidate_id: candidate.id });
   return NextResponse.json({ ok: true, id: candidate.id });
 }

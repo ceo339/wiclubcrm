@@ -282,7 +282,7 @@ function LongField({ label, value }: { label: string; value: string | null }) {
   return (
     <div className="mt-2.5">
       <div className="text-xs text-muted">{label}</div>
-      <p className="mt-0.5 whitespace-pre-wrap text-sm text-ink-2">{value}</p>
+      <p className="mt-0.5 whitespace-pre-wrap break-words text-sm text-ink-2">{linkify(value)}</p>
     </div>
   );
 }
@@ -338,7 +338,7 @@ function CommentsSection({
                 <span className="font-medium text-ink-2">{c.author_name}</span>
                 <span>{new Date(c.created_at).toLocaleString(locale === "bg" ? "bg-BG" : "ru-RU")}</span>
               </div>
-              <p className="mt-1 whitespace-pre-wrap text-ink-2">{c.body}</p>
+              <p className="mt-1 whitespace-pre-wrap break-words text-ink-2">{linkify(c.body)}</p>
             </div>
           ))}
         </div>
@@ -372,4 +372,20 @@ function isoToLocalInput(iso: string | null | undefined): string {
   if (isNaN(d.getTime())) return "";
   const pad = (n: number) => String(n).padStart(2, "0");
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+/** Turns http(s) URLs inside plain text into clickable links (opens in a new
+ * tab). React escapes the surrounding text as usual — no raw HTML involved. */
+function linkify(text: string | null | undefined) {
+  if (!text) return text;
+  const parts = text.split(/(https?:\/\/[^\s<>"]+)/g);
+  return parts.map((part, i) =>
+    /^https?:\/\//.test(part) ? (
+      <a key={i} href={part} target="_blank" rel="noreferrer" className="text-accent-strong underline break-all">
+        {part}
+      </a>
+    ) : (
+      part
+    )
+  );
 }
