@@ -10,8 +10,10 @@
  *      CRM_INTAKE_SECRET = то же значение, что FRANCHISE_INTAKE_SECRET в Vercel
  * 2. Triggers (будильник) → Add Trigger → функция onFormSubmitToCrm,
  *    источник «From form», тип «On form submit» → Save → разрешить доступ.
- * 3. Проверка: выбрать функцию testSendLatest и нажать Run —
- *    последний ответ формы отправится в CRM (дубль не создастся).
+ * 3. Проверка: заполнить форму самой с тестовым email — через несколько
+ *    секунд карточка появится во «Франчайзи» на стадии «Заявка».
+ *    (testSendLatest НЕ запускать на реальных ответах: последний ответ уже
+ *    перенесён в CRM и может задублироваться.)
  */
 
 function onFormSubmitToCrm(e) {
