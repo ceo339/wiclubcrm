@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { createHash } from "crypto";
 import { createAdminClient } from "@/lib/supabase/admin";
 import {
   addSystemComment,
@@ -66,6 +67,16 @@ export async function POST(request: Request) {
   const sig = request.headers.get("x-zm-signature") ?? "";
   const expected = "v0=" + hmacHex(secret, `v0:${ts}:${rawBody}`);
   if (!ts || Math.abs(Date.now() / 1000 - Number(ts)) > TOLERANCE_SEC || !safeEqual(sig, expected)) {
+    // Same idea as the Calendly route: make a secret-token mismatch visible
+    // in integration_events (fingerprint only, never the token itself).
+    if (sig) {
+      await logIntegrationEvent(createAdminClient(), {
+        source: "zoom",
+        event_type: "signature_check",
+        status: "bad_signature",
+        detail: `key_fp=${createHash("sha256").update(secret).digest("hex").slice(0, 8)} age_sec=${Math.round(Date.now() / 1000 - Number(ts))}`,
+      });
+    }
     return NextResponse.json({ error: "Invalid signature" }, { status: 401 });
   }
 
@@ -78,6 +89,7 @@ export async function POST(request: Request) {
 
   if (evt.event === "endpoint.url_validation") {
     const plainToken = evt.payload?.plainToken ?? "";
+    await logIntegrationEvent(createAdminClient(), { source: "zoom", event_type: "endpoint.url_validation", status: "ok" });
     return NextResponse.json({ plainToken, encryptedToken: hmacHex(secret, plainToken) });
   }
 
