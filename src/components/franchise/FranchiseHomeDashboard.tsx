@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { inPeriod, type Period } from "@/lib/dashboard";
+import type { OpenTask } from "@/lib/tasks";
 import {
   computeFranchiseFunnel,
   computeFranchiseSourceBreakdown,
@@ -36,10 +37,16 @@ export default function FranchiseHomeDashboard({
   candidates,
   qualifiedIds,
   interviewStats,
+  tasks,
+  canEditTasks,
 }: {
   candidates: FranchiseCandidate[];
   qualifiedIds: string[];
   interviewStats: InterviewStats;
+  /** Round 44 — open tasks left on franchise candidates' cards, same
+   * OpenTask shape the club Главная's "Мои задачи" widget uses. */
+  tasks: OpenTask[];
+  canEditTasks: boolean;
 }) {
   const [period, setPeriod] = useState<Period>({ mode: "month", month: currentMonthKey() });
   const qualifiedIdSet = useMemo(() => new Set(qualifiedIds), [qualifiedIds]);
@@ -71,6 +78,8 @@ export default function FranchiseHomeDashboard({
       interviewStats={interviewStats}
       sourceBreakdown={computeFranchiseSourceBreakdown(inPeriodCandidates)}
       staleCandidates={findStaleFranchiseCandidates(candidates)}
+      tasks={tasks}
+      canEditTasks={canEditTasks}
     />
   );
 }

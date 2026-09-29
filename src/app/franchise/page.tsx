@@ -33,6 +33,24 @@ export default async function FranchisePage() {
     .select("*")
     .order("submitted_at", { ascending: false });
 
+  // "добавь отображение комментария последнего в канбане" (round 44) — same
+  // "one extra query for every id on this page, newest-first so the first
+  // row seen per id wins" pattern as leads/page.tsx's own latestCommentByLead,
+  // just against franchise_candidate_comments instead of the generic
+  // comments table.
+  const candidateIds = (candidates ?? []).map((c) => c.id);
+  const { data: latestComments } = candidateIds.length
+    ? await supabase
+        .from("franchise_candidate_comments")
+        .select("candidate_id, body, created_at")
+        .in("candidate_id", candidateIds)
+        .order("created_at", { ascending: false })
+    : { data: [] };
+  const latestCommentByCandidate = new Map<string, string>();
+  for (const c of latestComments ?? []) {
+    if (!latestCommentByCandidate.has(c.candidate_id)) latestCommentByCandidate.set(c.candidate_id, c.body);
+  }
+
   // "Квалифицированные" (round 40) — "туда переносить всех, кто на стадии
   // Фин. модель отправлена или прошел эту стадию". Her decision when asked
   // via AskUserQuestion: by HISTORY, not just current stage — someone who
@@ -72,7 +90,14 @@ export default async function FranchisePage() {
           <T k="errLoadFranchiseFailed" />: {error.message}
         </p>
       ) : (
-        <FranchiseBoard initialCandidates={candidates ?? []} canEdit={canEdit} qualifiedIds={qualifiedIds} />
+        <FranchiseBoard
+          initialCandidates={(candidates ?? []).map((c) => ({
+            ...c,
+            latest_comment: latestCommentByCandidate.get(c.id) ?? null,
+          }))}
+          canEdit={canEdit}
+          qualifiedIds={qualifiedIds}
+        />
       )}
     </AppShell>
   );

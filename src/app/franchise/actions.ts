@@ -109,21 +109,26 @@ export async function setCandidateInterviewDate(candidateId: string, date: strin
 export type FranchiseCandidateDetail = {
   history: Tables<"franchise_stage_history">[];
   comments: Tables<"franchise_candidate_comments">[];
+  /** Round 44 ("Добавь задачи в карточку лида") — same `tasks` table leads/
+   * members already use, just entity_type = "franchise_candidate" and no
+   * partner_id (a candidate isn't any one club's — see the migration that
+   * made tasks.partner_id nullable for this entity_type). */
+  tasks: Tables<"tasks">[];
 };
 
 /**
- * Loads a candidate's stage timeline + comment thread, fetched on demand
- * when the card opens — same lazy pattern as getLeadDetail in
- * leads/actions.ts.
+ * Loads a candidate's stage timeline + comment thread + open/done tasks,
+ * fetched on demand when the card opens — same lazy pattern as
+ * getLeadDetail in leads/actions.ts.
  */
 export async function getCandidateDetail(candidateId: string): Promise<FranchiseCandidateDetail> {
   const profile = await getCurrentProfile();
-  if (!profile) return { history: [], comments: [] };
+  if (!profile) return { history: [], comments: [], tasks: [] };
   const { canView } = franchiseAccess(profile);
-  if (!canView) return { history: [], comments: [] };
+  if (!canView) return { history: [], comments: [], tasks: [] };
 
   const supabase = await createClient();
-  const [{ data: history }, { data: comments }] = await Promise.all([
+  const [{ data: history }, { data: comments }, { data: tasks }] = await Promise.all([
     supabase
       .from("franchise_stage_history")
       .select("*")
@@ -134,9 +139,66 @@ export async function getCandidateDetail(candidateId: string): Promise<Franchise
       .select("*")
       .eq("candidate_id", candidateId)
       .order("created_at", { ascending: false }),
+    supabase
+      .from("tasks")
+      .select("*")
+      .eq("entity_type", "franchise_candidate")
+      .eq("entity_id", candidateId)
+      .order("due_date", { ascending: true }),
   ]);
 
-  return { history: history ?? [], comments: comments ?? [] };
+  return { history: history ?? [], comments: comments ?? [], tasks: tasks ?? [] };
+}
+
+/**
+ * Same shape/rules as leads/actions.ts's own addTask/setTaskDone, just
+ * against a franchise candidate instead of a lead — gated on franchise
+ * edit access (not profile.partner_id, which a franchise candidate has
+ * nothing to do with) and written with partner_id: null (see the
+ * tasks_partner_id_matches_entity_type check constraint added for this).
+ */
+export async function addCandidateTask(
+  candidateId: string,
+  text: string,
+  dueDate: string | null
+): Promise<ActionResult> {
+  const profile = await getCurrentProfile();
+  if (!profile) return { error: "errNotAuthorized" };
+  const { canEdit } = franchiseAccess(profile);
+  if (!canEdit) return { error: "errNotAuthorized" };
+
+  const trimmed = text.trim();
+  if (!trimmed) return { error: "errEnterTaskText" };
+
+  const supabase = await createClient();
+  const { error } = await supabase.from("tasks").insert({
+    partner_id: null,
+    entity_type: "franchise_candidate",
+    entity_id: candidateId,
+    text: trimmed,
+    due_date: dueDate || null,
+    done: false,
+  });
+  if (error) return { error: error.message };
+
+  revalidatePath("/franchise");
+  revalidatePath("/");
+  return { error: null };
+}
+
+export async function setCandidateTaskDone(taskId: string, done: boolean): Promise<ActionResult> {
+  const profile = await getCurrentProfile();
+  if (!profile) return { error: "errNotAuthorized" };
+  const { canEdit } = franchiseAccess(profile);
+  if (!canEdit) return { error: "errNotAuthorized" };
+
+  const supabase = await createClient();
+  const { error } = await supabase.from("tasks").update({ done }).eq("id", taskId);
+  if (error) return { error: error.message };
+
+  revalidatePath("/franchise");
+  revalidatePath("/");
+  return { error: null };
 }
 
 /**

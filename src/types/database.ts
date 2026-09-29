@@ -956,7 +956,11 @@ export type Database = {
           entity_id: string
           entity_type: string
           id: string
-          partner_id: string
+          // Nullable since round 44: a "franchise_candidate" task has no
+          // club to belong to (the whole franchise pipeline is network-wide,
+          // same reasoning as franchise_candidates itself) — see the
+          // tasks_partner_id_matches_entity_type check constraint.
+          partner_id: string | null
           text: string
         }
         Insert: {
@@ -966,7 +970,7 @@ export type Database = {
           entity_id: string
           entity_type: string
           id?: string
-          partner_id: string
+          partner_id?: string | null
           text: string
         }
         Update: {
@@ -976,7 +980,7 @@ export type Database = {
           entity_id?: string
           entity_type?: string
           id?: string
-          partner_id?: string
+          partner_id?: string | null
           text?: string
         }
         Relationships: [

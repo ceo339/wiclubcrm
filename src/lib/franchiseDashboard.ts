@@ -30,9 +30,21 @@ export type FranchiseFunnelStage = {
 /** Same forward-funnel idea as computeFunnel in lib/dashboard.ts, applied
  * to the 15-stage franchise pipeline (declined/paused excluded from the
  * "forward" line — a candidate who reached fin_model_sent before declining
- * still counts as having reached it, same as leads' own funnel). */
-export function computeFranchiseFunnel(candidates: { stage: string }[]): FranchiseFunnelStage[] {
-  const forward = FRANCHISE_STAGES.filter((s) => !s.lost);
+ * still counts as having reached it, same as leads' own funnel).
+ *
+ * `fromStageId` (round 44, 29 сен 2026 — "на вкладке квалификация воронка
+ * отображалась со стадии фин модель отправлена") truncates the funnel to
+ * start at a later stage instead of the very first one — the "Квалифи-
+ * цированные" tab's own funnel, scoped to the candidates it already shows,
+ * has no reason to repeat the application/interview stages every candidate
+ * on that tab has already passed. */
+export function computeFranchiseFunnel(
+  candidates: { stage: string }[],
+  fromStageId?: FranchiseStageId
+): FranchiseFunnelStage[] {
+  const allForward = FRANCHISE_STAGES.filter((s) => !s.lost);
+  const startIdx = fromStageId ? Math.max(0, allForward.findIndex((s) => s.id === fromStageId)) : 0;
+  const forward = allForward.slice(startIdx);
   const counts = forward.map(
     (_, i) => candidates.filter((c) => forward.findIndex((f) => f.id === c.stage) >= i).length
   );

@@ -8,11 +8,15 @@ export type OpenTask = {
   id: string;
   text: string;
   dueDate: string | null;
-  entityType: "lead" | "member";
+  /** "franchise_candidate" added round 44 ("Добавь задачи в карточку лида
+   * [франчайзи] и на главную") — a task on a franchise candidate's card,
+   * shown on the franchise-scope Главная instead of a club's own task list. */
+  entityType: "lead" | "member" | "franchise_candidate";
   entityId: string;
   entityName: string;
   /** Only set on the HQ (network-wide) view — a partner's own list is all
-   * their own club, so naming it on every row would be noise. */
+   * their own club, so naming it on every row would be noise. Always null
+   * for a franchise-candidate task (no club owns it). */
   partnerName: string | null;
 };
 
@@ -41,7 +45,10 @@ export function sortOpenTasks(tasks: OpenTask[]): OpenTask[] {
 }
 
 /** Where clicking this task's row should take you — the deep-link query
- * param that LeadsBoard/MembersBoard read to auto-open the right card. */
+ * param that LeadsBoard/MembersBoard/FranchiseBoard read to auto-open the
+ * right card. */
 export function taskHref(task: OpenTask): string {
-  return task.entityType === "lead" ? `/leads?open=${task.entityId}` : `/members?open=${task.entityId}`;
+  if (task.entityType === "lead") return `/leads?open=${task.entityId}`;
+  if (task.entityType === "member") return `/members?open=${task.entityId}`;
+  return `/franchise?open=${task.entityId}`;
 }

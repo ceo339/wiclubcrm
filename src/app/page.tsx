@@ -92,15 +92,35 @@ export default async function Home({
   // (tasks, leads, members, payments…) is even fetched in this branch, it
   // has no bearing on a franchise view.
   if (networkView && viewMode === "franchise") {
-    const [{ data: candidates, error }, { data: qualifyingHistory }, { data: interviewHistory }] = await Promise.all([
-      supabase.from("franchise_candidates").select("*").order("submitted_at", { ascending: false }),
-      supabase.from("franchise_stage_history").select("candidate_id").in("stage", QUALIFYING_STAGES),
-      supabase.from("franchise_stage_history").select("candidate_id, occurred_at").eq("stage", "interview_done"),
-    ]);
+    const [{ data: candidates, error }, { data: qualifyingHistory }, { data: interviewHistory }, { data: rawFranchiseTasks }] =
+      await Promise.all([
+        supabase.from("franchise_candidates").select("*").order("submitted_at", { ascending: false }),
+        supabase.from("franchise_stage_history").select("candidate_id").in("stage", QUALIFYING_STAGES),
+        supabase.from("franchise_stage_history").select("candidate_id, occurred_at").eq("stage", "interview_done"),
+        supabase.from("tasks").select("*").eq("entity_type", "franchise_candidate").eq("done", false),
+      ]);
 
     const allCandidates = candidates ?? [];
     const qualifiedIds = computeQualifiedIds(allCandidates, (qualifyingHistory ?? []).map((r) => r.candidate_id));
     const interviewStats = computeInterviewStats(interviewHistory ?? []);
+
+    // "Добавь задачи... на главную" (round 44) — same OpenTask/TasksWidget
+    // machinery the club Главная already uses below, just scoped to
+    // franchise-candidate tasks (no partner_id/partnerName — a candidate
+    // isn't any one club's, see the tasks migration for this entity_type).
+    const candidateNameById = new Map(allCandidates.map((c) => [c.id, c.name]));
+    const canEditFranchiseTasks = profile.role === "hq" || profile.franchise_access === "edit";
+    const franchiseOpenTasks: OpenTask[] = sortOpenTasks(
+      (rawFranchiseTasks ?? []).map((row) => ({
+        id: row.id,
+        text: row.text,
+        dueDate: row.due_date,
+        entityType: "franchise_candidate",
+        entityId: row.entity_id,
+        entityName: candidateNameById.get(row.entity_id) ?? "—",
+        partnerName: null,
+      }))
+    );
 
     return (
       <AppShell
@@ -122,7 +142,13 @@ export default async function Home({
             <T k="errLoadFranchiseFailed" />: {error.message}
           </p>
         ) : (
-          <FranchiseHomeDashboard candidates={allCandidates} qualifiedIds={qualifiedIds} interviewStats={interviewStats} />
+          <FranchiseHomeDashboard
+            candidates={allCandidates}
+            qualifiedIds={qualifiedIds}
+            interviewStats={interviewStats}
+            tasks={franchiseOpenTasks}
+            canEditTasks={canEditFranchiseTasks}
+          />
         )}
       </AppShell>
     );

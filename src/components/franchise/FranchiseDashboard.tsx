@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { monthLabel, periodLabel, type Period } from "@/lib/dashboard";
+import type { OpenTask } from "@/lib/tasks";
 import {
   franchiseStageLabel,
   type FranchiseFunnelStage,
@@ -13,6 +14,7 @@ import {
 import { interpolateHex } from "@/lib/leads";
 import { useLocale } from "@/components/i18n/LocaleProvider";
 import Sparkline from "@/components/dashboard/Sparkline";
+import TasksWidget from "@/components/home/TasksWidget";
 
 /**
  * "Главную сделать с той же аналитикой, что и для клубов" (Anastasiia, 28
@@ -54,6 +56,8 @@ export default function FranchiseDashboard({
   interviewStats,
   sourceBreakdown,
   staleCandidates,
+  tasks,
+  canEditTasks,
 }: {
   period: Period;
   monthOptions: string[];
@@ -74,6 +78,11 @@ export default function FranchiseDashboard({
   interviewStats: InterviewStats;
   sourceBreakdown: FranchiseSourceBreakdown[];
   staleCandidates: StaleFranchiseCandidate[];
+  /** Round 44 ("Добавь задачи... на главную") — open tasks left on
+   * candidates' cards, rendered the same way the club Главная's own "Мои
+   * задачи" widget does. */
+  tasks: OpenTask[];
+  canEditTasks: boolean;
 }) {
   const { locale, t } = useLocale();
   const maxFunnel = Math.max(1, ...funnel.map((s) => s.count));
@@ -121,6 +130,8 @@ export default function FranchiseDashboard({
         </div>
         <p className="mt-2 text-xs text-muted">{periodLabel(period, locale)}</p>
       </div>
+
+      <TasksWidget tasks={tasks} headingKey="headingFranchiseTasks" canEdit={canEditTasks} />
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
         <div className="rounded-xl border border-border bg-background p-4 shadow-card">

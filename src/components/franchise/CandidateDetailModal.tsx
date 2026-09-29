@@ -3,8 +3,10 @@
 import { useEffect, useState, useTransition } from "react";
 import {
   addCandidateComment,
+  addCandidateTask,
   getCandidateDetail,
   setCandidateInterviewDate,
+  setCandidateTaskDone,
   setCandidateZoomUrl,
   updateCandidateStage,
   type FranchiseCandidateDetail,
@@ -251,6 +253,7 @@ export default function CandidateDetailModal({
             {candidate.internal_note && <LongField label={t("fFieldInternalNote")} value={candidate.internal_note} />}
           </div>
 
+          <TasksSection candidateId={candidate.id} detail={detail} canEdit={canEdit} onChanged={reload} />
           <CommentsSection candidateId={candidate.id} detail={detail} canEdit={canEdit} onChanged={reload} />
         </div>
       </div>
@@ -283,6 +286,109 @@ function LongField({ label, value }: { label: string; value: string | null }) {
     <div className="mt-2.5">
       <div className="text-xs text-muted">{label}</div>
       <p className="mt-0.5 whitespace-pre-wrap break-words text-sm text-ink-2">{linkify(value)}</p>
+    </div>
+  );
+}
+
+/**
+ * "Добавь задачи в карточку лида [франчайзи]" (Anastasiia, round 44) — same
+ * layout and behavior as leads/LeadDetailModal.tsx's own TasksSection, just
+ * backed by addCandidateTask/setCandidateTaskDone instead of addTask/
+ * setTaskDone (a franchise candidate task has no partner_id — see those
+ * actions' own comments).
+ */
+function TasksSection({
+  candidateId,
+  detail,
+  canEdit,
+  onChanged,
+}: {
+  candidateId: string;
+  detail: FranchiseCandidateDetail | null;
+  canEdit: boolean;
+  onChanged: () => void;
+}) {
+  const { t } = useLocale();
+  const [text, setText] = useState("");
+  const [due, setDue] = useState("");
+  const [pending, startTransition] = useTransition();
+  const [error, setError] = useState<string | null>(null);
+
+  function handleAdd() {
+    if (!text.trim()) return;
+    setError(null);
+    startTransition(async () => {
+      const res = await addCandidateTask(candidateId, text, due || null);
+      if (res.error) setError(res.error);
+      else {
+        setText("");
+        setDue("");
+        onChanged();
+      }
+    });
+  }
+
+  function handleToggle(taskId: string, done: boolean) {
+    startTransition(async () => {
+      await setCandidateTaskDone(taskId, done);
+      onChanged();
+    });
+  }
+
+  const tasks = detail?.tasks ?? [];
+  const open = tasks.filter((task) => !task.done);
+  const done = tasks.filter((task) => task.done);
+
+  return (
+    <div className="mt-4">
+      <span className="text-xs font-semibold uppercase tracking-wide text-muted">{t("headingTasks")}</span>
+      {detail === null ? (
+        <p className="mt-2 text-xs text-muted">{t("loading")}</p>
+      ) : open.length === 0 && done.length === 0 ? (
+        <p className="mt-2 text-xs text-muted">{t("emptyNoTasks")}</p>
+      ) : (
+        <div className="mt-2 flex flex-col gap-1.5">
+          {[...open, ...done].map((task) => (
+            <label key={task.id} className="flex items-center gap-2 text-xs">
+              <input
+                type="checkbox"
+                checked={task.done}
+                disabled={!canEdit || pending}
+                onChange={(e) => handleToggle(task.id, e.target.checked)}
+                className="h-3.5 w-3.5"
+              />
+              <span className={task.done ? "flex-1 text-muted line-through" : "flex-1 text-ink-2"}>{task.text}</span>
+              {task.due_date && <span className="text-muted">{task.due_date}</span>}
+            </label>
+          ))}
+        </div>
+      )}
+
+      {canEdit && (
+        <div className="mt-2 flex flex-wrap items-center gap-2">
+          <input
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            placeholder={t("placeholderNewTask")}
+            className="min-w-[140px] flex-1 rounded-lg border border-border bg-background px-2 py-1.5 text-xs outline-none focus:border-accent focus:ring-1 focus:ring-accent"
+          />
+          <input
+            type="date"
+            value={due}
+            onChange={(e) => setDue(e.target.value)}
+            className="rounded-lg border border-border bg-background px-2 py-1.5 text-xs outline-none focus:border-accent focus:ring-1 focus:ring-accent"
+          />
+          <button
+            type="button"
+            onClick={handleAdd}
+            disabled={pending || !text.trim()}
+            className="rounded-lg border border-border px-3 py-1.5 text-xs font-medium text-ink-2 hover:bg-surface-2 disabled:opacity-50"
+          >
+            {t("btnAddTaskShort")}
+          </button>
+        </div>
+      )}
+      {error && <p className="mt-1 text-xs text-accent-strong">{t(error)}</p>}
     </div>
   );
 }

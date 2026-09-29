@@ -1,10 +1,13 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { useLocale } from "@/components/i18n/LocaleProvider";
+import { computeFranchiseFunnel } from "@/lib/franchiseDashboard";
 import type { FranchiseCandidate } from "./types";
 import KanbanBoard from "./KanbanBoard";
 import CandidateDetailModal from "./CandidateDetailModal";
+import FranchiseFunnelBars from "./FranchiseFunnelBars";
 
 /**
  * Thin wrapper mirroring leads/LeadsBoard.tsx's role (own the
@@ -36,7 +39,15 @@ export default function FranchiseBoard({
 }) {
   const { t } = useLocale();
   const [search, setSearch] = useState("");
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  // "?open=<id>" — same deep-link convention as leads/LeadsBoard.tsx, how a
+  // link from outside this page (the home page's "Задачи по кандидаткам"
+  // widget, round 44) opens a specific candidate's card directly.
+  const searchParams = useSearchParams();
+  const [selectedId, setSelectedId] = useState<string | null>(() => searchParams.get("open"));
+  useEffect(() => {
+    const openId = searchParams.get("open");
+    if (openId) setSelectedId(openId);
+  }, [searchParams]);
   // "сделать отдельно модуль «квалифицированные»" (Anastasiia, 28 сен
   // 2026) — a tab alongside "Все" rather than a whole separate page, so it
   // shares the same board/search/detail-modal plumbing already here.
@@ -46,6 +57,14 @@ export default function FranchiseBoard({
   const byView = useMemo(
     () => (view === "qualified" ? initialCandidates.filter((c) => qualifiedIdSet.has(c.id)) : initialCandidates),
     [initialCandidates, view, qualifiedIdSet]
+  );
+
+  // "воронка отображалась со стадии фин модель отправлена" (round 44) —
+  // scoped to the same population this tab already shows (byView, before
+  // the free-text search box narrows it further).
+  const qualifiedFunnel = useMemo(
+    () => (view === "qualified" ? computeFranchiseFunnel(byView, "fin_model_sent") : []),
+    [byView, view]
   );
 
   const filtered = useMemo(() => {
@@ -90,6 +109,15 @@ export default function FranchiseBoard({
         <span className="ml-auto text-xs text-muted">{t("fCandidatesCount", { count: byView.length })}</span>
       </div>
       {view === "qualified" && <p className="text-xs text-muted">{t("fQualifiedHint")}</p>}
+
+      {view === "qualified" && (
+        <div className="rounded-xl border border-border bg-background shadow-card p-5">
+          <h2 className="text-sm font-semibold text-foreground">{t("headingQualifiedFunnel")}</h2>
+          <div className="mt-4">
+            <FranchiseFunnelBars funnel={qualifiedFunnel} />
+          </div>
+        </div>
+      )}
 
       <KanbanBoard candidates={filtered} canEdit={canEdit} onSelect={setSelectedId} />
 

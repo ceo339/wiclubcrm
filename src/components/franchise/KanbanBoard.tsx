@@ -91,6 +91,12 @@ export default function KanbanBoard({
                     <div className="mt-1 truncate text-xs text-muted">
                       {candidate.target_city || candidate.country || "—"}
                     </div>
+                    {/* "добавь отображение комментария последнего в
+                        канбане" (Anastasiia, round 44) — same one-line
+                        truncated preview as leads/KanbanBoard.tsx. */}
+                    {candidate.latest_comment && (
+                      <div className="mt-1 truncate text-xs italic text-muted">{candidate.latest_comment}</div>
+                    )}
                     {(stage.id === "declined" || stage.id === "paused") && candidate.reject_reason && (
                       <div className="mt-1 truncate text-xs text-accent-strong">{candidate.reject_reason}</div>
                     )}
