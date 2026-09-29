@@ -178,6 +178,7 @@ export const DICT: Record<string, Entry> = {
   statCollectedTotal: { ru: "Собрано за период", bg: "Събрано за периода" },
   statPending: { ru: "Ожидается", bg: "Очаква се" },
   deltaForPeriod: { ru: "за выбранный период", bg: "за избрания период" },
+  captionAllTime: { ru: "за всё время", bg: "за цялото време" },
   deltaMembersAdded: { ru: "+{n} за период", bg: "+{n} за периода" },
   deltaMembersNone: { ru: "не добавлено за период", bg: "не са добавени за периода" },
   deltaRoyaltyPercent: { ru: "{percent}% от выручки за период", bg: "{percent}% от приходите за периода" },
@@ -1036,7 +1037,12 @@ export const DICT: Record<string, Entry> = {
   // ---- franchise dashboard (round 40, Главная → «Франчайзи») ----
   statFranchiseSubmitted: { ru: "Заявок франчайзи", bg: "Заявления за франчайз" },
   statFranchiseQualified: { ru: "Квалифицированных", bg: "Квалифицирани" },
-  statFranchiseActive: { ru: "Активных франшиз", bg: "Активни франчайзи" },
+  // statFranchiseActive ("Активных франшиз") removed round 46 part 2 — it
+  // duplicated the «Активные клубы» tile already at the top of «Дашборд
+  // партнёров» (same candidates.filter(stage === "active").length),
+  // flagged by Anastasiia from the live screenshot. statFranchiseConversion
+  // ("Заявка → Активна") stays in use — moved up into that same top row,
+  // now computed all-time (see NetworkSummary.conversionRate).
   statFranchiseConversion: { ru: "Заявка → Активна", bg: "Заявление → Активен" },
   headingFranchiseFunnel: { ru: "Воронка франчайзи за период", bg: "Фуния на франчайза за периода" },
   headingFranchiseSourceBreakdown: { ru: "Откуда приходят кандидатки", bg: "Откъде идват кандидатите" },

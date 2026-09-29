@@ -13,7 +13,7 @@ import {
   franchiseStageLabel,
   type FranchiseStageId,
 } from "@/lib/franchise";
-import { currentMonthKey, lastNMonthKeys, monthKeyOf, pctOf, type Period } from "@/lib/dashboard";
+import { currentMonthKey, inPeriod, lastNMonthKeys, monthKeyOf, pctOf, type Period } from "@/lib/dashboard";
 import { approximateLocation } from "@/lib/geo";
 import type { Locale } from "@/lib/i18n";
 
@@ -172,6 +172,25 @@ export function weeklyFranchiseCandidates<T extends { submitted_at: string }>(
   return candidates.filter((c) => isWithinLastWeek(c.submitted_at, now));
 }
 
+/**
+ * "Добавь договор отправлен за неделю/ за выбранный период" (Anastasiia,
+ * round 46 part 2) — counts TRANSITIONS onto `stage` within the dashboard's
+ * month/year/range period, from franchise_stage_history.occurred_at, not
+ * "how many candidates currently sit on this stage right now": a candidate
+ * usually moves off "Договор отправлен" within days (onto "Договор
+ * подписан" or a decline), so a current-stage count would read near-zero
+ * almost all the time and say nothing about how much of this actually
+ * happened in the period — same reasoning as latestActivityByCandidate
+ * above for why history, not a snapshot column, is the real signal here.
+ */
+export function countStageTransitionsInPeriod(
+  history: { stage: string; occurred_at: string }[],
+  stage: string,
+  period: Period
+): number {
+  return history.filter((r) => r.stage === stage && inPeriod(period, r.occurred_at)).length;
+}
+
 export type InterviewStats = { week: number; allTime: number };
 
 /** Counts DISTINCT candidates who ever logged an "Собеседование пройдено"
@@ -214,6 +233,14 @@ export type NetworkSummary = {
   totalAll: number;
   weeklyAll: number;
   activeClubs: number;
+  /** "ЗАЯВКА → АКТИВНА это перенеси наверх и считается за все время"
+   * (Anastasiia, round 46 part 2) — moved up from the lower funnel-tiles row
+   * into this top block. Always computed against every candidate passed in
+   * here (this function is only ever called with the full, unfiltered
+   * candidate list — see FranchiseHomeDashboard.tsx), never the month/year
+   * period selector, so "за все время" holds by construction rather than
+   * needing a second period-aware code path. */
+  conversionRate: number | null;
 };
 
 export function computeNetworkSummary(candidates: { stage: string; submitted_at: string }[]): NetworkSummary {
@@ -221,6 +248,7 @@ export function computeNetworkSummary(candidates: { stage: string; submitted_at:
     totalAll: candidates.length,
     weeklyAll: weeklyFranchiseCandidates(candidates).length,
     activeClubs: candidates.filter((c) => c.stage === "active").length,
+    conversionRate: franchiseConversionRate(candidates),
   };
 }
 
@@ -280,6 +308,9 @@ export type RecentActivityItem = {
   stage: string;
   city: string | null;
   lastActivityAt: string;
+  /** "если там есть отказ, то показывай и причину отказа" (Anastasiia,
+   * round 46 part 2) — shown instead of the city for declined/paused rows. */
+  rejectReason: string | null;
 };
 
 /** franchise_candidates.updated_at оказался бесполезен для «Недавней
@@ -300,7 +331,14 @@ export function latestActivityByCandidate(history: { candidate_id: string; occur
 }
 
 export function computeRecentActivity(
-  candidates: { id: string; name: string; stage: string; target_city: string | null; submitted_at: string }[],
+  candidates: {
+    id: string;
+    name: string;
+    stage: string;
+    target_city: string | null;
+    submitted_at: string;
+    reject_reason: string | null;
+  }[],
   lastActivityById: Map<string, string>,
   limit = 6
 ): RecentActivityItem[] {
@@ -311,6 +349,7 @@ export function computeRecentActivity(
       stage: c.stage,
       city: c.target_city,
       lastActivityAt: lastActivityById.get(c.id) ?? c.submitted_at,
+      rejectReason: c.reject_reason,
     }))
     .sort((a, b) => new Date(b.lastActivityAt).getTime() - new Date(a.lastActivityAt).getTime())
     .slice(0, limit);

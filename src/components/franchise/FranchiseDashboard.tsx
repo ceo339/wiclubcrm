@@ -56,8 +56,7 @@ export default function FranchiseDashboard({
   submittedCount,
   weeklyCount,
   qualifiedCount,
-  activeCount,
-  conversion,
+  contractSentCount,
   submissionTrend,
   funnel,
   weeklyFunnel,
@@ -80,8 +79,13 @@ export default function FranchiseDashboard({
    * week", independent of the month/year selector above. */
   weeklyCount: number;
   qualifiedCount: number;
-  activeCount: number;
-  conversion: number | null;
+  /** Round 46 part 2 ("Добавь договор отправлен за неделю/ за выбранный
+   * период") — count of stage-history transitions onto "contract_sent"
+   * within the selected month/year/range period (see
+   * countStageTransitionsInPeriod). "Активных франшиз" and "Заявка →
+   * Активна" used to live in this same row; both moved/removed this round
+   * (see NetworkSummaryPanel's top row and computeNetworkSummary). */
+  contractSentCount: number;
   submissionTrend: MonthlyCount[];
   funnel: FranchiseFunnelStage[];
   /** Same shape/logic as `funnel`, computed against just the candidates
@@ -180,15 +184,9 @@ export default function FranchiseDashboard({
           borderColor={FUNNEL_TILE_COLOR}
         />
         <StatTile
-          label={t("statFranchiseActive")}
-          value={activeCount}
-          caption={t("dash")}
-          borderColor={FUNNEL_TILE_COLOR}
-        />
-        <StatTile
-          label={t("statFranchiseConversion")}
-          value={conversion === null ? t("dash") : `${conversion}%`}
-          caption={t("dash")}
+          label={t("fStageContractSent")}
+          value={contractSentCount}
+          caption={t("deltaForPeriod")}
           borderColor={FUNNEL_TILE_COLOR}
         />
         <StatTile

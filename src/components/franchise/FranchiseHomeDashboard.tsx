@@ -10,9 +10,9 @@ import {
   computeNetworkStructure,
   computeApproxGeography,
   computeRecentActivity,
+  countStageTransitionsInPeriod,
   latestActivityByCandidate,
   findStaleFranchiseCandidates,
-  franchiseConversionRate,
   franchiseMonthsWithActivity,
   franchiseYearsWithActivity,
   monthlyFranchiseSubmissions,
@@ -56,10 +56,11 @@ export default function FranchiseHomeDashboard({
   tasks: OpenTask[];
   canEditTasks: boolean;
   /** Round 46 — full franchise_stage_history (candidate_id/stage/
-   * occurred_at), fetched once in page.tsx. Powers the new «Дашборд
-   * партнёров» block's "last activity" timestamp per candidate
-   * (candidates.updated_at itself turned out to be a mass-backfill
-   * artifact, useless for this — see latestActivityByCandidate). */
+   * occurred_at), fetched once in page.tsx. Powers the «Дашборд партнёров»
+   * block's "last activity" timestamp per candidate (candidates.updated_at
+   * itself turned out to be a mass-backfill artifact, useless for this —
+   * see latestActivityByCandidate) and, since round 46 part 2, the
+   * period-scoped "Договор отправлен" tile (countStageTransitionsInPeriod). */
   stageHistory: StageHistoryRow[];
 }) {
   const [period, setPeriod] = useState<Period>({ mode: "month", month: currentMonthKey() });
@@ -89,6 +90,15 @@ export default function FranchiseHomeDashboard({
   const weeklyCandidates = useMemo(() => weeklyFranchiseCandidates(candidates), [candidates]);
   const weeklyFunnel = useMemo(() => computeFranchiseFunnel(weeklyCandidates), [weeklyCandidates]);
 
+  // "Добавь договор отправлен за неделю/ за выбранный период" (round 46
+  // part 2) — same month/year/range period as submittedCount below, applied
+  // to stage-history transitions instead of submission dates (see
+  // countStageTransitionsInPeriod for why history, not current stage).
+  const contractSentCount = useMemo(
+    () => countStageTransitionsInPeriod(stageHistory, "contract_sent", period),
+    [stageHistory, period]
+  );
+
   return (
     <FranchiseDashboard
       period={period}
@@ -98,8 +108,7 @@ export default function FranchiseHomeDashboard({
       submittedCount={inPeriodCandidates.length}
       weeklyCount={weeklyCandidates.length}
       qualifiedCount={qualifiedIdSet.size}
-      activeCount={candidates.filter((c) => c.stage === "active").length}
-      conversion={franchiseConversionRate(candidates)}
+      contractSentCount={contractSentCount}
       submissionTrend={monthlyFranchiseSubmissions(candidates)}
       funnel={computeFranchiseFunnel(candidates)}
       weeklyFunnel={weeklyFunnel}

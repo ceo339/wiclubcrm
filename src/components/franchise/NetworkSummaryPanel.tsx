@@ -1,6 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
+import Link from "next/link";
 import { useLocale } from "@/components/i18n/LocaleProvider";
 import { franchiseStageLabel } from "@/lib/franchise";
 import {
@@ -36,6 +37,13 @@ const COLOR_TERMINAL = "#9e0c24";
  * заменено на обычный список стран-баров (тот же паттерн, что и
  * «Откуда приходят кандидатки» в франчайзи-аналитике ниже) — гарантированно
  * читаемо при любом количестве стран.
+ *
+ * Round 46, part 2 (тот же день, фидбек уже по живым скриншотам):
+ * «Недавняя активность» стала кликабельной (ведёт на /franchise?open=<id>,
+ * тот же deep-link, что уже открывает карточку из канбана) и показывает
+ * причину отказа вместо города для «Отказ»/«Пауза»; «ЗАЯВКА → АКТИВНА»
+ * переехала сюда из нижнего ряда funnel-плиток и теперь всегда за всё
+ * время (см. NetworkSummary.conversionRate).
  */
 export default function NetworkSummaryPanel({
   summary,
@@ -61,7 +69,7 @@ export default function NetworkSummaryPanel({
         <p className="mt-1 text-sm text-muted">{t("subheadingNetworkSummary")}</p>
       </div>
 
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <StatTile
           label={t("statNetworkTotalApplications")}
           value={summary.totalAll}
@@ -80,6 +88,17 @@ export default function NetworkSummaryPanel({
           label={t("statNetworkCountries")}
           value={geography.countries.length}
           caption={t("statNetworkCountriesCaption")}
+          borderColor="var(--border-strong)"
+        />
+        {/* "ЗАЯВКА → АКТИВНА это перенеси наверх и считается за все время"
+            (Anastasiia, round 46 part 2) — moved here from the lower funnel
+            tiles row; summary.conversionRate is always computed against the
+            full candidate list, never the period selector (see
+            computeNetworkSummary). */}
+        <StatTile
+          label={t("statFranchiseConversion")}
+          value={summary.conversionRate === null ? t("dash") : `${summary.conversionRate}%`}
+          caption={t("captionAllTime")}
           borderColor="var(--border-strong)"
         />
       </div>
@@ -120,8 +139,17 @@ export default function NetworkSummaryPanel({
             {recentActivity.map((item) => {
               const rt = relativeTimeParts(item.lastActivityAt);
               const isTerminal = item.stage === "declined" || item.stage === "paused";
+              // "если там есть отказ, то показывай и причину отказа"
+              // (Anastasiia, round 46 part 2) — reject_reason instead of the
+              // city for a declined/paused row; falls back to the city when
+              // no reason was recorded, rather than showing nothing.
+              const secondaryText = isTerminal ? item.rejectReason ?? item.city : item.city;
               return (
-                <div key={item.id} className="flex items-center gap-3 px-5 py-3">
+                <Link
+                  key={item.id}
+                  href={`/franchise?open=${item.id}`}
+                  className="flex items-center gap-3 px-5 py-3 transition-colors hover:bg-surface-2"
+                >
                   <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-surface-2 text-xs font-semibold text-ink-2">
                     {initials(item.name)}
                   </div>
@@ -140,11 +168,11 @@ export default function NetworkSummaryPanel({
                       >
                         {franchiseStageLabel(item.stage, locale)}
                       </span>
-                      {item.city && <span className="text-xs text-muted">· {item.city}</span>}
+                      {secondaryText && <span className="truncate text-xs text-muted">· {secondaryText}</span>}
                     </div>
                   </div>
                   <div className="shrink-0 text-xs text-muted">{t(rt.key, rt.n !== undefined ? { n: rt.n } : undefined)}</div>
-                </div>
+                </Link>
               );
             })}
           </div>
