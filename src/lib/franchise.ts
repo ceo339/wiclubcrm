@@ -128,6 +128,19 @@ export const QUALIFYING_STAGES: FranchiseStageId[] = FRANCHISE_STAGES
   .map((s) => s.id);
 
 /**
+ * "Убери и отображение самих колонок до стадии фин модель отправлена"
+ * (Anastasiia, round 46) — which kanban COLUMNS the "Квалифицированные" tab
+ * shows, as opposed to QUALIFYING_STAGES above (which decides who COUNTS as
+ * qualified). Unlike QUALIFYING_STAGES this keeps declined/paused: a
+ * candidate can be qualified by history (reached fin_model_sent once) while
+ * currently sitting on "Отказ"/"Пауза", and those two are already the last
+ * two entries in FRANCHISE_STAGES, so slicing from fin_model_sent onward
+ * naturally includes them without needing to list them separately. */
+export const QUALIFIED_TAB_STAGES = VISIBLE_FRANCHISE_STAGES.slice(
+  VISIBLE_FRANCHISE_STAGES.findIndex((s) => s.id === "fin_model_sent")
+);
+
+/**
  * Shared by franchise/page.tsx's kanban ("Квалифицированные" tab) and the
  * Главная franchise dashboard (round 42) so the two never compute this
  * differently. Union of (a) candidates whose franchise_stage_history ever

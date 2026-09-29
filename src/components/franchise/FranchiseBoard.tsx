@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { useLocale } from "@/components/i18n/LocaleProvider";
+import { QUALIFIED_TAB_STAGES } from "@/lib/franchise";
 import { computeFranchiseFunnel } from "@/lib/franchiseDashboard";
 import type { FranchiseCandidate } from "./types";
 import KanbanBoard from "./KanbanBoard";
@@ -119,7 +120,12 @@ export default function FranchiseBoard({
         </div>
       )}
 
-      <KanbanBoard candidates={filtered} canEdit={canEdit} onSelect={setSelectedId} />
+      <KanbanBoard
+        candidates={filtered}
+        canEdit={canEdit}
+        onSelect={setSelectedId}
+        stages={view === "qualified" ? QUALIFIED_TAB_STAGES : undefined}
+      />
 
       {selected && (
         <CandidateDetailModal key={selected.id} candidate={selected} canEdit={canEdit} onClose={() => setSelectedId(null)} />

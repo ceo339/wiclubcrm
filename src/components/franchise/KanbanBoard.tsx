@@ -16,15 +16,24 @@ type StageUpdate = { id: string; stage: FranchiseStageId; reason: string | null 
  * the date the candidate CURRENTLY on top of the pile reached this stage
  * only implicitly (see the card itself, not the header) — with this many
  * columns a header-level date would be meaningless across many candidates.
+ *
+ * `stages` (round 46 — "убери и отображение самих колонок до стадии фин
+ * модель отправлена") lets the caller narrow which columns render, since
+ * the "Квалифицированные" tab already filters the candidate list to
+ * QUALIFYING_STAGES/history but was still rendering every earlier-stage
+ * column empty. Defaults to the full VISIBLE_FRANCHISE_STAGES so the "Все"
+ * tab (and anything else that doesn't pass it) is unaffected.
  */
 export default function KanbanBoard({
   candidates,
   canEdit,
   onSelect,
+  stages = VISIBLE_FRANCHISE_STAGES,
 }: {
   candidates: FranchiseCandidate[];
   canEdit: boolean;
   onSelect: (id: string) => void;
+  stages?: typeof VISIBLE_FRANCHISE_STAGES;
 }) {
   const { t } = useLocale();
   const [items, applyOptimistic] = useOptimistic(candidates, (state, update: StageUpdate) =>
@@ -61,7 +70,7 @@ export default function KanbanBoard({
   return (
     <>
       <div className="flex flex-1 gap-4 overflow-x-auto pb-2">
-        {VISIBLE_FRANCHISE_STAGES.map((stage) => {
+        {stages.map((stage) => {
           const stageCandidates = items.filter((c) => c.stage === stage.id);
           return (
             <div
