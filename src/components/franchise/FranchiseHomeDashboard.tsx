@@ -99,6 +99,22 @@ export default function FranchiseHomeDashboard({
     [stageHistory, period]
   );
 
+  // "как считается КВАЛИФИЦИРОВАННЫХ 23? за какой период? сделай за
+  // выбранный и за неделю" (round 46 part 5) — qualifiedIdSet itself is
+  // all-time (see page.tsx/computeQualifiedIds), so it never answered "for
+  // what period". Scoped here the same way "Заявок франчайзи"/"Заявок за
+  // неделю" already are — by submitted_at, not by when the qualifying stage
+  // was reached — so it reads as "of who APPLIED in this period/week, how
+  // many turned out qualified".
+  const qualifiedInPeriodCount = useMemo(
+    () => inPeriodCandidates.filter((c) => qualifiedIdSet.has(c.id)).length,
+    [inPeriodCandidates, qualifiedIdSet]
+  );
+  const qualifiedWeeklyCount = useMemo(
+    () => weeklyCandidates.filter((c) => qualifiedIdSet.has(c.id)).length,
+    [weeklyCandidates, qualifiedIdSet]
+  );
+
   return (
     <FranchiseDashboard
       period={period}
@@ -107,7 +123,8 @@ export default function FranchiseHomeDashboard({
       yearOptions={franchiseYearsWithActivity(candidates)}
       submittedCount={inPeriodCandidates.length}
       weeklyCount={weeklyCandidates.length}
-      qualifiedCount={qualifiedIdSet.size}
+      qualifiedCount={qualifiedInPeriodCount}
+      qualifiedWeeklyCount={qualifiedWeeklyCount}
       contractSentCount={contractSentCount}
       submissionTrend={monthlyFranchiseSubmissions(candidates)}
       funnel={computeFranchiseFunnel(candidates)}

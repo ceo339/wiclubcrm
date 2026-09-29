@@ -56,6 +56,7 @@ export default function FranchiseDashboard({
   submittedCount,
   weeklyCount,
   qualifiedCount,
+  qualifiedWeeklyCount,
   contractSentCount,
   submissionTrend,
   funnel,
@@ -78,7 +79,15 @@ export default function FranchiseDashboard({
   /** New candidates submitted in the last rolling 7 days — always "this
    * week", independent of the month/year selector above. */
   weeklyCount: number;
+  /** Round 46 part 5 ("как считается КВАЛИФИЦИРОВАННЫХ 23? за какой период?
+   * сделай за выбранный и за неделю") — scoped by submitted_at, same
+   * population as submittedCount above (of who applied in this period, how
+   * many are qualified), not by when the qualifying stage was reached. */
   qualifiedCount: number;
+  /** Same scoping as qualifiedCount, but the fixed rolling 7 days instead of
+   * the month/year/range selector — rendered as this tile's secondary line,
+   * same pattern as statInterviewsAllTime below. */
+  qualifiedWeeklyCount: number;
   /** Round 46 part 2 ("Добавь договор отправлен за неделю/ за выбранный
    * период") — count of stage-history transitions onto "contract_sent"
    * within the selected month/year/range period (see
@@ -180,9 +189,11 @@ export default function FranchiseDashboard({
         <StatTile
           label={t("statFranchiseQualified")}
           value={qualifiedCount}
-          caption={t("dash")}
+          caption={t("deltaForPeriod")}
           borderColor={FUNNEL_TILE_COLOR}
-        />
+        >
+          <div className="text-xs text-muted">{t("statQualifiedWeekly", { n: qualifiedWeeklyCount })}</div>
+        </StatTile>
         <StatTile
           label={t("fStageContractSent")}
           value={contractSentCount}

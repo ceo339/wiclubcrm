@@ -89,7 +89,7 @@ function navItemsForProfile(profile: Profile, viewMode: ViewMode): NavItem[] {
   const hasFranchiseAccess =
     profile.role === "hq" || profile.franchise_access === "view" || profile.franchise_access === "edit";
   if (hasFranchiseAccess) {
-    items.push({ href: "/franchise", labelKey: "navFranchise", icon: <IconFranchise /> });
+    items.push({ href: "/franchise", labelKey: "navFranchiseSidebar", icon: <IconFranchise /> });
   }
 
   return items;
