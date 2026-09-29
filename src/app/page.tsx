@@ -7,6 +7,7 @@ import { isNetworkRole, getViewScopePartnerId, getViewMode } from "@/lib/viewSco
 import { sortOpenTasks, type OpenTask } from "@/lib/tasks";
 import { QUALIFYING_STAGES, computeQualifiedIds } from "@/lib/franchise";
 import { computeInterviewStats } from "@/lib/franchiseDashboard";
+import { computeMasterclassConversion } from "@/lib/masterclassConversion";
 import FranchiseHomeDashboard from "@/components/franchise/FranchiseHomeDashboard";
 import {
   computeCoreMetrics,
@@ -184,12 +185,16 @@ export default async function Home({
     const [{ data: partners }, { data: leads }, { data: members }, { data: enrollments }, { data: payments }, { data: products }, { data: cohorts }] =
       await Promise.all([
         supabase.from("partners").select("id, name").order("name"),
-        supabase.from("leads").select("id, name, partner_id, stage, source, added_date, cohort_start_date, updated_at"),
-        supabase.from("members").select("partner_id, created_at"),
+        supabase
+          .from("leads")
+          .select("id, name, partner_id, stage, source, added_date, cohort_start_date, product_id, updated_at"),
+        supabase.from("members").select("id, partner_id, lead_id, created_at"),
         supabase.from("member_enrollments").select("partner_id, product_id, created_at, start_date, status, price"),
         supabase
           .from("payments")
-          .select("partner_id, amount, status, paid_date, member_enrollments(start_date, created_at), leads(cohort_start_date, added_date)"),
+          .select(
+            "partner_id, member_id, product_id, amount, status, paid_date, member_enrollments(start_date, created_at), leads(cohort_start_date, added_date)"
+          ),
         supabase.from("products").select("id, name"),
         supabase.from("product_cohorts").select("partner_id, product_id, start_date"),
       ]);
@@ -223,6 +228,18 @@ export default async function Home({
 
     const staleLeads = findStaleLeads(allLeads, partnerNamesById);
     const decliningClubs = findDecliningClubs(partners ?? [], allPayments);
+
+    // "Конверсия из МК в СФ" (round 43) — every club's own МК cohorts, so
+    // each row below is labeled with its club (see showClub on
+    // DashboardBoard, same convention as upcomingEvents above).
+    const masterclassConversion = computeMasterclassConversion({
+      cohorts: cohorts ?? [],
+      leads: allLeads,
+      members: allMembers,
+      payments: allPayments,
+      products: products ?? [],
+      partnerNamesById,
+    });
 
     const period = parsePeriodParams(params);
     const monthOptions = monthsWithActivity(allLeads, allEnrollments, allPayments);
@@ -319,6 +336,7 @@ export default async function Home({
           productsPeriod={countByProduct(enrollmentsInPeriod, productNamesById)}
           productsAllTime={countByProduct(allEnrollments, productNamesById)}
           upcomingCohorts={upcomingEvents}
+          masterclassConversion={masterclassConversion}
         />
       </AppShell>
     );
@@ -363,15 +381,20 @@ export default async function Home({
 
   const [{ data: leads }, { data: members }, { data: enrollments }, { data: payments }, { data: products }, { data: cohorts }] =
     await Promise.all([
-      supabase.from("leads").select("stage, source, added_date, cohort_start_date").eq("partner_id", partnerId),
-      supabase.from("members").select("created_at").eq("partner_id", partnerId),
+      supabase
+        .from("leads")
+        .select("id, stage, source, added_date, cohort_start_date, product_id")
+        .eq("partner_id", partnerId),
+      supabase.from("members").select("id, lead_id, created_at").eq("partner_id", partnerId),
       supabase
         .from("member_enrollments")
         .select("product_id, created_at, start_date, status, price")
         .eq("partner_id", partnerId),
       supabase
         .from("payments")
-        .select("amount, status, paid_date, member_enrollments(start_date, created_at), leads(cohort_start_date, added_date)")
+        .select(
+          "member_id, product_id, amount, status, paid_date, member_enrollments(start_date, created_at), leads(cohort_start_date, added_date)"
+        )
         .eq("partner_id", partnerId),
       supabase.from("products").select("id, name").eq("partner_id", partnerId),
       supabase.from("product_cohorts").select("product_id, start_date").eq("partner_id", partnerId),
@@ -412,6 +435,17 @@ export default async function Home({
   const activeCoursesCount = new Set(
     enrollmentsInPeriod.map((e) => e.product_id).filter((id): id is string => !!id)
   ).size;
+
+  // "Конверсия из МК в СФ" (round 43) — one club, so no partnerNamesById/
+  // showClub column needed (see the network branch above for the
+  // multi-club version).
+  const masterclassConversion = computeMasterclassConversion({
+    cohorts: cohorts ?? [],
+    leads: clubLeads,
+    members: clubMembers,
+    payments: clubPayments,
+    products: products ?? [],
+  });
 
   // See the HQ branch above — period-scoped like everything else on the page.
   const totals = {
@@ -468,6 +502,7 @@ export default async function Home({
         productsPeriod={countByProduct(enrollmentsInPeriod, productNamesById)}
         productsAllTime={countByProduct(clubEnrollments, productNamesById)}
         upcomingCohorts={upcomingEvents}
+        masterclassConversion={masterclassConversion}
       />
     </AppShell>
   );

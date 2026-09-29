@@ -15,6 +15,7 @@ import {
   upcomingCohorts,
   yearsWithActivity,
 } from "@/lib/dashboard";
+import { computeMasterclassConversion } from "@/lib/masterclassConversion";
 import { currencyForCountry } from "@/lib/currency";
 import { localeForCountry } from "@/lib/i18n";
 import CurrencySwitcher from "@/components/currency/CurrencySwitcher";
@@ -55,15 +56,20 @@ export default async function ClubDashboardPage({
 
   const [{ data: leads }, { data: members }, { data: enrollments }, { data: payments }, { data: products }, { data: cohorts }] =
     await Promise.all([
-      supabase.from("leads").select("stage, source, added_date, cohort_start_date").eq("partner_id", partnerId),
-      supabase.from("members").select("created_at").eq("partner_id", partnerId),
+      supabase
+        .from("leads")
+        .select("id, stage, source, added_date, cohort_start_date, product_id")
+        .eq("partner_id", partnerId),
+      supabase.from("members").select("id, lead_id, created_at").eq("partner_id", partnerId),
       supabase
         .from("member_enrollments")
         .select("product_id, created_at, start_date, status, price")
         .eq("partner_id", partnerId),
       supabase
         .from("payments")
-        .select("amount, status, paid_date, member_enrollments(start_date, created_at), leads(cohort_start_date, added_date)")
+        .select(
+          "member_id, product_id, amount, status, paid_date, member_enrollments(start_date, created_at), leads(cohort_start_date, added_date)"
+        )
         .eq("partner_id", partnerId),
       supabase.from("products").select("id, name").eq("partner_id", partnerId),
       supabase.from("product_cohorts").select("product_id, start_date").eq("partner_id", partnerId),
@@ -108,6 +114,15 @@ export default async function ClubDashboardPage({
   const activeCoursesCount = new Set(
     enrollmentsInPeriod.map((e) => e.product_id).filter((id): id is string => !!id)
   ).size;
+
+  // See src/app/page.tsx's own club branch — "Конверсия из МК в СФ" (round 43).
+  const masterclassConversion = computeMasterclassConversion({
+    cohorts: cohorts ?? [],
+    leads: clubLeads,
+    members: clubMembers,
+    payments: clubPayments,
+    products: products ?? [],
+  });
 
   // See src/app/page.tsx — period-scoped like everything else on the page.
   const totals = {
@@ -156,6 +171,7 @@ export default async function ClubDashboardPage({
         productsPeriod={countByProduct(enrollmentsInPeriod, productNamesById)}
         productsAllTime={countByProduct(clubEnrollments, productNamesById)}
         upcomingCohorts={upcomingEvents}
+        masterclassConversion={masterclassConversion}
       />
     </AppShell>
   );

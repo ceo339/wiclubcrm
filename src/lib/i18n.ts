@@ -203,6 +203,24 @@ export const DICT: Record<string, Entry> = {
   eventStartsTomorrow: { ru: "завтра", bg: "утре" },
   eventStartsInDays: { ru: "через {n} дн.", bg: "след {n} дни" },
 
+  // ---- dashboard: "Конверсия из МК в СФ" widget (Anastasiia, round 43,
+  // 29 сен 2026) — same fixed-30-days idea as "Ближайшие события" above.
+  headingMasterclassConversion: { ru: "Конверсия МК → СФ", bg: "Конверсия МК → СФ" },
+  subheadingMasterclassConversion: {
+    ru: "Мастер-классы за последние {days} дней, по каждому отдельно",
+    bg: "Майсторски класове през последните {days} дни, по отделно",
+  },
+  statMkAttended: { ru: "Были на МК", bg: "Присъствали на МК" },
+  statMkBoughtSf: { ru: "Купили СФ", bg: "Купили СФ" },
+  statMkConversion: { ru: "Конверсия в СФ", bg: "Конверсия към СФ" },
+  colMkAttended: { ru: "Были на МК", bg: "Присъствали" },
+  colMkBoughtSf: { ru: "Купили СФ", bg: "Купили СФ" },
+  colMkConversion: { ru: "Конверсия", bg: "Конверсия" },
+  emptyNoMasterclassesPeriod: {
+    ru: "За последние 30 дней мастер-классов не было.",
+    bg: "През последните 30 дни не е имало майсторски класове.",
+  },
+
   // ---- dashboard: funnel / breakdown headings ----
   headingFunnel: { ru: "Воронка лидов за период", bg: "Фуния на запитванията за периода" },
   funnelStart: { ru: "начало пути", bg: "начало на пътя" },

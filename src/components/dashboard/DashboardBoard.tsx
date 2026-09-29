@@ -15,6 +15,7 @@ import type {
 } from "@/lib/dashboard";
 import { formatDateRu, formatPctDelta, formatPointsDelta, monthLabel, periodLabel } from "@/lib/dashboard";
 import type { MonthlyCount } from "@/lib/dashboard";
+import type { MasterclassConversionResult } from "@/lib/masterclassConversion";
 import Money from "@/components/currency/Money";
 import { interpolateHex, sourceColor, sourceLabel, stageLabel } from "@/lib/leads";
 import { useLocale } from "@/components/i18n/LocaleProvider";
@@ -596,6 +597,103 @@ function UpcomingEventsPanel({ events, showClub }: { events: UpcomingCohort[]; s
   );
 }
 
+/**
+ * "Конверсия из МК в СФ. Т.е. сколько чел купило сф из тех, что были на
+ * МК? сделать по Мк последние 30 дней (по каждому отдельно) и виджет по
+ * всем мк. сколько было, сколько купили сф, конверсия мастер класса в
+ * оплату" (Anastasiia, round 43, 29 сен 2026) — a summary row (every МК in
+ * the last 30 days combined) over a per-МК breakdown table, same
+ * fixed-30-days-regardless-of-the-period-filter idea as UpcomingEventsPanel
+ * right above it. See src/lib/masterclassConversion.ts for how "attended"
+ * and "bought" are actually matched — there's no dedicated schema concept
+ * for either, both are inferred from products/leads/members/payments.
+ */
+function MasterclassConversionPanel({
+  data,
+  showClub,
+}: {
+  data: MasterclassConversionResult;
+  showClub?: boolean;
+}) {
+  const { t } = useLocale();
+  const { perCohort, total } = data;
+  return (
+    <div className="rounded-xl border border-border bg-background shadow-card">
+      <div className="border-b border-border px-5 py-4">
+        <h2 className="text-sm font-semibold text-foreground">{t("headingMasterclassConversion")}</h2>
+        <p className="mt-0.5 text-xs text-muted">{t("subheadingMasterclassConversion", { days: 30 })}</p>
+      </div>
+      <div className="grid grid-cols-3 gap-3 border-b border-border p-5">
+        <div>
+          <div className="text-xs uppercase tracking-wide text-muted">{t("statMkAttended")}</div>
+          <div
+            className="mt-1 font-display text-[28px] leading-[1.05] tracking-[-0.02em] text-foreground"
+            style={{ fontVariantNumeric: "tabular-nums" }}
+          >
+            {total.attendedCount}
+          </div>
+        </div>
+        <div>
+          <div className="text-xs uppercase tracking-wide text-muted">{t("statMkBoughtSf")}</div>
+          <div
+            className="mt-1 font-display text-[28px] leading-[1.05] tracking-[-0.02em] text-foreground"
+            style={{ fontVariantNumeric: "tabular-nums" }}
+          >
+            {total.boughtCount}
+          </div>
+        </div>
+        <div>
+          <div className="text-xs uppercase tracking-wide text-muted">{t("statMkConversion")}</div>
+          <div
+            className="mt-1 font-display text-[28px] leading-[1.05] tracking-[-0.02em] text-foreground"
+            style={{ fontVariantNumeric: "tabular-nums" }}
+          >
+            {total.conversion === null ? t("dash") : `${total.conversion}%`}
+          </div>
+        </div>
+      </div>
+      {perCohort.length === 0 ? (
+        <p className="p-5 text-sm text-muted">{t("emptyNoMasterclassesPeriod")}</p>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[560px] text-left text-sm">
+            <thead className="border-b border-border text-xs uppercase tracking-wide text-muted">
+              <tr>
+                <th className="px-5 py-3 font-medium">{t("colCourse")}</th>
+                {showClub && <th className="px-5 py-3 font-medium">{t("colClub")}</th>}
+                <th className="px-5 py-3 font-medium">{t("colStream")}</th>
+                <th className="px-5 py-3 text-right font-medium">{t("colMkAttended")}</th>
+                <th className="px-5 py-3 text-right font-medium">{t("colMkBoughtSf")}</th>
+                <th className="px-5 py-3 text-right font-medium">{t("colMkConversion")}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {perCohort.map((c) => (
+                <tr key={c.key} className="border-b border-border last:border-0">
+                  <td className="px-5 py-3 font-medium text-foreground">{c.courseName ?? t("productDeleted")}</td>
+                  {showClub && <td className="px-5 py-3 text-muted">{c.partnerName ?? "—"}</td>}
+                  <td className="px-5 py-3 text-ink-2" style={{ fontVariantNumeric: "tabular-nums" }}>
+                    {formatDateRu(c.startDate)}
+                  </td>
+                  <td className="px-5 py-3 text-right font-medium text-foreground" style={{ fontVariantNumeric: "tabular-nums" }}>
+                    {c.attendedCount}
+                  </td>
+                  <td className="px-5 py-3 text-right text-muted" style={{ fontVariantNumeric: "tabular-nums" }}>
+                    {c.boughtCount}
+                  </td>
+                  <td className="px-5 py-3 text-right font-semibold text-foreground">
+                    {c.conversion === null ? t("dash") : `${c.conversion}%`}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function DashboardBoard({
   totals,
   fourthTile,
@@ -620,6 +718,7 @@ export default function DashboardBoard({
   productsPeriod,
   productsAllTime,
   upcomingCohorts,
+  masterclassConversion,
 }: {
   totals: Totals;
   /** The 4th all-time tile — "Клубов в сети" on the network view, "Курсов"
@@ -667,6 +766,10 @@ export default function DashboardBoard({
    * is only set (and only rendered as its own column) on the network-wide
    * Главная — see upcomingCohorts in lib/dashboard.ts. */
   upcomingCohorts: UpcomingCohort[];
+  /** "Конверсия из МК в СФ" (round 43) — see MasterclassConversionPanel and
+   * src/lib/masterclassConversion.ts. Same fixed-30-days idea as
+   * `upcomingCohorts`, independent of the period filter above. */
+  masterclassConversion: MasterclassConversionResult;
 }) {
   const { locale, t } = useLocale();
   const maxFunnel = Math.max(1, ...funnel.map((s) => s.count));
@@ -689,6 +792,8 @@ export default function DashboardBoard({
       )}
 
       <UpcomingEventsPanel events={upcomingCohorts} showClub={!!clubs} />
+
+      <MasterclassConversionPanel data={masterclassConversion} showClub={!!clubs} />
 
       <p className="text-sm text-muted">
         {t("metricsForPrefix")} <span className="font-medium text-foreground">{periodLabel(period, locale)}</span>
