@@ -191,6 +191,25 @@ export async function updateCandidateApplicationFields(
   return { error: null };
 }
 
+/** Round 49c: rename the candidate/partner from the card header. */
+export async function setCandidateName(candidateId: string, name: string): Promise<ActionResult> {
+  const profile = await getCurrentProfile();
+  if (!profile) return { error: "errNotAuthorized" };
+  const { canEdit } = franchiseAccess(profile);
+  if (!canEdit) return { error: "errNotAuthorized" };
+  const clean = name.trim();
+  if (!clean) return { error: "errEnterName" };
+
+  const supabase = await createClient();
+  const { error } = await supabase.from("franchise_candidates").update({ name: clean }).eq("id", candidateId);
+  if (error) return { error: error.message };
+
+  revalidatePath("/franchise");
+  revalidatePath("/franchise/payments");
+  revalidatePath("/contacts");
+  return { error: null };
+}
+
 export type FranchiseCandidateDetail = {
   history: Tables<"franchise_stage_history">[];
   comments: Tables<"franchise_candidate_comments">[];

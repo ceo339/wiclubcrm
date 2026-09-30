@@ -6,6 +6,7 @@ import {
   addCandidateTask,
   getCandidateDetail,
   setCandidateInterviewDate,
+  setCandidateName,
   setCandidateTaskDone,
   setCandidateZoomUrl,
   updateCandidateApplicationFields,
@@ -49,6 +50,9 @@ export default function CandidateDetailModal({
   const [application, setApplication] = useState<ApplicationFields>(() => applicationFieldsFromCandidate(candidate));
   const [editingApplication, setEditingApplication] = useState(false);
   const [stage, setStage] = useState<FranchiseCandidate["stage"]>(candidate.stage);
+  const [name, setName] = useState(candidate.name);
+  const [nameDraft, setNameDraft] = useState<string | null>(null);
+  const [nameError, setNameError] = useState<string | null>(null);
   const [rejectReason, setRejectReason] = useState(candidate.reject_reason);
   const [reasonPromptStage, setReasonPromptStage] = useState<"declined" | "paused" | null>(null);
   const [zoomUrl, setZoomUrl] = useState(candidate.zoom_recording_url ?? "");
@@ -171,7 +175,53 @@ export default function CandidateDetailModal({
         {/* Right panel — анкета + действия */}
         <div className="max-h-[85vh] overflow-y-auto p-5">
           <div className="flex items-start justify-between gap-2">
-            <h2 className="text-lg font-semibold text-foreground">{candidate.name}</h2>
+            {nameDraft === null ? (
+              <div className="flex items-baseline gap-2">
+                <h2 className="text-lg font-semibold text-foreground">{name}</h2>
+                {canEdit && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setNameDraft(name);
+                      setNameError(null);
+                    }}
+                    className="text-xs text-muted hover:text-ink-2"
+                  >
+                    {t("edit")}
+                  </button>
+                )}
+              </div>
+            ) : (
+              <form
+                className="flex flex-1 flex-wrap items-center gap-2"
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  const next = nameDraft.trim();
+                  startTransition(async () => {
+                    const res = await setCandidateName(candidate.id, next);
+                    if (res.error) setNameError(res.error);
+                    else {
+                      setName(next);
+                      setNameDraft(null);
+                    }
+                  });
+                }}
+              >
+                <input
+                  autoFocus
+                  value={nameDraft}
+                  onChange={(e) => setNameDraft(e.target.value)}
+                  className="min-w-0 flex-1 rounded-lg border border-border bg-background px-2.5 py-1 text-lg font-semibold text-foreground outline-none focus:border-accent"
+                />
+                <button type="submit" className="rounded-lg bg-accent px-3 py-1 text-xs font-semibold text-white hover:bg-accent-strong">
+                  {t("save")}
+                </button>
+                <button type="button" onClick={() => setNameDraft(null)} className="text-xs text-muted hover:text-ink-2">
+                  {t("cancel")}
+                </button>
+                {nameError && <p className="w-full text-xs text-accent-strong">{t(nameError)}</p>}
+              </form>
+            )}
             <button onClick={onClose} className="rounded-md p-1 text-lg leading-none text-muted hover:bg-surface-2">
               ×
             </button>
@@ -315,7 +365,7 @@ export default function CandidateDetailModal({
 
       {reasonPromptStage && (
         <ReasonModal
-          candidateName={candidate.name}
+          candidateName={name}
           stage={reasonPromptStage}
           onCancel={() => setReasonPromptStage(null)}
           onConfirm={confirmReasonStage}
