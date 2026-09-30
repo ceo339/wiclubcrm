@@ -4,8 +4,7 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentProfile } from "@/lib/auth";
 import { isFranchiseStage, type FranchiseStageId } from "@/lib/franchise";
-import type { Tables } from "@/types/database";
-import { isTerminalStage, stageIndex } from "@/lib/integrations/franchise";
+import type { Tables, TablesUpdate } from "@/types/database";
 
 export type ActionResult = { error: string | null };
 
@@ -66,45 +65,21 @@ export async function updateCandidateStage(
   return { error: null };
 }
 
-export async function setCandidateZoomUrl(
-  candidateId: string,
-  url: string | null
-): Promise<ActionResult & { stage?: FranchiseStageId }> {
+export async function setCandidateZoomUrl(candidateId: string, url: string | null): Promise<ActionResult> {
   const profile = await getCurrentProfile();
   if (!profile) return { error: "errNotAuthorized" };
   const { canEdit } = franchiseAccess(profile);
   if (!canEdit) return { error: "errNotAuthorized" };
 
   const supabase = await createClient();
-  const clean = url?.trim() || null;
-  const { data: current } = await supabase
-    .from("franchise_candidates")
-    .select("stage")
-    .eq("id", candidateId)
-    .maybeSingle();
   const { error } = await supabase
     .from("franchise_candidates")
-    .update({ zoom_recording_url: clean })
+    .update({ zoom_recording_url: url?.trim() || null })
     .eq("id", candidateId);
   if (error) return { error: error.message };
 
-  // Round 48: a Zoom recording added by hand moves the card to «Фин. модель
-  // отправлена», same rule as the Zoom webhook — forward only, never out of
-  // declined/paused.
-  let movedTo: FranchiseStageId | undefined;
-  if (clean && current && !isTerminalStage(current.stage) && stageIndex(current.stage) < stageIndex("fin_model_sent")) {
-    await supabase.from("franchise_candidates").update({ stage: "fin_model_sent" }).eq("id", candidateId);
-    await supabase.from("franchise_stage_history").insert({
-      candidate_id: candidateId,
-      stage: "fin_model_sent",
-      created_by: profile.id,
-      note: "Добавлена запись Zoom",
-    });
-    movedTo = "fin_model_sent";
-  }
-
   revalidatePath("/franchise");
-  return { error: null, stage: movedTo };
+  return { error: null };
 }
 
 /**
@@ -125,6 +100,64 @@ export async function setCandidateInterviewDate(candidateId: string, date: strin
     .from("franchise_candidates")
     .update({ interview_scheduled_at: date || null })
     .eq("id", candidateId);
+  if (error) return { error: error.message };
+
+  revalidatePath("/franchise");
+  return { error: null };
+}
+
+/**
+ * The "АНКЕТА" block on the candidate card (CandidateDetailModal) — the raw
+ * intake-form answers. Until now these came in once via the public intake
+ * form (api/franchise/intake) and were never editable in the CRM itself —
+ * "Сделай редактируемые поля анкеты" (Anastasiia, round 47/48): a typo in a
+ * phone/email, or a field the candidate skipped, had no way to be fixed
+ * short of editing the row directly in Supabase. Same field set the card
+ * already renders (see CandidateDetailModal's Field/LongField calls) —
+ * name/stage/interview date/Zoom link/internal_note stay on their own
+ * existing controls, not duplicated here.
+ */
+const APPLICATION_FIELD_KEYS = [
+  "email",
+  "phone",
+  "telegram",
+  "country",
+  "target_city",
+  "birth_date",
+  "instagram_url",
+  "followers",
+  "source",
+  "knows_method",
+  "train_or_hire",
+  "ready_when",
+  "budget",
+  "occupation",
+  "experience",
+  "content_description",
+  "why_city",
+  "fears",
+  "questions",
+] as const;
+
+export type ApplicationFieldKey = (typeof APPLICATION_FIELD_KEYS)[number];
+
+export async function updateCandidateApplicationFields(
+  candidateId: string,
+  formData: FormData
+): Promise<ActionResult> {
+  const profile = await getCurrentProfile();
+  if (!profile) return { error: "errNotAuthorized" };
+  const { canEdit } = franchiseAccess(profile);
+  if (!canEdit) return { error: "errNotAuthorized" };
+
+  const patch: TablesUpdate<"franchise_candidates"> = {};
+  for (const key of APPLICATION_FIELD_KEYS) {
+    const raw = formData.get(key);
+    patch[key] = raw === null ? null : String(raw).trim() || null;
+  }
+
+  const supabase = await createClient();
+  const { error } = await supabase.from("franchise_candidates").update(patch).eq("id", candidateId);
   if (error) return { error: error.message };
 
   revalidatePath("/franchise");

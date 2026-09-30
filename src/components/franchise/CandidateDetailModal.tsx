@@ -8,14 +8,15 @@ import {
   setCandidateInterviewDate,
   setCandidateTaskDone,
   setCandidateZoomUrl,
+  updateCandidateApplicationFields,
   updateCandidateStage,
+  type ApplicationFieldKey,
   type FranchiseCandidateDetail,
 } from "@/app/franchise/actions";
 import { VISIBLE_FRANCHISE_STAGES, FRANCHISE_TERMINAL_STAGES, franchiseStageLabel, type FranchiseStageId } from "@/lib/franchise";
 import { useLocale, useT } from "@/components/i18n/LocaleProvider";
 import type { FranchiseCandidate } from "./types";
 import ReasonModal from "./ReasonModal";
-import CandidatePaymentsSection from "./payments/CandidatePaymentsSection";
 
 /**
  * Candidate card — laid out as the two panels from Anastasiia's reference
@@ -40,6 +41,8 @@ export default function CandidateDetailModal({
 }) {
   const { locale, t } = useLocale();
   const [detail, setDetail] = useState<FranchiseCandidateDetail | null>(null);
+  const [application, setApplication] = useState<ApplicationFields>(() => applicationFieldsFromCandidate(candidate));
+  const [editingApplication, setEditingApplication] = useState(false);
   const [stage, setStage] = useState<FranchiseCandidate["stage"]>(candidate.stage);
   const [rejectReason, setRejectReason] = useState(candidate.reject_reason);
   const [reasonPromptStage, setReasonPromptStage] = useState<"declined" | "paused" | null>(null);
@@ -98,11 +101,7 @@ export default function CandidateDetailModal({
   function handleZoomSave() {
     if (zoomUrl === (candidate.zoom_recording_url ?? "")) return;
     startTransition(async () => {
-      const res = await setCandidateZoomUrl(candidate.id, zoomUrl || null);
-      if (res.stage) {
-        setStage(res.stage);
-        reload();
-      }
+      await setCandidateZoomUrl(candidate.id, zoomUrl || null);
     });
   }
 
@@ -231,41 +230,62 @@ export default function CandidateDetailModal({
             )}
           </div>
 
-          {/* Анкета */}
+          {/* Анкета — "Сделай редактируемые поля анкеты" (Anastasiia, round
+              47/48): these came in once via the public intake form and had
+              no way to fix a typo/omission short of editing the row
+              directly in Supabase. internal_note stays out of the edit form
+              (it's the CRM's own note, not an intake-form answer). */}
           <div className="mt-4 rounded-xl border border-border bg-surface-2 p-3.5">
-            <span className="text-xs font-semibold uppercase tracking-wide text-muted">{t("fHeadingApplication")}</span>
-            <dl className="mt-2 grid grid-cols-1 gap-x-4 gap-y-2 text-sm sm:grid-cols-2">
-              <Field label={t("fFieldEmail")} value={candidate.email} />
-              <Field label={t("fFieldPhone")} value={candidate.phone} />
-              <Field label={t("fFieldTelegram")} value={candidate.telegram} />
-              <Field label={t("fFieldCountry")} value={candidate.country} />
-              <Field label={t("fFieldTargetCity")} value={candidate.target_city} />
-              <Field label={t("fFieldBirthDate")} value={candidate.birth_date} />
-              <Field label={t("fFieldInstagram")} value={candidate.instagram_url} />
-              <Field label={t("fFieldFollowers")} value={candidate.followers} />
-              <Field label={t("fFieldSource")} value={candidate.source} />
-              <Field label={t("fFieldKnowsMethod")} value={candidate.knows_method} />
-              <Field label={t("fFieldTrainOrHire")} value={candidate.train_or_hire} />
-              <Field label={t("fFieldReadyWhen")} value={candidate.ready_when} />
-              <Field label={t("fFieldBudget")} value={candidate.budget} />
-            </dl>
-            <LongField label={t("fFieldOccupation")} value={candidate.occupation} />
-            <LongField label={t("fFieldExperience")} value={candidate.experience} />
-            <LongField label={t("fFieldContentDescription")} value={candidate.content_description} />
-            <LongField label={t("fFieldWhyCity")} value={candidate.why_city} />
-            <LongField label={t("fFieldFears")} value={candidate.fears} />
-            <LongField label={t("fFieldQuestions")} value={candidate.questions} />
-            {candidate.internal_note && <LongField label={t("fFieldInternalNote")} value={candidate.internal_note} />}
-          </div>
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-semibold uppercase tracking-wide text-muted">{t("fHeadingApplication")}</span>
+              {canEdit && !editingApplication && (
+                <button
+                  type="button"
+                  onClick={() => setEditingApplication(true)}
+                  className="text-xs font-medium text-ink-2 hover:underline"
+                >
+                  {t("edit")}
+                </button>
+              )}
+            </div>
 
-          <CandidatePaymentsSection
-            candidateId={candidate.id}
-            canEdit={canEdit}
-            onStageChanged={(next) => {
-              setStage(next);
-              reload();
-            }}
-          />
+            {editingApplication ? (
+              <ApplicationEditForm
+                candidateId={candidate.id}
+                initial={application}
+                onCancel={() => setEditingApplication(false)}
+                onSaved={(next) => {
+                  setApplication(next);
+                  setEditingApplication(false);
+                }}
+              />
+            ) : (
+              <>
+                <dl className="mt-2 grid grid-cols-1 gap-x-4 gap-y-2 text-sm sm:grid-cols-2">
+                  <Field label={t("fFieldEmail")} value={application.email} />
+                  <Field label={t("fFieldPhone")} value={application.phone} />
+                  <Field label={t("fFieldTelegram")} value={application.telegram} />
+                  <Field label={t("fFieldCountry")} value={application.country} />
+                  <Field label={t("fFieldTargetCity")} value={application.target_city} />
+                  <Field label={t("fFieldBirthDate")} value={application.birth_date} />
+                  <Field label={t("fFieldInstagram")} value={application.instagram_url} />
+                  <Field label={t("fFieldFollowers")} value={application.followers} />
+                  <Field label={t("fFieldSource")} value={application.source} />
+                  <Field label={t("fFieldKnowsMethod")} value={application.knows_method} />
+                  <Field label={t("fFieldTrainOrHire")} value={application.train_or_hire} />
+                  <Field label={t("fFieldReadyWhen")} value={application.ready_when} />
+                  <Field label={t("fFieldBudget")} value={application.budget} />
+                </dl>
+                <LongField label={t("fFieldOccupation")} value={application.occupation} />
+                <LongField label={t("fFieldExperience")} value={application.experience} />
+                <LongField label={t("fFieldContentDescription")} value={application.content_description} />
+                <LongField label={t("fFieldWhyCity")} value={application.why_city} />
+                <LongField label={t("fFieldFears")} value={application.fears} />
+                <LongField label={t("fFieldQuestions")} value={application.questions} />
+                {candidate.internal_note && <LongField label={t("fFieldInternalNote")} value={candidate.internal_note} />}
+              </>
+            )}
+          </div>
 
           <TasksSection candidateId={candidate.id} detail={detail} canEdit={canEdit} onChanged={reload} />
           <CommentsSection candidateId={candidate.id} detail={detail} canEdit={canEdit} onChanged={reload} />
@@ -281,6 +301,139 @@ export default function CandidateDetailModal({
         />
       )}
     </div>
+  );
+}
+
+type ApplicationFields = Record<ApplicationFieldKey, string | null>;
+
+function applicationFieldsFromCandidate(c: FranchiseCandidate): ApplicationFields {
+  return {
+    email: c.email,
+    phone: c.phone,
+    telegram: c.telegram,
+    country: c.country,
+    target_city: c.target_city,
+    birth_date: c.birth_date,
+    instagram_url: c.instagram_url,
+    followers: c.followers,
+    source: c.source,
+    knows_method: c.knows_method,
+    train_or_hire: c.train_or_hire,
+    ready_when: c.ready_when,
+    budget: c.budget,
+    occupation: c.occupation,
+    experience: c.experience,
+    content_description: c.content_description,
+    why_city: c.why_city,
+    fears: c.fears,
+    questions: c.questions,
+  };
+}
+
+/** Short fields render as a single-line input; the rest (free-text answers)
+ * as a textarea — same split as the read view's Field vs LongField. */
+const APPLICATION_SHORT_FIELDS: { key: ApplicationFieldKey; labelKey: string; type?: string }[] = [
+  { key: "email", labelKey: "fFieldEmail", type: "email" },
+  { key: "phone", labelKey: "fFieldPhone", type: "tel" },
+  { key: "telegram", labelKey: "fFieldTelegram" },
+  { key: "country", labelKey: "fFieldCountry" },
+  { key: "target_city", labelKey: "fFieldTargetCity" },
+  { key: "birth_date", labelKey: "fFieldBirthDate", type: "date" },
+  { key: "instagram_url", labelKey: "fFieldInstagram" },
+  { key: "followers", labelKey: "fFieldFollowers" },
+  { key: "source", labelKey: "fFieldSource" },
+  { key: "knows_method", labelKey: "fFieldKnowsMethod" },
+  { key: "train_or_hire", labelKey: "fFieldTrainOrHire" },
+  { key: "ready_when", labelKey: "fFieldReadyWhen" },
+  { key: "budget", labelKey: "fFieldBudget" },
+];
+
+const APPLICATION_LONG_FIELDS: { key: ApplicationFieldKey; labelKey: string }[] = [
+  { key: "occupation", labelKey: "fFieldOccupation" },
+  { key: "experience", labelKey: "fFieldExperience" },
+  { key: "content_description", labelKey: "fFieldContentDescription" },
+  { key: "why_city", labelKey: "fFieldWhyCity" },
+  { key: "fears", labelKey: "fFieldFears" },
+  { key: "questions", labelKey: "fFieldQuestions" },
+];
+
+function ApplicationEditForm({
+  candidateId,
+  initial,
+  onCancel,
+  onSaved,
+}: {
+  candidateId: string;
+  initial: ApplicationFields;
+  onCancel: () => void;
+  onSaved: (next: ApplicationFields) => void;
+}) {
+  const t = useT();
+  const [pending, startTransition] = useTransition();
+  const [error, setError] = useState<string | null>(null);
+
+  function handleSubmit(formData: FormData) {
+    setError(null);
+    startTransition(async () => {
+      const res = await updateCandidateApplicationFields(candidateId, formData);
+      if (res.error) {
+        setError(res.error);
+        return;
+      }
+      const next = { ...initial };
+      for (const key of Object.keys(next) as ApplicationFieldKey[]) {
+        next[key] = String(formData.get(key) ?? "").trim() || null;
+      }
+      onSaved(next);
+    });
+  }
+
+  return (
+    <form action={handleSubmit} className="mt-2">
+      <div className="grid grid-cols-1 gap-x-4 gap-y-2.5 sm:grid-cols-2">
+        {APPLICATION_SHORT_FIELDS.map((f) => (
+          <label key={f.key} className="flex flex-col gap-1 text-xs">
+            <span className="font-medium text-ink-2">{t(f.labelKey)}</span>
+            <input
+              name={f.key}
+              type={f.type ?? "text"}
+              defaultValue={initial[f.key] ?? ""}
+              className="rounded-lg border border-border bg-background px-2.5 py-1.5 text-sm outline-none focus:border-accent focus:ring-1 focus:ring-accent"
+            />
+          </label>
+        ))}
+      </div>
+      {APPLICATION_LONG_FIELDS.map((f) => (
+        <label key={f.key} className="mt-2.5 flex flex-col gap-1 text-xs">
+          <span className="font-medium text-ink-2">{t(f.labelKey)}</span>
+          <textarea
+            name={f.key}
+            defaultValue={initial[f.key] ?? ""}
+            rows={2}
+            className="rounded-lg border border-border bg-background px-2.5 py-1.5 text-sm outline-none focus:border-accent focus:ring-1 focus:ring-accent"
+          />
+        </label>
+      ))}
+
+      {error && <p className="mt-2 text-xs text-accent-strong">{t(error)}</p>}
+
+      <div className="mt-3 flex justify-end gap-2">
+        <button
+          type="button"
+          onClick={onCancel}
+          className="rounded-lg border border-border px-3 py-1.5 text-xs font-medium text-ink-2 hover:bg-surface-2"
+        >
+          {t("cancel")}
+        </button>
+        <button
+          type="submit"
+          disabled={pending}
+          className="rounded-lg bg-foreground px-3 py-1.5 text-xs font-medium text-background disabled:opacity-50"
+        >
+          {pending ? "..." : t("save")}
+        </button>
+      </div>
+    </form>
   );
 }
 
