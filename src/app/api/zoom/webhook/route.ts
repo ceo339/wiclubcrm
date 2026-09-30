@@ -130,12 +130,13 @@ export async function POST(request: Request) {
   if (obj.password) lines.push(`Код доступа: ${obj.password}`);
   await addSystemComment(admin, candidate.id, lines.join("\n"));
 
-  // "как только запись появляется — переводить на «Собеседование пройдено»"
-  // (Anastasiia, 29 сен 2026). A finished recording of the interview meeting
-  // means the interview happened. Only moves FORWARD from an earlier stage;
-  // a candidate already further along, or declined/paused, is left as is.
-  if (!isTerminalStage(candidate.stage) && stageIndex(candidate.stage) < stageIndex("interview_done")) {
-    await setStage(admin, candidate.id, "interview_done", "Zoom: запись интервью готова");
+  // Round 48 (30 сен 2026): «Собеседование проведено» retired — a finished
+  // recording now moves the card straight to «Фин. модель отправлена»
+  // ("как только запись зума добавляется в карточку - переводи на стадию фин
+  // модель отправлена"). Only moves FORWARD; a candidate already further
+  // along, or declined/paused, is left as is.
+  if (!isTerminalStage(candidate.stage) && stageIndex(candidate.stage) < stageIndex("fin_model_sent")) {
+    await setStage(admin, candidate.id, "fin_model_sent", "Zoom: запись интервью готова");
   }
   await logIntegrationEvent(admin, { source: "zoom", event_type: type, status: "matched", candidate_id: candidate.id });
   return NextResponse.json({ ok: true, id: candidate.id });

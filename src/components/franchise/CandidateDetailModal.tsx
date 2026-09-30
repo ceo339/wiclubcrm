@@ -15,6 +15,7 @@ import { VISIBLE_FRANCHISE_STAGES, FRANCHISE_TERMINAL_STAGES, franchiseStageLabe
 import { useLocale, useT } from "@/components/i18n/LocaleProvider";
 import type { FranchiseCandidate } from "./types";
 import ReasonModal from "./ReasonModal";
+import CandidatePaymentsSection from "./payments/CandidatePaymentsSection";
 
 /**
  * Candidate card — laid out as the two panels from Anastasiia's reference
@@ -97,7 +98,11 @@ export default function CandidateDetailModal({
   function handleZoomSave() {
     if (zoomUrl === (candidate.zoom_recording_url ?? "")) return;
     startTransition(async () => {
-      await setCandidateZoomUrl(candidate.id, zoomUrl || null);
+      const res = await setCandidateZoomUrl(candidate.id, zoomUrl || null);
+      if (res.stage) {
+        setStage(res.stage);
+        reload();
+      }
     });
   }
 
@@ -252,6 +257,15 @@ export default function CandidateDetailModal({
             <LongField label={t("fFieldQuestions")} value={candidate.questions} />
             {candidate.internal_note && <LongField label={t("fFieldInternalNote")} value={candidate.internal_note} />}
           </div>
+
+          <CandidatePaymentsSection
+            candidateId={candidate.id}
+            canEdit={canEdit}
+            onStageChanged={(next) => {
+              setStage(next);
+              reload();
+            }}
+          />
 
           <TasksSection candidateId={candidate.id} detail={detail} canEdit={canEdit} onChanged={reload} />
           <CommentsSection candidateId={candidate.id} detail={detail} canEdit={canEdit} onChanged={reload} />

@@ -201,11 +201,17 @@ export function computeInterviewStats(
   interviewDoneHistory: { candidate_id: string; occurred_at: string }[],
   now: Date = new Date()
 ): InterviewStats {
-  const allTime = new Set(interviewDoneHistory.map((r) => r.candidate_id));
-  const week = new Set(
-    interviewDoneHistory.filter((r) => isWithinLastWeek(r.occurred_at, now)).map((r) => r.candidate_id)
-  );
-  return { week: week.size, allTime: allTime.size };
+  // Earliest qualifying row per candidate (round 48: rows now come from both
+  // interview_done and fin_model_sent) — so the week count reflects when the
+  // interview first happened, not a later re-crossing.
+  const first = new Map<string, string>();
+  for (const r of interviewDoneHistory) {
+    const prev = first.get(r.candidate_id);
+    if (!prev || r.occurred_at < prev) first.set(r.candidate_id, r.occurred_at);
+  }
+  let week = 0;
+  for (const at of first.values()) if (isWithinLastWeek(at, now)) week++;
+  return { week, allTime: first.size };
 }
 
 export { franchiseStageLabel };

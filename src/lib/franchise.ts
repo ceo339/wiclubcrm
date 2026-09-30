@@ -68,7 +68,12 @@ export const FRANCHISE_STAGES: {
   { id: "application", labelKey: "fStageApplication" },
   { id: "in_progress", labelKey: "fStageInProgress" },
   { id: "interview_scheduled", labelKey: "fStageInterviewScheduled" },
-  { id: "interview_done", labelKey: "fStageInterviewDone" },
+  // Round 48 (30 сен 2026): "убери стадию собеседование проведено, как только
+  // запись зума добавляется в карточку - переводи на стадию фин модель
+  // отправлена" — retired; a Zoom recording now moves straight to
+  // fin_model_sent (zoom webhook + setCandidateZoomUrl). No candidate sat on
+  // this stage when it was retired (checked in production).
+  { id: "interview_done", labelKey: "fStageInterviewDone", retired: true },
   { id: "fin_model_sent", labelKey: "fStageFinModelSent" },
   { id: "kristina_scheduled", labelKey: "fStageKristinaScheduled" },
   { id: "kristina_done", labelKey: "fStageKristinaDone" },

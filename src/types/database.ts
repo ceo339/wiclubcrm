@@ -469,6 +469,65 @@ export type Database = {
         }
         Relationships: []
       }
+      franchise_payments: {
+        Row: {
+          amount: number
+          candidate_id: string
+          created_at: string
+          created_by: string | null
+          currency: string
+          due_date: string | null
+          id: string
+          invoice_date: string
+          kind: string
+          note: string | null
+          paid_date: string | null
+          period_month: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          amount: number
+          candidate_id: string
+          created_at?: string
+          created_by?: string | null
+          currency?: string
+          due_date?: string | null
+          id?: string
+          invoice_date?: string
+          kind?: string
+          note?: string | null
+          paid_date?: string | null
+          period_month?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          amount?: number
+          candidate_id?: string
+          created_at?: string
+          created_by?: string | null
+          currency?: string
+          due_date?: string | null
+          id?: string
+          invoice_date?: string
+          kind?: string
+          note?: string | null
+          paid_date?: string | null
+          period_month?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "franchise_payments_candidate_id_fkey"
+            columns: ["candidate_id"]
+            isOneToOne: false
+            referencedRelation: "franchise_candidates"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       franchise_stage_history: {
         Row: {
           candidate_id: string

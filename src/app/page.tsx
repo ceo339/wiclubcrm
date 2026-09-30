@@ -101,7 +101,14 @@ export default async function Home({
     ] = await Promise.all([
       supabase.from("franchise_candidates").select("*").order("submitted_at", { ascending: false }),
       supabase.from("franchise_stage_history").select("candidate_id").in("stage", QUALIFYING_STAGES),
-      supabase.from("franchise_stage_history").select("candidate_id, occurred_at").eq("stage", "interview_done"),
+      // Round 48: «Собеседование проведено» retired — an interview now shows up
+      // as the first move to «Фин. модель отправлена» (Zoom recording), so
+      // both stages count; computeInterviewStats keeps each candidate's
+      // earliest one.
+      supabase
+        .from("franchise_stage_history")
+        .select("candidate_id, occurred_at")
+        .in("stage", ["interview_done", "fin_model_sent"]),
       supabase.from("tasks").select("*").eq("entity_type", "franchise_candidate").eq("done", false),
       // Round 46 — «Дашборд партнёров» needs (a) which candidates ever
       // reached PARTNER_STAGES (same history-based logic as qualifiedIds
