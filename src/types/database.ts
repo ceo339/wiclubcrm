@@ -367,6 +367,7 @@ export type Database = {
       franchise_candidates: {
         Row: {
           birth_date: string | null
+          billing_email: string | null
           billing_name: string | null
           billing_address: string | null
           agreement_number: string | null
@@ -405,6 +406,7 @@ export type Database = {
         }
         Insert: {
           birth_date?: string | null
+          billing_email?: string | null
           billing_name?: string | null
           billing_address?: string | null
           agreement_number?: string | null
@@ -443,6 +445,7 @@ export type Database = {
         }
         Update: {
           birth_date?: string | null
+          billing_email?: string | null
           billing_name?: string | null
           billing_address?: string | null
           agreement_number?: string | null

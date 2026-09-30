@@ -12,7 +12,7 @@ const EMPTY: BillingDetails = {
   billing_address: null,
   agreement_number: null,
   agreement_date: null,
-  email: null,
+  billing_email: null,
   phone: null,
 };
 
@@ -25,6 +25,7 @@ export default function BillingDetailsSection({ candidateId, canEdit }: { candid
   const { t } = useLocale();
   const [data, setData] = useState<BillingDetails | null>(null);
   const [cardName, setCardName] = useState("");
+  const [cardEmail, setCardEmail] = useState<string | null>(null);
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState<BillingDetails>(EMPTY);
   const [error, setError] = useState<string | null>(null);
@@ -33,15 +34,16 @@ export default function BillingDetailsSection({ candidateId, canEdit }: { candid
   function load() {
     getCandidateBilling(candidateId).then((c) => {
       if (!c) return;
-      const { id: _id, name, ...rest } = c;
+      const { id: _id, name, email, ...rest } = c;
       setCardName(name);
+      setCardEmail(email);
       setData(rest);
     });
   }
   useEffect(load, [candidateId]);
 
   if (!data) return null;
-  const incomplete = !data.billing_name || !data.billing_address || !data.agreement_number || !data.email;
+  const incomplete = !data.billing_name || !data.billing_address || !data.agreement_number || !(data.billing_email || cardEmail);
 
   function save() {
     setError(null);
@@ -91,7 +93,7 @@ export default function BillingDetailsSection({ candidateId, canEdit }: { candid
             {field("billing_name", t("fpBillingName"), "text", "Rodina Alona")}
             {field("agreement_number", t("fpBillingAgreementNo"), "text", "FLA-002")}
             {field("agreement_date", t("fpBillingAgreementDate"), "date")}
-            {field("email", t("fFieldEmail"), "email")}
+            {field("billing_email", t("fpBillingEmail"), "email", cardEmail ?? undefined)}
             {field("phone", t("fFieldPhone"))}
           </div>
           {field("billing_address", t("fpBillingAddress"), "text", "27 Davit Mamuladze St., Apt. 11, Batumi, Georgia")}
@@ -117,7 +119,7 @@ export default function BillingDetailsSection({ candidateId, canEdit }: { candid
             {data.billing_address && <span className="text-muted"> · {data.billing_address}</span>}
           </div>
           <div className="text-muted">
-            {[data.email, data.phone].filter(Boolean).join(" · ") || "—"}
+            {[data.billing_email || cardEmail, data.phone].filter(Boolean).join(" · ") || "—"}
             {data.agreement_number &&
               ` · ${t("fpBillingAgreementShort", {
                 no: data.agreement_number,

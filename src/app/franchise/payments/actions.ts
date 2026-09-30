@@ -210,7 +210,7 @@ export async function deleteFranchisePayment(paymentId: string): Promise<Payment
 
 export type BillingDetails = Pick<
   InvoiceCandidate,
-  "billing_name" | "billing_address" | "agreement_number" | "agreement_date" | "email" | "phone"
+  "billing_name" | "billing_address" | "agreement_number" | "agreement_date" | "billing_email" | "phone"
 >;
 
 export async function getCandidateBilling(candidateId: string): Promise<InvoiceCandidate | null> {
@@ -228,7 +228,8 @@ export async function getCandidateBilling(candidateId: string): Promise<InvoiceC
 /** Saved through the admin client after the permission check: the finance
  * director must be able to fill in invoice requisites, but RLS keeps every
  * other candidate field (stage, anketa) out of her reach. Only these six
- * columns are ever written here. */
+ * columns are ever written here (billing_email is separate from the anketa
+ * email: invoices may go to a different mailbox than the contact one). */
 export async function saveCandidateBilling(candidateId: string, input: BillingDetails): Promise<PaymentActionResult> {
   const profile = await billingProfile();
   if (!profile) return { error: "errNotAuthorized" };
@@ -243,7 +244,7 @@ export async function saveCandidateBilling(candidateId: string, input: BillingDe
       billing_address: clean(input.billing_address),
       agreement_number: clean(input.agreement_number),
       agreement_date: agreementDate,
-      email: clean(input.email),
+      billing_email: clean(input.billing_email),
       phone: clean(input.phone),
     })
     .eq("id", candidateId);

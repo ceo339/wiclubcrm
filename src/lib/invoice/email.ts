@@ -29,7 +29,7 @@ export async function sendInvoiceToPartner(
   if (!loaded) return { error: "errGeneric" };
   const { payment, candidate, data } = loaded;
   if (payment.status !== "invoiced") return { error: "fpErrNotOpen" };
-  const to = candidate.email?.trim();
+  const to = candidate.billing_email?.trim() || candidate.email?.trim();
   if (!to) return { error: "fpErrNoEmail" };
 
   let resend;

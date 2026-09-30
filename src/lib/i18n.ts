@@ -1302,11 +1302,16 @@ export const DICT: Record<string, Entry> = {
   fpErrNotOpen: { ru: "Счёт уже оплачен или отменён.", bg: "Фактурата вече е платена или анулирана." },
   fpBillingHeading: { ru: "Реквизиты для инвойса", bg: "Реквизити за фактура" },
   fpBillingName: { ru: "Имя в инвойсе (латиницей, как в договоре)", bg: "Име във фактурата (на латиница)" },
+  fpBillingEmail: { ru: "Email для счетов", bg: "Имейл за фактури" },
   fpBillingAddress: { ru: "Адрес", bg: "Адрес" },
   fpBillingAgreementNo: { ru: "№ договора франшизы", bg: "№ на франчайз договора" },
   fpBillingAgreementDate: { ru: "Дата договора", bg: "Дата на договора" },
   fpBillingAgreementShort: { ru: "договор {no} от {date}", bg: "договор {no} от {date}" },
   fpBillingIncomplete: { ru: "Заполните имя, адрес, email и № договора — они печатаются в инвойсе.", bg: "Попълнете име, адрес, имейл и № на договора." },
+  accessTypeNetworkViewFinanceLabel: {
+    ru: "Финдиректор + просмотр сети клубов и Франчайзи",
+    bg: "Финансов директор + преглед на мрежата и Франчайзи",
+  },
   accessTypeFranchiseFinanceLabel: {
     ru: "Финдиректор: счета франчайзи + просмотр Франчайзи",
     bg: "Финансов директор: фактури + преглед на Франчайзи",

@@ -25,5 +25,7 @@ export const TEAM_ACCESS_TYPES = [
   "network_and_franchise_view",
   "franchise_edit",
   "franchise_finance",
+  // Сеть клубов на просмотр + счета франчайзи (финдиректор с обзором сети).
+  "network_view_finance",
 ] as const;
 export type TeamAccessType = (typeof TEAM_ACCESS_TYPES)[number];

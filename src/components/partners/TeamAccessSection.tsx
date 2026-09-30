@@ -14,11 +14,20 @@ import { useLocale } from "@/components/i18n/LocaleProvider";
 
 const initialState: ActionResult = { error: null };
 
+const ROLE_OF: Record<TeamAccessType, string> = {
+  network_view: "viewer",
+  network_and_franchise_view: "viewer",
+  franchise_edit: "franchise",
+  franchise_finance: "franchise",
+  network_view_finance: "viewer",
+};
+
 const FRANCHISE_ACCESS_OF: Record<TeamAccessType, string> = {
   network_view: "none",
   network_and_franchise_view: "view",
   franchise_edit: "edit",
   franchise_finance: "finance",
+  network_view_finance: "finance",
 };
 
 const ACCESS_TYPE_LABEL_KEYS: Record<TeamAccessType, string> = {
@@ -26,6 +35,7 @@ const ACCESS_TYPE_LABEL_KEYS: Record<TeamAccessType, string> = {
   network_and_franchise_view: "accessTypeNetworkAndFranchiseViewLabel",
   franchise_edit: "accessTypeFranchiseEditLabel",
   franchise_finance: "accessTypeFranchiseFinanceLabel",
+  network_view_finance: "accessTypeNetworkViewFinanceLabel",
 };
 
 /**
@@ -59,7 +69,7 @@ export default function TeamAccessSection({ initialAccounts }: { initialAccounts
           full_name: String(formData.get("full_name") || ""),
           email: result.resetEmail ?? null,
           created_at: new Date().toISOString(),
-          role: accessType === "franchise_edit" || accessType === "franchise_finance" ? "franchise" : "viewer",
+          role: ROLE_OF[accessType],
           franchise_access: FRANCHISE_ACCESS_OF[accessType],
           access_type: accessType,
         },
@@ -127,7 +137,7 @@ export default function TeamAccessSection({ initialAccounts }: { initialAccounts
                           ? {
                               ...x,
                               access_type: accessType,
-                              role: accessType === "franchise_edit" || accessType === "franchise_finance" ? "franchise" : "viewer",
+                              role: ROLE_OF[accessType],
                               franchise_access: FRANCHISE_ACCESS_OF[accessType],
                             }
                           : x

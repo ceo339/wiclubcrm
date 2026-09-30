@@ -15,13 +15,14 @@ export type InvoiceCandidate = Pick<
   | "email"
   | "phone"
   | "billing_name"
+  | "billing_email"
   | "billing_address"
   | "agreement_number"
   | "agreement_date"
 >;
 
 export const INVOICE_CANDIDATE_FIELDS =
-  "id, name, email, phone, billing_name, billing_address, agreement_number, agreement_date";
+  "id, name, email, phone, billing_name, billing_email, billing_address, agreement_number, agreement_date";
 
 export function toInvoiceData(p: InvoicePayment, c: InvoiceCandidate): InvoiceData {
   return {
@@ -32,7 +33,7 @@ export function toInvoiceData(p: InvoicePayment, c: InvoiceCandidate): InvoiceDa
     franchisee: {
       name: c.billing_name?.trim() || c.name,
       address: c.billing_address?.trim() || null,
-      email: c.email?.trim() || null,
+      email: c.billing_email?.trim() || c.email?.trim() || null,
       phone: c.phone?.trim() || null,
     },
     agreement: { number: c.agreement_number?.trim() || null, date: c.agreement_date },
