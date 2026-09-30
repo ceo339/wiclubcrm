@@ -8,7 +8,7 @@ import { FRANCHISE_PAYMENT_KINDS, FRANCHISE_PAYMENT_STATUSES, isOverdue } from "
 import { FRANCHISE_TERMINAL_STAGES, type FranchiseStageId } from "@/lib/franchise";
 import type { FranchiseCandidate } from "../types";
 import CandidateDetailModal from "../CandidateDetailModal";
-import { FranchisePaymentForm, PaymentActions, PaymentStatusPill, formatUsd, paymentKindText } from "./PaymentParts";
+import { FranchisePaymentForm, InvoiceLinks, PaymentActions, PaymentStatusPill, formatUsd, paymentKindText } from "./PaymentParts";
 
 function todayIso() {
   return new Date().toISOString().slice(0, 10);
@@ -18,15 +18,22 @@ export default function FranchisePaymentsBoard({
   payments,
   candidates,
   canEdit,
+  canEditCandidate,
+  initialStatus = "all",
 }: {
   payments: FranchisePayment[];
   candidates: FranchiseCandidate[];
+  /** May create/send/mark invoices (HQ, МПП, финдиректор). */
   canEdit: boolean;
+  /** May edit the pipeline card itself (HQ, МПП) — the finance director
+   * opens it read-only. */
+  canEditCandidate: boolean;
+  initialStatus?: string;
 }) {
   const { locale, t } = useLocale();
   const router = useRouter();
   const [kind, setKind] = useState("all");
-  const [status, setStatus] = useState("all");
+  const [status, setStatus] = useState(initialStatus);
   const [search, setSearch] = useState("");
   const [adding, setAdding] = useState(false);
   const [openId, setOpenId] = useState<string | null>(null);
@@ -48,7 +55,7 @@ export default function FranchisePaymentsBoard({
     if (status === "overdue" ? !isOverdue(p, today) : status !== "all" && p.status !== status) return false;
     if (q) {
       const c = byId.get(p.candidate_id);
-      const hay = `${c?.name ?? ""} ${c?.target_city ?? ""} ${p.note ?? ""}`.toLowerCase();
+      const hay = `${c?.name ?? ""} ${c?.billing_name ?? ""} ${c?.target_city ?? ""} ${p.note ?? ""} ${p.invoice_number ?? ""}`.toLowerCase();
       if (!hay.includes(q)) return false;
     }
     return true;
@@ -122,10 +129,11 @@ export default function FranchisePaymentsBoard({
       )}
 
       <div className="overflow-x-auto rounded-xl border border-border bg-background shadow-card">
-        <table className="w-full min-w-[820px] text-sm">
+        <table className="w-full min-w-[920px] text-sm">
           <thead>
             <tr className="text-left text-[11px] uppercase tracking-wide text-muted">
               <th className="px-4 py-2 font-medium">{t("fpColInvoiceDate")}</th>
+              <th className="px-4 py-2 font-medium">{t("fpColInvoice")}</th>
               <th className="px-4 py-2 font-medium">{t("fpColFranchisee")}</th>
               <th className="px-4 py-2 font-medium">{t("fpFieldKind")}</th>
               <th className="px-4 py-2 font-medium">{t("fpFieldAmount")}</th>
@@ -137,7 +145,7 @@ export default function FranchisePaymentsBoard({
           <tbody>
             {rows.length === 0 ? (
               <tr>
-                <td colSpan={7} className="px-4 py-6 text-center text-sm text-muted">
+                <td colSpan={8} className="px-4 py-6 text-center text-sm text-muted">
                   {t("fpEmpty")}
                 </td>
               </tr>
@@ -147,6 +155,9 @@ export default function FranchisePaymentsBoard({
                 return (
                   <tr key={p.id} className="border-t border-border align-top">
                     <td className="px-4 py-2 whitespace-nowrap">{p.invoice_date}</td>
+                    <td className="px-4 py-2 whitespace-nowrap">
+                      <InvoiceLinks payment={p} />
+                    </td>
                     <td className="px-4 py-2">
                       <button type="button" onClick={() => setOpenId(p.candidate_id)} className="text-left font-medium text-foreground hover:underline">
                         {c?.name ?? "—"}
@@ -180,7 +191,8 @@ export default function FranchisePaymentsBoard({
       {openCandidate && (
         <CandidateDetailModal
           candidate={openCandidate}
-          canEdit={canEdit}
+          canEdit={canEditCandidate}
+          canBill={canEdit}
           onClose={() => {
             setOpenId(null);
             router.refresh();

@@ -89,7 +89,10 @@ function navItemsForProfile(profile: Profile, viewMode: ViewMode): NavItem[] {
   // franchise_access also needs to reach it, same gating as the page's own
   // canView check (src/app/franchise/page.tsx).
   const hasFranchiseAccess =
-    profile.role === "hq" || profile.franchise_access === "view" || profile.franchise_access === "edit";
+    profile.role === "hq" ||
+    profile.franchise_access === "view" ||
+    profile.franchise_access === "edit" ||
+    profile.franchise_access === "finance";
   if (hasFranchiseAccess) {
     items.push({ href: "/franchise", labelKey: "navFranchiseSidebar", icon: <IconFranchise /> });
     items.push({ href: "/franchise/payments", labelKey: "navFranchisePayments", icon: <IconWallet /> });

@@ -367,6 +367,10 @@ export type Database = {
       franchise_candidates: {
         Row: {
           birth_date: string | null
+          billing_name: string | null
+          billing_address: string | null
+          agreement_number: string | null
+          agreement_date: string | null
           budget: string | null
           calendly_event_uri: string | null
           calendly_invitee_uri: string | null
@@ -401,6 +405,10 @@ export type Database = {
         }
         Insert: {
           birth_date?: string | null
+          billing_name?: string | null
+          billing_address?: string | null
+          agreement_number?: string | null
+          agreement_date?: string | null
           budget?: string | null
           calendly_event_uri?: string | null
           calendly_invitee_uri?: string | null
@@ -435,6 +443,10 @@ export type Database = {
         }
         Update: {
           birth_date?: string | null
+          billing_name?: string | null
+          billing_address?: string | null
+          agreement_number?: string | null
+          agreement_date?: string | null
           budget?: string | null
           calendly_event_uri?: string | null
           calendly_invitee_uri?: string | null
@@ -477,6 +489,11 @@ export type Database = {
           created_by: string | null
           currency: string
           due_date: string | null
+          invoice_number: string | null
+          description: string | null
+          sent_at: string | null
+          sent_to: string | null
+          last_reminder_at: string | null
           id: string
           invoice_date: string
           kind: string
@@ -493,6 +510,11 @@ export type Database = {
           created_by?: string | null
           currency?: string
           due_date?: string | null
+          invoice_number?: string | null
+          description?: string | null
+          sent_at?: string | null
+          sent_to?: string | null
+          last_reminder_at?: string | null
           id?: string
           invoice_date?: string
           kind?: string
@@ -509,6 +531,11 @@ export type Database = {
           created_by?: string | null
           currency?: string
           due_date?: string | null
+          invoice_number?: string | null
+          description?: string | null
+          sent_at?: string | null
+          sent_to?: string | null
+          last_reminder_at?: string | null
           id?: string
           invoice_date?: string
           kind?: string

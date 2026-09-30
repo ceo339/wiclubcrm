@@ -4,9 +4,11 @@ import { useEffect, useState } from "react";
 import { useLocale } from "@/components/i18n/LocaleProvider";
 import { getCandidatePayments, type FranchisePayment } from "@/app/franchise/payments/actions";
 import type { FranchiseStageId } from "@/lib/franchise";
-import { FranchisePaymentForm, PaymentActions, PaymentStatusPill, formatUsd, paymentKindText } from "./PaymentParts";
+import { FranchisePaymentForm, InvoiceLinks, PaymentActions, PaymentStatusPill, formatUsd, paymentKindText } from "./PaymentParts";
+import BillingDetailsSection from "./BillingDetailsSection";
 
-/** «Оплаты» block inside the candidate card (round 48). */
+/** «Оплаты» block inside the candidate card (round 48). `canEdit` here means
+ * «may bill» (HQ, МПП, финдиректор) — see lib/franchiseAccess. */
 export default function CandidatePaymentsSection({
   candidateId,
   canEdit,
@@ -61,6 +63,8 @@ export default function CandidatePaymentsSection({
         </div>
       )}
 
+      <BillingDetailsSection candidateId={candidateId} canEdit={canEdit} />
+
       {adding && (
         <div className="mt-2">
           <FranchisePaymentForm candidateId={candidateId} onDone={changed} onCancel={() => setAdding(false)} />
@@ -84,6 +88,7 @@ export default function CandidatePaymentsSection({
                 {p.status === "paid" && p.paid_date ? `${t("fpPaidOn")} ${p.paid_date}` : p.due_date ? `${t("fpDueOn")} ${p.due_date}` : p.invoice_date}
               </span>
               <PaymentStatusPill payment={p} />
+              <InvoiceLinks payment={p} />
               {canEdit && <PaymentActions payment={p} onChanged={changed} />}
             </div>
           ))}

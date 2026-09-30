@@ -45,12 +45,14 @@ const ACCESS_TYPE_TO_ROLE: Record<TeamAccessType, string> = {
   network_view: "viewer",
   network_and_franchise_view: "viewer",
   franchise_edit: "franchise",
+  franchise_finance: "franchise",
 };
 
 const ACCESS_TYPE_TO_FRANCHISE: Record<TeamAccessType, string> = {
   network_view: "none",
   network_and_franchise_view: "view",
   franchise_edit: "edit",
+  franchise_finance: "finance",
 };
 
 function accessTypeOf(role: string, franchiseAccess: string): TeamAccessType | null {

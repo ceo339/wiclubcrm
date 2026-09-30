@@ -39,10 +39,13 @@ import FranchiseFunnelBars from "./FranchiseFunnelBars";
 export default function FranchiseBoard({
   initialCandidates,
   canEdit,
+  canBill,
   qualifiedIds,
 }: {
   initialCandidates: FranchiseCandidate[];
   canEdit: boolean;
+  /** Round 49: may bill (finance director) even when the card is read-only. */
+  canBill?: boolean;
   /** ids of candidates who ever reached "Фин. модель отправлена" or later
    * (round 40) — see franchise/page.tsx for how this is computed. */
   qualifiedIds: string[];
@@ -282,7 +285,13 @@ export default function FranchiseBoard({
       />
 
       {selected && (
-        <CandidateDetailModal key={selected.id} candidate={selected} canEdit={canEdit} onClose={() => setSelectedId(null)} />
+        <CandidateDetailModal
+          key={selected.id}
+          candidate={selected}
+          canEdit={canEdit}
+          canBill={canBill ?? canEdit}
+          onClose={() => setSelectedId(null)}
+        />
       )}
     </div>
   );

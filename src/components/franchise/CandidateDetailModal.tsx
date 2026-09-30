@@ -17,6 +17,7 @@ import { VISIBLE_FRANCHISE_STAGES, FRANCHISE_TERMINAL_STAGES, franchiseStageLabe
 import { useLocale, useT } from "@/components/i18n/LocaleProvider";
 import type { FranchiseCandidate } from "./types";
 import ReasonModal from "./ReasonModal";
+import CandidatePaymentsSection from "./payments/CandidatePaymentsSection";
 
 /**
  * Candidate card — laid out as the two panels from Anastasiia's reference
@@ -33,10 +34,14 @@ import ReasonModal from "./ReasonModal";
 export default function CandidateDetailModal({
   candidate,
   canEdit,
+  canBill = canEdit,
   onClose,
 }: {
   candidate: FranchiseCandidate;
   canEdit: boolean;
+  /** Round 49: may create/send invoices — the finance director can while
+   * the rest of the card stays read-only for her. */
+  canBill?: boolean;
   onClose: () => void;
 }) {
   const { locale, t } = useLocale();
@@ -101,7 +106,14 @@ export default function CandidateDetailModal({
   function handleZoomSave() {
     if (zoomUrl === (candidate.zoom_recording_url ?? "")) return;
     startTransition(async () => {
-      await setCandidateZoomUrl(candidate.id, zoomUrl || null);
+      // Round 48 rule (restored in round 49 — it was lost in the «Анкета»
+      // commit 0ce2339): a recording added by hand moves the card to «Фин.
+      // модель отправлена».
+      const res = await setCandidateZoomUrl(candidate.id, zoomUrl || null);
+      if (res.stage) {
+        setStage(res.stage);
+        reload();
+      }
     });
   }
 
@@ -286,6 +298,15 @@ export default function CandidateDetailModal({
               </>
             )}
           </div>
+
+          <CandidatePaymentsSection
+            candidateId={candidate.id}
+            canEdit={canBill}
+            onStageChanged={(next) => {
+              setStage(next);
+              reload();
+            }}
+          />
 
           <TasksSection candidateId={candidate.id} detail={detail} canEdit={canEdit} onChanged={reload} />
           <CommentsSection candidateId={candidate.id} detail={detail} canEdit={canEdit} onChanged={reload} />

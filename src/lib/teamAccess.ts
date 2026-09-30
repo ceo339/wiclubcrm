@@ -18,5 +18,12 @@
  * count) from a "use server" file, so this particular restriction never
  * came up before.
  */
-export const TEAM_ACCESS_TYPES = ["network_view", "network_and_franchise_view", "franchise_edit"] as const;
+// Round 49: + "franchise_finance" — финдиректор: sees the franchise pipeline
+// read-only, bills franchisees in «Оплаты франчайзи».
+export const TEAM_ACCESS_TYPES = [
+  "network_view",
+  "network_and_franchise_view",
+  "franchise_edit",
+  "franchise_finance",
+] as const;
 export type TeamAccessType = (typeof TEAM_ACCESS_TYPES)[number];

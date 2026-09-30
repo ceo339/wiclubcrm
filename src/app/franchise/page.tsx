@@ -24,7 +24,7 @@ export default async function FranchisePage() {
 
   const isHq = profile.role === "hq";
   const canEdit = isHq || profile.franchise_access === "edit";
-  const canView = canEdit || profile.franchise_access === "view";
+  const canView = canEdit || profile.franchise_access === "view" || profile.franchise_access === "finance";
   if (!canView) redirect("/");
 
   const supabase = await createClient();
@@ -96,6 +96,7 @@ export default async function FranchisePage() {
             latest_comment: latestCommentByCandidate.get(c.id) ?? null,
           }))}
           canEdit={canEdit}
+          canBill={canEdit || profile.franchise_access === "finance"}
           qualifiedIds={qualifiedIds}
         />
       )}

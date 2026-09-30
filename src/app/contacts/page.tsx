@@ -53,7 +53,8 @@ export default async function ContactsPage() {
   // anyway; franchise_candidates has nothing to do with partner_id, so no
   // scopePartnerId filter applies here the way it does for contacts.
   const canEditFranchise = profile.role === "hq" || profile.franchise_access === "edit";
-  const canViewFranchise = canEditFranchise || profile.franchise_access === "view";
+  const canViewFranchise =
+    canEditFranchise || profile.franchise_access === "view" || profile.franchise_access === "finance";
   const { data: franchiseCandidates } = canViewFranchise
     ? await supabase.from("franchise_candidates").select("*").order("submitted_at", { ascending: false })
     : { data: [] };

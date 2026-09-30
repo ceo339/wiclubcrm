@@ -1,3 +1,6 @@
 {
-  "crons": [{ "path": "/api/cron/meta-ads", "schedule": "0 5 * * *" }]
+  "crons": [
+    { "path": "/api/cron/meta-ads", "schedule": "0 5 * * *" },
+    { "path": "/api/cron/franchise-invoices", "schedule": "15 6 * * *" }
+  ]
 }

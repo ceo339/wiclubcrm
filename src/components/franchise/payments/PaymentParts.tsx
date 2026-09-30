@@ -1,10 +1,11 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { useLocale } from "@/components/i18n/LocaleProvider";
 import {
   createFranchisePayment,
   deleteFranchisePayment,
+  sendFranchiseInvoice,
   setFranchisePaymentStatus,
   type FranchisePayment,
 } from "@/app/franchise/payments/actions";
@@ -16,6 +17,7 @@ import {
   kindLabelKey,
   statusLabelKey,
 } from "@/lib/franchisePayments";
+import { defaultInvoiceDescription } from "@/lib/invoice/franchisor";
 
 const inputCls =
   "rounded-lg border border-border bg-background px-2.5 py-1.5 text-sm outline-none focus:border-accent focus:ring-1 focus:ring-accent";
@@ -47,6 +49,15 @@ export function FranchisePaymentForm({
   const [note, setNote] = useState("");
   const [paid, setPaid] = useState(false);
   const [paidDate, setPaidDate] = useState(todayIso());
+  // Round 49: the English line printed on the invoice — prefilled per kind
+  // (and royalty month) until the user types her own wording.
+  const [description, setDescription] = useState(defaultInvoiceDescription("lump_sum", null));
+  const [descTouched, setDescTouched] = useState(false);
+  const [sendNow, setSendNow] = useState(true);
+  const [sentTo, setSentTo] = useState<string | null>(null);
+  useEffect(() => {
+    if (!descTouched) setDescription(defaultInvoiceDescription(kind, kind === "royalty" ? `${periodMonth}-01` : null));
+  }, [kind, periodMonth, descTouched]);
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
 
@@ -62,12 +73,22 @@ export function FranchisePaymentForm({
         invoiceDate,
         dueDate: dueDate || null,
         periodMonth: kind === "royalty" ? periodMonth : null,
+        description,
         note,
         paid,
         paidDate: paid ? paidDate : null,
+        sendNow: !paid && sendNow,
       });
-      if (res.error) setError(res.error);
-      else onDone(res.stage);
+      if (res.error && res.saved) {
+        // The invoice is saved; only emailing it failed — say so, keep going.
+        alertError(`${t("fpSavedButNotSent")} ${t(res.error)}`);
+        onDone(res.stage);
+      } else if (res.error) {
+        setError(res.error);
+      } else {
+        if (res.sentTo) setSentTo(res.sentTo);
+        onDone(res.stage);
+      }
     });
   }
 
@@ -122,6 +143,18 @@ export function FranchisePaymentForm({
           </label>
         )}
       </div>
+      <label className="flex flex-col gap-1 text-xs font-medium text-muted">
+        {t("fpFieldDescription")}
+        <textarea
+          value={description}
+          onChange={(e) => {
+            setDescription(e.target.value);
+            setDescTouched(true);
+          }}
+          rows={2}
+          className={inputCls}
+        />
+      </label>
       <input value={note} onChange={(e) => setNote(e.target.value)} placeholder={t("fpFieldNote")} className={inputCls} />
       <div className="flex flex-wrap items-center gap-2 text-sm">
         <label className="flex items-center gap-1.5 text-ink-2">
@@ -129,6 +162,12 @@ export function FranchisePaymentForm({
           {t("fpAlreadyPaid")}
         </label>
         {paid && <input type="date" value={paidDate} onChange={(e) => setPaidDate(e.target.value)} className={inputCls} />}
+        {!paid && (
+          <label className="flex items-center gap-1.5 text-ink-2">
+            <input type="checkbox" checked={sendNow} onChange={(e) => setSendNow(e.target.checked)} className="h-3.5 w-3.5" />
+            {t("fpSendNow")}
+          </label>
+        )}
       </div>
       {kind === "lump_sum" && <p className="text-xs text-muted">{t("fpLumpSumHint")}</p>}
       <div className="flex gap-2">
@@ -147,7 +186,35 @@ export function FranchisePaymentForm({
         )}
       </div>
       {error && <p className="text-xs text-accent-strong">{t(error)}</p>}
+      {sentTo && <p className="text-xs text-muted">{t("fpSentTo", { email: sentTo })}</p>}
     </div>
+  );
+}
+
+/** Round 49: invoice number + PDF/Word download + when it was emailed. */
+export function InvoiceLinks({ payment }: { payment: FranchisePayment }) {
+  const { t } = useLocale();
+  const base = `/api/franchise/invoices/${payment.id}`;
+  const d = (iso: string) => iso.slice(0, 10).split("-").reverse().join(".");
+  return (
+    <span className="flex flex-col gap-0.5 text-xs">
+      <span className="flex flex-wrap items-center gap-x-2">
+        {payment.invoice_number && <span className="font-medium text-ink-2">№ {payment.invoice_number}</span>}
+        <a href={`${base}/pdf?inline=1`} target="_blank" rel="noreferrer" className="text-accent hover:underline">
+          PDF
+        </a>
+        <a href={`${base}/docx`} className="text-accent hover:underline">
+          Word
+        </a>
+      </span>
+      {(payment.sent_at || payment.last_reminder_at) && (
+        <span className="text-muted">
+          {payment.last_reminder_at
+            ? t("fpRemindedOn", { date: d(payment.last_reminder_at) })
+            : t("fpSentOn", { date: d(payment.sent_at!) })}
+        </span>
+      )}
+    </span>
   );
 }
 
@@ -224,8 +291,23 @@ export function PaymentActions({
     );
   }
 
+  const sendLabel = payment.sent_at ? t("fpRemind") : t("fpSend");
   return (
     <span className="flex flex-wrap items-center gap-1.5">
+      {payment.status === "invoiced" && (
+        <button
+          type="button"
+          disabled={pending}
+          title={t("fpSendHint")}
+          onClick={() => {
+            if (confirm(payment.sent_at ? t("fpRemindConfirm") : t("fpSendConfirm")))
+              run(() => sendFranchiseInvoice(payment.id, !!payment.sent_at));
+          }}
+          className="rounded-md bg-accent px-2 py-0.5 text-xs font-semibold text-white hover:bg-accent-strong disabled:opacity-50"
+        >
+          {sendLabel}
+        </button>
+      )}
       {payment.status === "invoiced" && (
         <button
           type="button"

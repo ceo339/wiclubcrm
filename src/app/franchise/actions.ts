@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getCurrentProfile } from "@/lib/auth";
 import { isFranchiseStage, type FranchiseStageId } from "@/lib/franchise";
 import type { Tables, TablesUpdate } from "@/types/database";
+import { isTerminalStage, stageIndex } from "@/lib/integrations/franchise";
 
 export type ActionResult = { error: string | null };
 
@@ -22,7 +23,8 @@ function franchiseAccess(profile: { role: string; franchise_access: string }): {
 } {
   const isHq = profile.role === "hq";
   const canEdit = isHq || profile.franchise_access === "edit";
-  const canView = canEdit || profile.franchise_access === "view";
+  // Round 49: the finance director sees the pipeline read-only.
+  const canView = canEdit || profile.franchise_access === "view" || profile.franchise_access === "finance";
   return { canView, canEdit };
 }
 
@@ -65,21 +67,46 @@ export async function updateCandidateStage(
   return { error: null };
 }
 
-export async function setCandidateZoomUrl(candidateId: string, url: string | null): Promise<ActionResult> {
+export async function setCandidateZoomUrl(
+  candidateId: string,
+  url: string | null
+): Promise<ActionResult & { stage?: FranchiseStageId }> {
   const profile = await getCurrentProfile();
   if (!profile) return { error: "errNotAuthorized" };
   const { canEdit } = franchiseAccess(profile);
   if (!canEdit) return { error: "errNotAuthorized" };
 
   const supabase = await createClient();
+  const clean = url?.trim() || null;
+  const { data: current } = await supabase
+    .from("franchise_candidates")
+    .select("stage")
+    .eq("id", candidateId)
+    .maybeSingle();
   const { error } = await supabase
     .from("franchise_candidates")
-    .update({ zoom_recording_url: url?.trim() || null })
+    .update({ zoom_recording_url: clean })
     .eq("id", candidateId);
   if (error) return { error: error.message };
 
+  // Round 48: a Zoom recording added by hand moves the card to «Фин. модель
+  // отправлена», same rule as the Zoom webhook — forward only, never out of
+  // declined/paused. (Restored in round 49: commit 0ce2339 «Анкета» had
+  // overwritten this function with an older copy.)
+  let movedTo: FranchiseStageId | undefined;
+  if (clean && current && !isTerminalStage(current.stage) && stageIndex(current.stage) < stageIndex("fin_model_sent")) {
+    await supabase.from("franchise_candidates").update({ stage: "fin_model_sent" }).eq("id", candidateId);
+    await supabase.from("franchise_stage_history").insert({
+      candidate_id: candidateId,
+      stage: "fin_model_sent",
+      created_by: profile.id,
+      note: "Добавлена запись Zoom",
+    });
+    movedTo = "fin_model_sent";
+  }
+
   revalidatePath("/franchise");
-  return { error: null };
+  return { error: null, stage: movedTo };
 }
 
 /**
