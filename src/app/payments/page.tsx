@@ -12,6 +12,7 @@ import T from "@/components/i18n/T";
 import PaymentsBoard from "@/components/payments/PaymentsBoard";
 import type { MemberOption } from "@/components/payments/types";
 import AppShell from "@/components/shell/AppShell";
+import { getPackageSalesForPayments } from "@/app/packages/actions";
 
 export default async function PaymentsPage() {
   const profile = await getCurrentProfile();
@@ -32,7 +33,10 @@ export default async function PaymentsPage() {
     )
     .order("paid_date", { ascending: false });
   if (scopePartnerId) paymentsQuery = paymentsQuery.eq("partner_id", scopePartnerId);
-  const { data: payments, error } = await paymentsQuery;
+  const [{ data: payments, error }, packageSales] = await Promise.all([
+    paymentsQuery,
+    getPackageSalesForPayments(scopePartnerId),
+  ]);
 
   const { data: clubs } = networkView
     ? await supabase.from("partners").select("id, name").order("name")
@@ -112,6 +116,7 @@ export default async function PaymentsPage() {
           memberOptions={memberOptions}
           canEdit={canEdit}
           stripeEnabled={stripeEnabled}
+          packageSales={packageSales}
         />
       )}
     </AppShell>

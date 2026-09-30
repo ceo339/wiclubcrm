@@ -18,9 +18,11 @@ import Money from "@/components/currency/Money";
 import Avatar from "@/components/ui/Avatar";
 import { useLocale } from "@/components/i18n/LocaleProvider";
 import type { MemberOption, Payment } from "./types";
+import type { PackageSaleRow } from "@/app/packages/actions";
 import NewPaymentModal from "./NewPaymentModal";
 import EditPaymentModal from "./EditPaymentModal";
 import PaymentLinkModal from "./PaymentLinkModal";
+import PackageSaleDetailModal from "./PackageSaleDetailModal";
 
 /** Month/year button options for the Оплаты page's own period picker —
  * same idea as monthsWithActivity/yearsWithActivity in lib/dashboard, just
@@ -96,11 +98,18 @@ export default function PaymentsBoard({
   memberOptions,
   canEdit,
   stripeEnabled,
+  packageSales,
 }: {
   initialPayments: Payment[];
   memberOptions: MemberOption[];
   canEdit: boolean;
   stripeEnabled: boolean;
+  /** "Продажа пакета" (round 46/47) — each is ONE real payment shown as a
+   * single line here (see app/packages/actions.ts); its own total_price is
+   * never in `initialPayments` and never counted in the tiles below — only
+   * the per-course payments rows created as потоки get assigned are (they
+   * show up in initialPayments like any other payment, automatically). */
+  packageSales: PackageSaleRow[];
 }) {
   const { locale, t } = useLocale();
   const [status, setStatus] = useState<string>("all");
@@ -108,6 +117,7 @@ export default function PaymentsBoard({
   const [showNew, setShowNew] = useState(false);
   const [showLink, setShowLink] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selectedPackageId, setSelectedPackageId] = useState<string | null>(null);
 
   const isHq = !canEdit;
 
@@ -122,6 +132,18 @@ export default function PaymentsBoard({
     const byStatus = status === "all" ? initialPayments : initialPayments.filter((p) => p.status === status);
     return byStatus.filter((p) => inPeriod(period, paymentAttributionDate(p)));
   }, [initialPayments, status, period]);
+
+  // A package sale is always "already paid" money (it's a lump sum received
+  // up front — see app/packages/actions.ts), so it only shows up under the
+  // "Оплачено"/"Все статусы" filters, never "Ожидает"/"Возврат". Attributed
+  // by its own paid_date (not per-course — the whole point is that the
+  // per-course потоки aren't all known at the time it's paid).
+  const filteredPackages = useMemo(() => {
+    if (status !== "all" && status !== "paid") return [];
+    return packageSales.filter((pkg) => inPeriod(period, pkg.paid_date));
+  }, [packageSales, status, period]);
+
+  const selectedPackage = packageSales.find((p) => p.id === selectedPackageId) ?? null;
 
   // The first three headline tiles deliberately read from ALL payments (only
   // scoped by the period picker, not the status dropdown below) — same
@@ -196,7 +218,7 @@ export default function PaymentsBoard({
             className="mt-1 font-display text-[28px] leading-[1.05] tracking-[-0.02em] text-foreground"
             style={{ fontVariantNumeric: "tabular-nums" }}
           >
-            {filtered.length}
+            {filtered.length + filteredPackages.length}
           </div>
         </div>
       </div>
@@ -242,7 +264,7 @@ export default function PaymentsBoard({
         </p>
       )}
 
-      {filtered.length === 0 ? (
+      {filtered.length === 0 && filteredPackages.length === 0 ? (
         <p className="rounded-lg border border-dashed border-border p-8 text-center text-sm text-muted">
           {t("emptyNoPaymentsFiltered")}
         </p>
@@ -260,36 +282,77 @@ export default function PaymentsBoard({
               </tr>
             </thead>
             <tbody>
-              {filtered.map((p) => (
-                <tr
-                  key={p.id}
-                  onClick={() => setSelectedId(p.id)}
-                  className="cursor-pointer border-b border-border last:border-0 hover:bg-surface-2"
-                >
-                  <td className="px-4 py-3">
-                    <div className="flex items-center gap-3">
-                      <Avatar name={p.member_name ?? p.lead_name ?? "?"} size={28} />
-                      <div className="min-w-0">
-                        <div className="font-medium text-foreground">{p.member_name ?? p.lead_name ?? "—"}</div>
-                        {!p.member_name && p.lead_name && (
-                          <div className="text-xs text-muted">{t("paymentFromLeadOnly")}</div>
-                        )}
-                      </div>
-                    </div>
-                  </td>
-                  {isHq && <td className="px-4 py-3 text-muted">{p.partner_name ?? "—"}</td>}
-                  <td className="px-4 py-3 text-muted">{p.product_name ?? "—"}</td>
-                  <td className="px-4 py-3">
-                    <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${statusPillClasses(p.status ?? "paid")}`}>
-                      {statusLabel(p.status ?? "paid", locale)}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3 text-muted">{p.paid_date}</td>
-                  <td className="px-4 py-3 text-right font-medium text-foreground">
-                    <Money amountEur={p.amount} />
-                  </td>
-                </tr>
-              ))}
+              {/* Package sales (round 46/47) render as one row each, sorted
+                  into the same list by date as real payments — see
+                  filteredPackages above for why they're never revenue-
+                  counted independently. */}
+              {[
+                ...filtered.map((p) => ({ kind: "payment" as const, date: p.paid_date, payment: p })),
+                ...filteredPackages.map((pkg) => ({ kind: "package" as const, date: pkg.paid_date, pkg })),
+              ]
+                .sort((a, b) => b.date.localeCompare(a.date))
+                .map((row) =>
+                  row.kind === "package" ? (
+                    <tr
+                      key={`pkg-${row.pkg.id}`}
+                      onClick={() => setSelectedPackageId(row.pkg.id)}
+                      className="cursor-pointer border-b border-border last:border-0 hover:bg-surface-2"
+                    >
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-3">
+                          <Avatar name={row.pkg.member_name ?? "?"} size={28} />
+                          <div className="min-w-0">
+                            <div className="font-medium text-foreground">{row.pkg.member_name ?? "—"}</div>
+                          </div>
+                        </div>
+                      </td>
+                      {isHq && <td className="px-4 py-3 text-muted">{row.pkg.partner_name ?? "—"}</td>}
+                      <td className="px-4 py-3 text-muted">{row.pkg.label}</td>
+                      <td className="px-4 py-3">
+                        <span className="rounded-full bg-surface-3 px-2 py-0.5 text-xs font-medium text-ink-2">
+                          {t("packageBadgeLabel")}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-muted">{row.pkg.paid_date}</td>
+                      <td className="px-4 py-3 text-right font-medium text-foreground">
+                        <Money amountEur={row.pkg.total_price} />
+                      </td>
+                    </tr>
+                  ) : (
+                    <tr
+                      key={row.payment.id}
+                      onClick={() => setSelectedId(row.payment.id)}
+                      className="cursor-pointer border-b border-border last:border-0 hover:bg-surface-2"
+                    >
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-3">
+                          <Avatar name={row.payment.member_name ?? row.payment.lead_name ?? "?"} size={28} />
+                          <div className="min-w-0">
+                            <div className="font-medium text-foreground">
+                              {row.payment.member_name ?? row.payment.lead_name ?? "—"}
+                            </div>
+                            {!row.payment.member_name && row.payment.lead_name && (
+                              <div className="text-xs text-muted">{t("paymentFromLeadOnly")}</div>
+                            )}
+                          </div>
+                        </div>
+                      </td>
+                      {isHq && <td className="px-4 py-3 text-muted">{row.payment.partner_name ?? "—"}</td>}
+                      <td className="px-4 py-3 text-muted">{row.payment.product_name ?? "—"}</td>
+                      <td className="px-4 py-3">
+                        <span
+                          className={`rounded-full px-2 py-0.5 text-xs font-medium ${statusPillClasses(row.payment.status ?? "paid")}`}
+                        >
+                          {statusLabel(row.payment.status ?? "paid", locale)}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-muted">{row.payment.paid_date}</td>
+                      <td className="px-4 py-3 text-right font-medium text-foreground">
+                        <Money amountEur={row.payment.amount} />
+                      </td>
+                    </tr>
+                  )
+                )}
             </tbody>
           </table>
         </div>
@@ -297,6 +360,7 @@ export default function PaymentsBoard({
 
       {showNew && <NewPaymentModal members={memberOptions} onClose={() => setShowNew(false)} />}
       {showLink && <PaymentLinkModal members={memberOptions} onClose={() => setShowLink(false)} />}
+      {selectedPackage && <PackageSaleDetailModal pkg={selectedPackage} onClose={() => setSelectedPackageId(null)} />}
       {selected && (
         <EditPaymentModal
           key={selected.id}

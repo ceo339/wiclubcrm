@@ -378,39 +378,6 @@ export type Database = {
         }
         Relationships: []
       }
-      integration_events: {
-        Row: {
-          candidate_id: string | null
-          created_at: string
-          detail: string | null
-          event_type: string
-          id: string
-          payload: Json | null
-          source: string
-          status: string
-        }
-        Insert: {
-          candidate_id?: string | null
-          created_at?: string
-          detail?: string | null
-          event_type: string
-          id?: string
-          payload?: Json | null
-          source: string
-          status: string
-        }
-        Update: {
-          candidate_id?: string | null
-          created_at?: string
-          detail?: string | null
-          event_type?: string
-          id?: string
-          payload?: Json | null
-          source?: string
-          status?: string
-        }
-        Relationships: []
-      }
       franchise_stage_history: {
         Row: {
           candidate_id: string
@@ -452,6 +419,47 @@ export type Database = {
             columns: ["created_by"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      integration_events: {
+        Row: {
+          candidate_id: string | null
+          created_at: string
+          detail: string | null
+          event_type: string
+          id: string
+          payload: Json | null
+          source: string
+          status: string
+        }
+        Insert: {
+          candidate_id?: string | null
+          created_at?: string
+          detail?: string | null
+          event_type: string
+          id?: string
+          payload?: Json | null
+          source: string
+          status: string
+        }
+        Update: {
+          candidate_id?: string | null
+          created_at?: string
+          detail?: string | null
+          event_type?: string
+          id?: string
+          payload?: Json | null
+          source?: string
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "integration_events_candidate_id_fkey"
+            columns: ["candidate_id"]
+            isOneToOne: false
+            referencedRelation: "franchise_candidates"
             referencedColumns: ["id"]
           },
         ]
@@ -695,6 +703,113 @@ export type Database = {
           },
           {
             foreignKeyName: "members_partner_id_fkey"
+            columns: ["partner_id"]
+            isOneToOne: false
+            referencedRelation: "partners"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      package_sale_items: {
+        Row: {
+          allocated_price: number | null
+          created_at: string
+          enrollment_id: string | null
+          id: string
+          package_sale_id: string
+          partner_id: string
+          product_id: string | null
+          start_date: string | null
+        }
+        Insert: {
+          allocated_price?: number | null
+          created_at?: string
+          enrollment_id?: string | null
+          id?: string
+          package_sale_id: string
+          partner_id: string
+          product_id?: string | null
+          start_date?: string | null
+        }
+        Update: {
+          allocated_price?: number | null
+          created_at?: string
+          enrollment_id?: string | null
+          id?: string
+          package_sale_id?: string
+          partner_id?: string
+          product_id?: string | null
+          start_date?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "package_sale_items_enrollment_id_fkey"
+            columns: ["enrollment_id"]
+            isOneToOne: false
+            referencedRelation: "member_enrollments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "package_sale_items_package_sale_id_fkey"
+            columns: ["package_sale_id"]
+            isOneToOne: false
+            referencedRelation: "package_sales"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "package_sale_items_partner_id_fkey"
+            columns: ["partner_id"]
+            isOneToOne: false
+            referencedRelation: "partners"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "package_sale_items_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      package_sales: {
+        Row: {
+          created_at: string
+          id: string
+          label: string
+          member_id: string
+          paid_date: string
+          partner_id: string
+          total_price: number
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          label: string
+          member_id: string
+          paid_date?: string
+          partner_id: string
+          total_price?: number
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          label?: string
+          member_id?: string
+          paid_date?: string
+          partner_id?: string
+          total_price?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "package_sales_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: false
+            referencedRelation: "members"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "package_sales_partner_id_fkey"
             columns: ["partner_id"]
             isOneToOne: false
             referencedRelation: "partners"
@@ -956,10 +1071,6 @@ export type Database = {
           entity_id: string
           entity_type: string
           id: string
-          // Nullable since round 44: a "franchise_candidate" task has no
-          // club to belong to (the whole franchise pipeline is network-wide,
-          // same reasoning as franchise_candidates itself) — see the
-          // tasks_partner_id_matches_entity_type check constraint.
           partner_id: string | null
           text: string
         }

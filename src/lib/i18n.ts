@@ -560,6 +560,44 @@ export const DICT: Record<string, Entry> = {
   optionNotSpecified: { ru: "— не указано —", bg: "— не е посочено —" },
   btnAddTaskShort: { ru: "+ Задача", bg: "+ Задача" },
 
+  // ---- package sales ("Продажа пакета", round 46/47) — a discounted
+  // bundle of courses paid for in one lump sum before all their потоки are
+  // known; see src/app/packages/actions.ts for the mechanic. ----
+  headingPackageSales: { ru: "Пакеты курсов", bg: "Пакети курсове" },
+  btnSellPackageShort: { ru: "+ Пакет", bg: "+ Пакет" },
+  headingNewPackageSale: { ru: "Продажа пакета", bg: "Продажба на пакет" },
+  fieldPackageLabel: { ru: "Название пакета", bg: "Наименование на пакета" },
+  placeholderPackageLabel: {
+    ru: "Например: СФ0–СФ3 со скидкой",
+    bg: "Например: СФ0–СФ3 с отстъпка",
+  },
+  fieldPackageCourses: { ru: "Курсы в пакете", bg: "Курсове в пакета" },
+  fieldTotalPrice: { ru: "Общая сумма", bg: "Обща сума" },
+  fieldPaidDate: { ru: "Дата оплаты", bg: "Дата на плащане" },
+  btnCreatePackageShort: { ru: "Продать пакет", bg: "Продай пакет" },
+  packageItemPending: { ru: "Поток ещё не назначен", bg: "Потокът все още не е назначен" },
+  packageItemAssignedOn: { ru: "Поток: {date}", bg: "Поток: {date}" },
+  btnAssignCohortShort: { ru: "Назначить поток", bg: "Назначи поток" },
+  headingAssignPackageItem: { ru: "Назначить поток", bg: "Назначаване на поток" },
+  fieldAllocatedPrice: { ru: "Доля этого курса в оплате", bg: "Дял на този курс от плащането" },
+  btnAssignShort: { ru: "Назначить", bg: "Назначи" },
+  errEnterPackageLabel: { ru: "Укажите название пакета", bg: "Въведете наименование на пакета" },
+  errSelectPackageCourses: {
+    ru: "Выберите хотя бы один курс для пакета",
+    bg: "Изберете поне един курс за пакета",
+  },
+  errPackageItemAlreadyAssigned: {
+    ru: "Поток для этого курса уже назначен",
+    bg: "Потокът за този курс вече е назначен",
+  },
+  errPackageHasAssignedItems: {
+    ru: "Нельзя удалить: часть курсов пакета уже распределена по потокам",
+    bg: "Не може да се изтрие: част от курсовете в пакета вече са разпределени по потоци",
+  },
+  packageBadgeLabel: { ru: "Пакет", bg: "Пакет" },
+  headingPackageSaleDetail: { ru: "Детали пакета", bg: "Детайли на пакета" },
+  packageTotalLabel: { ru: "Сумма пакета", bg: "Сума на пакета" },
+
   // ---- new lead modal ----
   headingNewLead: { ru: "Новый лид", bg: "Ново запитване" },
   fieldSource: { ru: "Источник", bg: "Източник" },

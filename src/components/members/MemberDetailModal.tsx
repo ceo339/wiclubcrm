@@ -14,6 +14,13 @@ import {
   type EnrollmentDetail,
   type MemberDetail,
 } from "@/app/members/actions";
+import {
+  assignPackageItem,
+  createPackageSale,
+  deletePackageSale,
+  getPackageSalesForMember,
+  type PackageSaleDetail,
+} from "@/app/packages/actions";
 import { attendedArray, STATUSES, statusLabel, statusPillClasses } from "@/lib/members";
 import { stageLabel } from "@/lib/leads";
 import { convertFromEur, convertToEur, currencySymbol, roundMoney } from "@/lib/currency";
@@ -39,12 +46,16 @@ export default function MemberDetailModal({
 }) {
   const t = useT();
   const [detail, setDetail] = useState<MemberDetail | null>(null);
+  const [packages, setPackages] = useState<PackageSaleDetail[] | null>(null);
   const [editing, setEditing] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
-    getMemberDetail(member.id).then((d) => {
-      if (!cancelled) setDetail(d);
+    Promise.all([getMemberDetail(member.id), getPackageSalesForMember(member.id)]).then(([d, p]) => {
+      if (!cancelled) {
+        setDetail(d);
+        setPackages(p);
+      }
     });
     return () => {
       cancelled = true;
@@ -54,6 +65,7 @@ export default function MemberDetailModal({
 
   function refresh() {
     getMemberDetail(member.id).then(setDetail);
+    getPackageSalesForMember(member.id).then(setPackages);
   }
 
   return (
@@ -92,6 +104,15 @@ export default function MemberDetailModal({
         <EnrollmentsSection
           memberId={member.id}
           detail={detail}
+          products={products}
+          cohorts={cohorts}
+          canEdit={canEdit}
+          onChanged={refresh}
+        />
+
+        <PackageSalesSection
+          memberId={member.id}
+          packages={packages}
           products={products}
           cohorts={cohorts}
           canEdit={canEdit}
@@ -712,6 +733,393 @@ function NewEnrollmentForm({
           className="rounded-lg bg-foreground px-3 py-1.5 text-xs font-medium text-background disabled:opacity-50"
         >
           {pending ? "..." : t("btnAddCourseShort")}
+        </button>
+      </div>
+    </form>
+  );
+}
+
+/**
+ * "Появилися пакет курсов со скидкой. Но как клиентов определять по
+ * потокам?" (Anastasiia, round 46) — a bundle of courses paid for as one
+ * lump sum before every course's поток is known. Lists whatever package
+ * sales already exist for this member (usually zero or one), each course
+ * inside shown as either "Поток ещё не назначен" (pending — see
+ * AssignPackageItemForm) or, once assigned, its date/price — it's a real
+ * course enrollment by then too, same as a normal EnrollmentCard above (see
+ * assignPackageItem in app/packages/actions.ts).
+ */
+function PackageSalesSection({
+  memberId,
+  packages,
+  products,
+  cohorts,
+  canEdit,
+  onChanged,
+}: {
+  memberId: string;
+  packages: PackageSaleDetail[] | null;
+  products: Tables<"products">[];
+  cohorts: Tables<"product_cohorts">[];
+  canEdit: boolean;
+  onChanged: () => void;
+}) {
+  const t = useT();
+  const [selling, setSelling] = useState(false);
+  const list = packages ?? [];
+
+  if (!canEdit && list.length === 0) return null;
+
+  return (
+    <div className="mt-5">
+      <div className="flex items-center justify-between">
+        <span className="text-xs font-medium text-ink-2">{t("headingPackageSales")}</span>
+        {canEdit && !selling && (
+          <button
+            type="button"
+            onClick={() => setSelling(true)}
+            className="text-xs font-medium text-ink-2 hover:underline"
+          >
+            {t("btnSellPackageShort")}
+          </button>
+        )}
+      </div>
+
+      {list.length > 0 && (
+        <div className="mt-2 flex flex-col gap-3">
+          {list.map((pkg) => (
+            <PackageSaleCard key={pkg.id} pkg={pkg} cohorts={cohorts} canEdit={canEdit} onChanged={onChanged} />
+          ))}
+        </div>
+      )}
+
+      {selling && (
+        <NewPackageSaleForm
+          memberId={memberId}
+          products={products}
+          onCancel={() => setSelling(false)}
+          onSaved={() => {
+            setSelling(false);
+            onChanged();
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+function PackageSaleCard({
+  pkg,
+  cohorts,
+  canEdit,
+  onChanged,
+}: {
+  pkg: PackageSaleDetail;
+  cohorts: Tables<"product_cohorts">[];
+  canEdit: boolean;
+  onChanged: () => void;
+}) {
+  const t = useT();
+  const [pending, startTransition] = useTransition();
+  const [error, setError] = useState<string | null>(null);
+  const [assigningItemId, setAssigningItemId] = useState<string | null>(null);
+  const allAssigned = pkg.items.every((i) => i.enrollment_id);
+
+  function handleDelete() {
+    setError(null);
+    startTransition(async () => {
+      const res = await deletePackageSale(pkg.id);
+      if (res.error) setError(res.error);
+      else onChanged();
+    });
+  }
+
+  return (
+    <div className="rounded-lg border border-border p-3">
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <div className="truncate text-sm font-medium text-foreground">{pkg.label}</div>
+          <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted">
+            <span className="rounded-full bg-surface-3 px-2 py-0.5 font-medium text-ink-2">
+              {t("packageBadgeLabel")}
+            </span>
+            <span>{pkg.paid_date}</span>
+            <span className="text-ink-2">
+              <Money amountEur={pkg.total_price} />
+            </span>
+          </div>
+        </div>
+        {canEdit && !allAssigned && (
+          <button
+            type="button"
+            disabled={pending}
+            onClick={handleDelete}
+            className="shrink-0 text-xs text-accent-strong hover:underline disabled:opacity-50"
+          >
+            {pending ? "..." : t("delete")}
+          </button>
+        )}
+      </div>
+      {error && <p className="mt-1 text-xs text-accent-strong">{t(error)}</p>}
+
+      <div className="mt-2 flex flex-col gap-1.5">
+        {pkg.items.map((item) => (
+          <div key={item.id} className="rounded-md bg-surface-2 px-2.5 py-1.5">
+            <div className="flex items-center justify-between gap-2 text-xs">
+              <span className="font-medium text-ink-2">{item.product_name ?? t("optionCourseNotChosen")}</span>
+              {item.enrollment_id ? (
+                <span className="flex items-center gap-2 text-muted">
+                  <span>{t("packageItemAssignedOn", { date: item.start_date ?? "" })}</span>
+                  <span className="text-ink-2">
+                    <Money amountEur={item.allocated_price ?? 0} />
+                  </span>
+                </span>
+              ) : canEdit ? (
+                assigningItemId === item.id ? null : (
+                  <button
+                    type="button"
+                    onClick={() => setAssigningItemId(item.id)}
+                    className="text-ink-2 hover:underline"
+                  >
+                    {t("btnAssignCohortShort")}
+                  </button>
+                )
+              ) : (
+                <span className="text-muted">{t("packageItemPending")}</span>
+              )}
+            </div>
+            {assigningItemId === item.id && (
+              <AssignPackageItemForm
+                item={item}
+                cohorts={cohorts}
+                onCancel={() => setAssigningItemId(null)}
+                onSaved={() => {
+                  setAssigningItemId(null);
+                  onChanged();
+                }}
+              />
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function AssignPackageItemForm({
+  item,
+  cohorts,
+  onCancel,
+  onSaved,
+}: {
+  item: PackageSaleDetail["items"][number];
+  cohorts: Tables<"product_cohorts">[];
+  onCancel: () => void;
+  onSaved: () => void;
+}) {
+  const t = useT();
+  const { currency, rates } = useCurrency();
+  const [startDate, setStartDate] = useState("");
+  const [price, setPrice] = useState("");
+  const [pending, startTransition] = useTransition();
+  const [error, setError] = useState<string | null>(null);
+
+  const productCohorts = useMemo(
+    () =>
+      cohorts
+        .filter((c) => c.product_id === item.product_id)
+        .sort((a, b) => a.start_date.localeCompare(b.start_date)),
+    [cohorts, item.product_id]
+  );
+
+  function handleSubmit(formData: FormData) {
+    setError(null);
+    startTransition(async () => {
+      const res = await assignPackageItem(item.id, formData);
+      if (res.error) setError(res.error);
+      else onSaved();
+    });
+  }
+
+  return (
+    <form action={handleSubmit} className="mt-2 flex flex-col gap-2 border-t border-border pt-2">
+      <div className="grid grid-cols-2 gap-2">
+        <label className="flex flex-col gap-1 text-xs">
+          <span className="font-medium text-ink-2">{t("fieldCohortStart")}</span>
+          <input
+            name="start_date"
+            type="date"
+            list={`cohorts-${item.id}`}
+            value={startDate}
+            onChange={(e) => setStartDate(e.target.value)}
+            required
+            className="rounded-lg border border-border bg-background px-2 py-1.5 text-xs outline-none focus:border-accent focus:ring-1 focus:ring-accent"
+          />
+          {productCohorts.length > 0 && (
+            <datalist id={`cohorts-${item.id}`}>
+              {productCohorts.map((c) => (
+                <option key={c.id} value={c.start_date} />
+              ))}
+            </datalist>
+          )}
+        </label>
+        <label className="flex flex-col gap-1 text-xs">
+          <span className="font-medium text-ink-2">
+            {t("fieldAllocatedPrice")} ({currencySymbol(currency)})
+          </span>
+          <input
+            type="number"
+            min="0"
+            step="0.01"
+            value={price}
+            onChange={(e) => setPrice(e.target.value)}
+            required
+            className="rounded-lg border border-border bg-background px-2 py-1.5 text-xs outline-none focus:border-accent focus:ring-1 focus:ring-accent"
+          />
+          <input
+            type="hidden"
+            name="allocated_price"
+            value={String(convertToEur(parseFloat(price) || 0, currency, rates))}
+          />
+        </label>
+      </div>
+      {error && <p className="text-xs text-accent-strong">{t(error)}</p>}
+      <div className="flex justify-end gap-2">
+        <button
+          type="button"
+          onClick={onCancel}
+          className="rounded-lg border border-border px-3 py-1 text-xs font-medium text-ink-2 hover:bg-surface-2"
+        >
+          {t("cancel")}
+        </button>
+        <button
+          type="submit"
+          disabled={pending}
+          className="rounded-lg bg-foreground px-3 py-1 text-xs font-medium text-background disabled:opacity-50"
+        >
+          {pending ? "..." : t("btnAssignShort")}
+        </button>
+      </div>
+    </form>
+  );
+}
+
+function NewPackageSaleForm({
+  memberId,
+  products,
+  onCancel,
+  onSaved,
+}: {
+  memberId: string;
+  products: Tables<"products">[];
+  onCancel: () => void;
+  onSaved: () => void;
+}) {
+  const t = useT();
+  const { currency, rates } = useCurrency();
+  const [label, setLabel] = useState("");
+  const [selected, setSelected] = useState<string[]>([]);
+  const [totalPrice, setTotalPrice] = useState("");
+  const [paidDate, setPaidDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [pending, startTransition] = useTransition();
+  const [error, setError] = useState<string | null>(null);
+
+  function toggle(productId: string) {
+    setSelected((prev) => (prev.includes(productId) ? prev.filter((id) => id !== productId) : [...prev, productId]));
+  }
+
+  function handleSubmit(formData: FormData) {
+    setError(null);
+    startTransition(async () => {
+      const res = await createPackageSale(memberId, formData);
+      if (res.error) setError(res.error);
+      else onSaved();
+    });
+  }
+
+  return (
+    <form action={handleSubmit} className="mt-2 rounded-lg border border-dashed border-border p-3">
+      <div className="flex flex-col gap-3">
+        <label className="flex flex-col gap-1.5 text-sm">
+          <span className="font-medium text-ink-2">{t("fieldPackageLabel")}</span>
+          <input
+            name="label"
+            value={label}
+            onChange={(e) => setLabel(e.target.value)}
+            placeholder={t("placeholderPackageLabel")}
+            required
+            className="rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-accent focus:ring-1 focus:ring-accent"
+          />
+        </label>
+
+        <div className="flex flex-col gap-1.5 text-sm">
+          <span className="font-medium text-ink-2">{t("fieldPackageCourses")}</span>
+          <div className="flex flex-col gap-1 rounded-lg border border-border p-2">
+            {products.map((p) => (
+              <label key={p.id} className="flex items-center gap-2 text-xs text-ink-2">
+                <input
+                  type="checkbox"
+                  name="product_id"
+                  value={p.id}
+                  checked={selected.includes(p.id)}
+                  onChange={() => toggle(p.id)}
+                  className="h-3.5 w-3.5"
+                />
+                {p.name}
+              </label>
+            ))}
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-3">
+          <label className="flex flex-col gap-1.5 text-sm">
+            <span className="font-medium text-ink-2">
+              {t("fieldTotalPrice")} ({currencySymbol(currency)})
+            </span>
+            <input
+              type="number"
+              min="0"
+              step="0.01"
+              value={totalPrice}
+              onChange={(e) => setTotalPrice(e.target.value)}
+              required
+              className="rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-accent focus:ring-1 focus:ring-accent"
+            />
+            <input
+              type="hidden"
+              name="total_price"
+              value={String(convertToEur(parseFloat(totalPrice) || 0, currency, rates))}
+            />
+          </label>
+          <label className="flex flex-col gap-1.5 text-sm">
+            <span className="font-medium text-ink-2">{t("fieldPaidDate")}</span>
+            <input
+              name="paid_date"
+              type="date"
+              value={paidDate}
+              onChange={(e) => setPaidDate(e.target.value)}
+              className="rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-accent focus:ring-1 focus:ring-accent"
+            />
+          </label>
+        </div>
+      </div>
+
+      {error && <p className="mt-2 text-xs text-accent-strong">{t(error)}</p>}
+
+      <div className="mt-3 flex justify-end gap-2">
+        <button
+          type="button"
+          onClick={onCancel}
+          className="rounded-lg border border-border px-3 py-1.5 text-xs font-medium text-ink-2 hover:bg-surface-2"
+        >
+          {t("cancel")}
+        </button>
+        <button
+          type="submit"
+          disabled={pending || selected.length === 0}
+          className="rounded-lg bg-foreground px-3 py-1.5 text-xs font-medium text-background disabled:opacity-50"
+        >
+          {pending ? "..." : t("btnCreatePackageShort")}
         </button>
       </div>
     </form>
