@@ -1,5 +1,7 @@
 "use client";
 
+import type React from "react";
+
 import { useState } from "react";
 import { monthLabel, periodLabel, type Period } from "@/lib/dashboard";
 import type { OpenTask } from "@/lib/tasks";
@@ -50,6 +52,7 @@ const FUNNEL_TILE_COLOR = "#9e0c24";
  */
 export default function FranchiseDashboard({
   period,
+  revenueSlot,
   monthOptions,
   yearOptions,
   onSelectPeriod,
@@ -72,6 +75,8 @@ export default function FranchiseDashboard({
   recentActivity,
 }: {
   period: Period;
+  /** Round 50 — «Доходы от франчайзи», rendered right under the KPI tiles. */
+  revenueSlot?: React.ReactNode;
   monthOptions: string[];
   yearOptions: string[];
   onSelectPeriod: (period: Period) => void;
@@ -209,6 +214,8 @@ export default function FranchiseDashboard({
           <div className="text-xs text-muted">{t("statInterviewsAllTime", { n: interviewStats.allTime })}</div>
         </StatTile>
       </div>
+
+      {revenueSlot}
 
       <div className="rounded-xl border border-border bg-background shadow-card p-5">
         <h2 className="text-sm font-semibold text-foreground">{t("headingFranchiseFunnel")}</h2>

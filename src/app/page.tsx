@@ -32,6 +32,7 @@ import LocaleScope from "@/components/i18n/LocaleScope";
 import TasksWidget from "@/components/home/TasksWidget";
 import DashboardBoard from "@/components/dashboard/DashboardBoard";
 import type { ClubRow } from "@/components/dashboard/DashboardBoard";
+import { canViewFranchise } from "@/lib/franchiseAccess";
 import T from "@/components/i18n/T";
 import AppShell from "@/components/shell/AppShell";
 
@@ -98,6 +99,7 @@ export default async function Home({
       { data: interviewHistory },
       { data: rawFranchiseTasks },
       { data: fullStageHistory },
+      { data: franchisePayments },
     ] = await Promise.all([
       supabase.from("franchise_candidates").select("*").order("submitted_at", { ascending: false }),
       supabase.from("franchise_stage_history").select("candidate_id").in("stage", QUALIFYING_STAGES),
@@ -119,6 +121,8 @@ export default async function Home({
       // is small (a few hundred rows for the whole pipeline), so fetching
       // it once, unfiltered, is simpler than two more targeted queries.
       supabase.from("franchise_stage_history").select("candidate_id, stage, occurred_at"),
+      // Round 50 — «Доходы от франчайзи» (RLS: hq or franchise view/edit/finance).
+      supabase.from("franchise_payments").select("*"),
     ]);
 
     const allCandidates = candidates ?? [];
@@ -170,6 +174,7 @@ export default async function Home({
             tasks={franchiseOpenTasks}
             canEditTasks={canEditFranchiseTasks}
             stageHistory={fullStageHistory ?? []}
+            payments={canViewFranchise(profile) ? (franchisePayments ?? []) : null}
           />
         )}
       </AppShell>

@@ -8,6 +8,7 @@ import { FRANCHISE_PAYMENT_KINDS, FRANCHISE_PAYMENT_STATUSES, isOverdue } from "
 import { FRANCHISE_TERMINAL_STAGES, type FranchiseStageId } from "@/lib/franchise";
 import type { FranchiseCandidate } from "../types";
 import CandidateDetailModal from "../CandidateDetailModal";
+import FranchiseRevenueWidget from "./FranchiseRevenueWidget";
 import { FranchisePaymentForm, InvoiceLinks, PaymentActions, PaymentStatusPill, formatUsd, paymentKindText } from "./PaymentParts";
 
 function todayIso() {
@@ -75,6 +76,7 @@ export default function FranchisePaymentsBoard({
 
   return (
     <div className="flex flex-col gap-4">
+      <FranchiseRevenueWidget payments={payments} />
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
         <Tile label={t("fpTilePaidMonth")} value={formatUsd(paidThisMonth, locale)} />
         <Tile label={t("fpTilePaidTotal")} value={formatUsd(paidTotal, locale)} />

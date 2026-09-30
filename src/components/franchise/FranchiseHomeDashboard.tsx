@@ -1,5 +1,8 @@
 "use client";
 
+import FranchiseRevenueWidget from "./payments/FranchiseRevenueWidget";
+import type { FranchisePayment } from "@/app/franchise/payments/actions";
+
 import { useMemo, useState } from "react";
 import { inPeriod, type Period } from "@/lib/dashboard";
 import type { OpenTask } from "@/lib/tasks";
@@ -47,6 +50,7 @@ export default function FranchiseHomeDashboard({
   tasks,
   canEditTasks,
   stageHistory,
+  payments,
 }: {
   candidates: FranchiseCandidate[];
   qualifiedIds: string[];
@@ -62,6 +66,9 @@ export default function FranchiseHomeDashboard({
    * see latestActivityByCandidate) and, since round 46 part 2, the
    * period-scoped "Договор отправлен" tile (countStageTransitionsInPeriod). */
   stageHistory: StageHistoryRow[];
+  /** Round 50 — franchise invoices for the revenue widget; null when the
+   * viewer has no franchise-billing visibility. */
+  payments?: FranchisePayment[] | null;
 }) {
   const [period, setPeriod] = useState<Period>({ mode: "month", month: currentMonthKey() });
   const qualifiedIdSet = useMemo(() => new Set(qualifiedIds), [qualifiedIds]);
@@ -138,6 +145,10 @@ export default function FranchiseHomeDashboard({
       networkStructure={networkStructure}
       networkGeography={networkGeography}
       recentActivity={recentActivity}
+      revenueSlot={
+        // Round 50: «Доходы от франчайзи» — follows the same period switcher.
+        payments ? <FranchiseRevenueWidget payments={payments} period={period} /> : null
+      }
     />
   );
 }

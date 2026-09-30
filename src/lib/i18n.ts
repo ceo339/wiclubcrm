@@ -1285,6 +1285,18 @@ export const DICT: Record<string, Entry> = {
   fpReopen: { ru: "Вернуть в ожидание", bg: "Върни в изчакване" },
   fpCancelInvoice: { ru: "Отменить", bg: "Анулирай" },
   fpDeleteConfirm: { ru: "Удалить этот счёт?", bg: "Да се изтрие ли фактурата?" },
+  // Round 50 — «Доходы от франчайзи» widget
+  frHeading: { ru: "Доходы от франчайзи", bg: "Приходи от франчайзи" },
+  frPeriod: { ru: "Период", bg: "Период" },
+  frPeriodThisMonth: { ru: "Этот месяц", bg: "Този месец" },
+  frPeriodPrevMonth: { ru: "Прошлый месяц", bg: "Миналия месец" },
+  frPeriodThisYear: { ru: "Этот год", bg: "Тази година" },
+  frForPeriod: { ru: "За период", bg: "За периода" },
+  frAllTime: { ru: "За всё время", bg: "За цялото време" },
+  frOpenNow: { ru: "Ожидает оплаты: {amount}", bg: "Очаква плащане: {amount}" },
+  frRoyaltyByMonth: { ru: "Роялти по месяцам", bg: "Роялти по месеци" },
+  frExpected: { ru: "Ожидается", bg: "Очаква се" },
+  frNoRoyalties: { ru: "Счетов на роялти пока нет.", bg: "Все още няма фактури за роялти." },
   // Round 49 — invoices (PDF/Word), emailing the partner, finance director
   fpColInvoice: { ru: "Счёт", bg: "Фактура" },
   fpFieldDescription: { ru: "Текст строки в инвойсе (англ.)", bg: "Текст на реда във фактурата (англ.)" },
