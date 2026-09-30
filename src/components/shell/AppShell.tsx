@@ -22,6 +22,7 @@ import {
   IconMenu,
   IconChart,
   IconFranchise,
+  IconMegaphone,
 } from "./icons";
 
 const ROLE_LABEL_KEYS: Record<string, string> = {
@@ -72,7 +73,8 @@ function navItemsForProfile(profile: Profile, viewMode: ViewMode): NavItem[] {
         { href: "/products", labelKey: "navCourses", icon: <IconBook /> },
         { href: "/payments", labelKey: "navPayments", icon: <IconWallet /> },
         { href: "/cohorts", labelKey: "navCohorts", icon: <IconChart /> },
-        { href: "/email", labelKey: "navEmail", icon: <IconMail /> }
+        { href: "/email", labelKey: "navEmail", icon: <IconMail /> },
+        { href: "/ads", labelKey: "navAds", icon: <IconMegaphone /> }
       );
     }
   }

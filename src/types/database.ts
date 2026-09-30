@@ -14,6 +14,97 @@ export type Database = {
   }
   public: {
     Tables: {
+      ad_insights_daily: {
+        Row: {
+          campaign_id: string
+          campaign_name: string | null
+          clicks: number
+          currency: string | null
+          date: string
+          impressions: number
+          leads: number
+          partner_id: string
+          spend: number
+          updated_at: string
+        }
+        Insert: {
+          campaign_id: string
+          campaign_name?: string | null
+          clicks?: number
+          currency?: string | null
+          date: string
+          impressions?: number
+          leads?: number
+          partner_id: string
+          spend?: number
+          updated_at?: string
+        }
+        Update: {
+          campaign_id?: string
+          campaign_name?: string | null
+          clicks?: number
+          currency?: string | null
+          date?: string
+          impressions?: number
+          leads?: number
+          partner_id?: string
+          spend?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ad_insights_daily_partner_id_fkey"
+            columns: ["partner_id"]
+            isOneToOne: false
+            referencedRelation: "partners"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      meta_ad_connections: {
+        Row: {
+          access_token: string
+          account_currency: string | null
+          account_name: string | null
+          ad_account_id: string
+          created_at: string
+          last_sync_at: string | null
+          last_sync_error: string | null
+          partner_id: string
+          updated_at: string
+        }
+        Insert: {
+          access_token: string
+          account_currency?: string | null
+          account_name?: string | null
+          ad_account_id: string
+          created_at?: string
+          last_sync_at?: string | null
+          last_sync_error?: string | null
+          partner_id: string
+          updated_at?: string
+        }
+        Update: {
+          access_token?: string
+          account_currency?: string | null
+          account_name?: string | null
+          ad_account_id?: string
+          created_at?: string
+          last_sync_at?: string | null
+          last_sync_error?: string | null
+          partner_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "meta_ad_connections_partner_id_fkey"
+            columns: ["partner_id"]
+            isOneToOne: true
+            referencedRelation: "partners"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       comments: {
         Row: {
           author: string

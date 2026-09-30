@@ -137,3 +137,13 @@ export function IconFranchise() {
     </svg>
   );
 }
+
+export function IconMegaphone() {
+  return (
+    <svg {...iconProps()}>
+      <path d="M3 10v4h3l7 4V6L6 10H3Z" />
+      <path d="M16 9a4 4 0 0 1 0 6" />
+      <path d="M19 6.5a8 8 0 0 1 0 11" />
+    </svg>
+  );
+}
