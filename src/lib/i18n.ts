@@ -1313,6 +1313,8 @@ export const DICT: Record<string, Entry> = {
   frOpenNow: { ru: "Ожидает оплаты: {amount}", bg: "Очаква плащане: {amount}" },
   frRoyaltyByMonth: { ru: "Роялти по месяцам", bg: "Роялти по месеци" },
   frExpected: { ru: "Ожидается", bg: "Очаква се" },
+  frTrainingByMonth: { ru: "Обучение ШМ по месяцам", bg: "Обучение ШМ по месеци" },
+  frNoTraining: { ru: "Счетов на обучение пока нет.", bg: "Все още няма фактури за обучение." },
   frNoRoyalties: { ru: "Счетов на роялти пока нет.", bg: "Все още няма фактури за роялти." },
   // Round 49 — invoices (PDF/Word), emailing the partner, finance director
   fpColInvoice: { ru: "Счёт", bg: "Фактура" },
