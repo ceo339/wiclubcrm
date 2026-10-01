@@ -1265,7 +1265,7 @@ export const DICT: Record<string, Entry> = {
   fpNewInvoice: { ru: "Счёт", bg: "Фактура" },
   fpKindLumpSum: { ru: "Паушальный взнос", bg: "Встъпителна такса" },
   fpKindRoyalty: { ru: "Роялти", bg: "Роялти" },
-  fpKindTraining: { ru: "Обучение / доп. услуги", bg: "Обучение / доп. услуги" },
+  fpKindTraining: { ru: "Обучение ШМ", bg: "Обучение ШМ" },
   fpKindEquipment: { ru: "Тренажёры", bg: "Тренажори" },
   fpKindOther: { ru: "Другое", bg: "Друго" },
   fpStatusInvoiced: { ru: "Ожидает оплаты", bg: "Очаква плащане" },

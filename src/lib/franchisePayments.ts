@@ -7,7 +7,8 @@
 export type FranchisePaymentKind = "lump_sum" | "royalty" | "training" | "equipment" | "other";
 export type FranchisePaymentStatus = "invoiced" | "paid" | "cancelled";
 
-export const FRANCHISE_PAYMENT_KINDS: { id: FranchisePaymentKind; labelKey: string }[] = [
+// Every kind the DB accepts — used for labels of existing rows.
+const ALL_PAYMENT_KINDS: { id: FranchisePaymentKind; labelKey: string }[] = [
   { id: "lump_sum", labelKey: "fpKindLumpSum" },
   { id: "royalty", labelKey: "fpKindRoyalty" },
   { id: "training", labelKey: "fpKindTraining" },
@@ -21,6 +22,11 @@ export const FRANCHISE_PAYMENT_STATUSES: { id: FranchisePaymentStatus; labelKey:
   { id: "cancelled", labelKey: "fpStatusCancelled" },
 ];
 
+/** Kinds offered in forms and filters. Паушальный взнос removed 1 Oct 2026
+ * (Anastasiia: «у нас нет паушального взноса») — still valid in the DB and
+ * still labelled for any old row, just no longer offered. */
+export const FRANCHISE_PAYMENT_KINDS = ALL_PAYMENT_KINDS.filter((k) => k.id !== "lump_sum");
+
 export function isFranchisePaymentKind(v: string): v is FranchisePaymentKind {
   return FRANCHISE_PAYMENT_KINDS.some((k) => k.id === v);
 }
@@ -28,7 +34,7 @@ export function isFranchisePaymentStatus(v: string): v is FranchisePaymentStatus
   return FRANCHISE_PAYMENT_STATUSES.some((k) => k.id === v);
 }
 
-export const kindLabelKey = (id: string) => FRANCHISE_PAYMENT_KINDS.find((k) => k.id === id)?.labelKey ?? id;
+export const kindLabelKey = (id: string) => ALL_PAYMENT_KINDS.find((k) => k.id === id)?.labelKey ?? id;
 export const statusLabelKey = (id: string) => FRANCHISE_PAYMENT_STATUSES.find((k) => k.id === id)?.labelKey ?? id;
 
 /** Round 51 — refunds. A paid invoice can be refunded in part or in full

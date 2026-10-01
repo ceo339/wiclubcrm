@@ -7,7 +7,8 @@ import { currentMonthKey, inPeriod, monthLabel, periodLabel, type Period } from 
 import { formatUsd, netPaidOf, refundedOf } from "@/lib/franchisePayments";
 
 /**
- * Round 50 — «Доходы от франчайзи»: паушальный взнос and royalties, each for
+ * Round 50 — «Доходы от франчайзи»: обучение ШМ (was паушальный взнос until
+ * 1 Oct 2026 — the network has none) and royalties, each for
  * the selected period and for all time, plus royalties as a monthly bar
  * chart. Only paid invoices count as income; open ones are shown separately
  * («ожидается»). Used on «Оплаты франчайзи» (own period picker) and on the
@@ -17,7 +18,7 @@ import { formatUsd, netPaidOf, refundedOf } from "@/lib/franchisePayments";
  * a period by the refund's own date (money went back in that period).
  *
  * Which date decides the period:
- *   • паушальный взнос — paid_date (when the money came in);
+ *   • обучение ШМ — paid_date (when the money came in);
  *   • роялти — period_month (the month the royalty is FOR, as on the
  *     invoice), falling back to paid_date / invoice_date if it's missing.
  */
@@ -51,22 +52,22 @@ export default function FranchiseRevenueWidget({ payments, period: externalPerio
     const open = live.filter((p) => p.status === "invoiced");
     const sum = (list: FranchisePayment[]) => list.reduce((s, p) => s + Number(p.amount), 0);
 
-    const lumpPaid = paid.filter((p) => p.kind === "lump_sum");
+    const trainPaid = paid.filter((p) => p.kind === "training");
     const royPaid = paid.filter((p) => p.kind === "royalty");
-    const lumpInPeriod = lumpPaid.filter((p) => p.paid_date && inPeriod(period, p.paid_date));
+    const trainInPeriod = trainPaid.filter((p) => p.paid_date && inPeriod(period, p.paid_date));
     const royInPeriod = royPaid.filter((p) => inPeriod(period, `${royaltyMonth(p)}-01`));
     const refundsInPeriod = (list: FranchisePayment[]) =>
       list.filter((p) => p.refund_date && inPeriod(period, p.refund_date)).reduce((s, p) => s + refundedOf(p), 0);
     const net = (list: FranchisePayment[]) => list.reduce((s, p) => s + netPaidOf(p), 0);
-    const lumpRefundPeriod = refundsInPeriod(lumpPaid);
+    const trainRefundPeriod = refundsInPeriod(trainPaid);
     const royRefundPeriod = refundsInPeriod(royPaid);
 
     return {
-      lumpPeriod: sum(lumpInPeriod) - lumpRefundPeriod,
-      lumpPeriodCount: lumpInPeriod.length,
-      lumpRefundPeriod,
-      lumpAll: net(lumpPaid),
-      lumpOpen: sum(open.filter((p) => p.kind === "lump_sum")),
+      trainPeriod: sum(trainInPeriod) - trainRefundPeriod,
+      trainPeriodCount: trainInPeriod.length,
+      trainRefundPeriod,
+      trainAll: net(trainPaid),
+      trainOpen: sum(open.filter((p) => p.kind === "training")),
       royPeriod: sum(royInPeriod) - royRefundPeriod,
       royRefundPeriod,
       royAll: net(royPaid),
@@ -132,12 +133,12 @@ export default function FranchiseRevenueWidget({ payments, period: externalPerio
 
       <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2">
         <RevenueCard
-          title={t("fpKindLumpSum")}
-          period={usd(stats.lumpPeriod)}
-          periodHint={stats.lumpPeriodCount ? t("fpTileCount", { n: stats.lumpPeriodCount }) : null}
-          refunds={stats.lumpRefundPeriod > 0 ? usd(stats.lumpRefundPeriod) : null}
-          all={usd(stats.lumpAll)}
-          open={stats.lumpOpen > 0 ? usd(stats.lumpOpen) : null}
+          title={t("fpKindTraining")}
+          period={usd(stats.trainPeriod)}
+          periodHint={stats.trainPeriodCount ? t("fpTileCount", { n: stats.trainPeriodCount }) : null}
+          refunds={stats.trainRefundPeriod > 0 ? usd(stats.trainRefundPeriod) : null}
+          all={usd(stats.trainAll)}
+          open={stats.trainOpen > 0 ? usd(stats.trainOpen) : null}
         />
         <RevenueCard
           title={t("fpKindRoyalty")}

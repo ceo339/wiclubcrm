@@ -25,6 +25,11 @@ import { defaultInvoiceDescription } from "@/lib/invoice/franchisor";
 const inputCls =
   "rounded-lg border border-border bg-background px-2.5 py-1.5 text-sm outline-none focus:border-accent focus:ring-1 focus:ring-accent";
 
+function prevMonthKey() {
+  const [y, m] = new Date().toISOString().slice(0, 7).split("-").map(Number);
+  return m === 1 ? `${y - 1}-12` : `${y}-${String(m - 1).padStart(2, "0")}`;
+}
+
 function todayIso() {
   return new Date().toISOString().slice(0, 10);
 }
@@ -44,17 +49,18 @@ export function FranchisePaymentForm({
 }) {
   const { t } = useLocale();
   const [pickedCandidate, setPickedCandidate] = useState(candidateId ?? "");
-  const [kind, setKind] = useState("lump_sum");
+  const [kind, setKind] = useState("royalty");
   const [amount, setAmount] = useState("");
   const [invoiceDate, setInvoiceDate] = useState(todayIso());
   const [dueDate, setDueDate] = useState("");
-  const [periodMonth, setPeriodMonth] = useState(todayIso().slice(0, 7));
+  // Royalties are billed after the month ends — default to the previous month.
+  const [periodMonth, setPeriodMonth] = useState(prevMonthKey());
   const [note, setNote] = useState("");
   const [paid, setPaid] = useState(false);
   const [paidDate, setPaidDate] = useState(todayIso());
   // Round 49: the English line printed on the invoice — prefilled per kind
   // (and royalty month) until the user types her own wording.
-  const [description, setDescription] = useState(defaultInvoiceDescription("lump_sum", null));
+  const [description, setDescription] = useState(defaultInvoiceDescription("royalty", `${prevMonthKey()}-01`));
   const [descTouched, setDescTouched] = useState(false);
   const [sendNow, setSendNow] = useState(true);
   const [sentTo, setSentTo] = useState<string | null>(null);
@@ -113,7 +119,14 @@ export function FranchisePaymentForm({
       <div className="grid grid-cols-2 gap-2">
         <label className="flex flex-col gap-1 text-xs font-medium text-muted">
           {t("fpFieldKind")}
-          <select value={kind} onChange={(e) => setKind(e.target.value)} className={inputCls}>
+          <select
+            value={kind}
+            onChange={(e) => {
+              setKind(e.target.value);
+              setDescTouched(false);
+            }}
+            className={inputCls}
+          >
             {FRANCHISE_PAYMENT_KINDS.map((k) => (
               <option key={k.id} value={k.id}>
                 {t(k.labelKey)}
@@ -142,7 +155,17 @@ export function FranchisePaymentForm({
         {kind === "royalty" && (
           <label className="flex flex-col gap-1 text-xs font-medium text-muted">
             {t("fpFieldPeriod")}
-            <input type="month" value={periodMonth} onChange={(e) => setPeriodMonth(e.target.value)} className={inputCls} />
+            <input
+              type="month"
+              value={periodMonth}
+              onChange={(e) => {
+                // A new month always rewrites the invoice line, so the text
+                // and the «за месяц» field can't disagree.
+                setPeriodMonth(e.target.value);
+                setDescTouched(false);
+              }}
+              className={inputCls}
+            />
           </label>
         )}
       </div>
