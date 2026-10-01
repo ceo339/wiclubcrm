@@ -4,8 +4,9 @@ import { useEffect, useState } from "react";
 import { useLocale } from "@/components/i18n/LocaleProvider";
 import { getCandidatePayments, type FranchisePayment } from "@/app/franchise/payments/actions";
 import type { FranchiseStageId } from "@/lib/franchise";
-import { FranchisePaymentForm, InvoiceLinks, PaymentActions, PaymentStatusPill, formatUsd, paymentKindText } from "./PaymentParts";
+import { FranchisePaymentForm, InvoiceLinks, PaymentActions, RefundNote, PaymentStatusPill, formatUsd, paymentKindText } from "./PaymentParts";
 import BillingDetailsSection from "./BillingDetailsSection";
+import { netPaidOf } from "@/lib/franchisePayments";
 
 /** «Оплаты» block inside the candidate card (round 48). `canEdit` here means
  * «may bill» (HQ, МПП, финдиректор) — see lib/franchiseAccess. */
@@ -34,7 +35,7 @@ export default function CandidatePaymentsSection({
   }
 
   const live = (payments ?? []).filter((p) => p.status !== "cancelled");
-  const paid = live.filter((p) => p.status === "paid").reduce((s, p) => s + Number(p.amount), 0);
+  const paid = live.reduce((s, p) => s + netPaidOf(p), 0);
   const due = live.filter((p) => p.status === "invoiced").reduce((s, p) => s + Number(p.amount), 0);
 
   return (
@@ -82,6 +83,7 @@ export default function CandidatePaymentsSection({
               <span className="min-w-[120px] flex-1 font-medium text-ink-2">
                 {paymentKindText(p, t, locale)}
                 {p.note && <span className="block font-normal text-muted">{p.note}</span>}
+                <RefundNote payment={p} />
               </span>
               <span className="font-semibold text-foreground">{formatUsd(Number(p.amount), locale)}</span>
               <span className="text-muted">

@@ -503,6 +503,9 @@ export type Database = {
           note: string | null
           paid_date: string | null
           period_month: string | null
+          refund_date: string | null
+          refund_reason: string | null
+          refunded_amount: number
           status: string
           updated_at: string
         }
@@ -524,6 +527,9 @@ export type Database = {
           note?: string | null
           paid_date?: string | null
           period_month?: string | null
+          refund_date?: string | null
+          refund_reason?: string | null
+          refunded_amount?: number
           status?: string
           updated_at?: string
         }
@@ -545,6 +551,9 @@ export type Database = {
           note?: string | null
           paid_date?: string | null
           period_month?: string | null
+          refund_date?: string | null
+          refund_reason?: string | null
+          refunded_amount?: number
           status?: string
           updated_at?: string
         }

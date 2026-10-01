@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import { useLocale } from "@/components/i18n/LocaleProvider";
 import type { FranchisePayment } from "@/app/franchise/payments/actions";
 import { currentMonthKey, inPeriod, monthLabel, periodLabel, type Period } from "@/lib/dashboard";
-import { formatUsd } from "@/lib/franchisePayments";
+import { formatUsd, netPaidOf, refundedOf } from "@/lib/franchisePayments";
 
 /**
  * Round 50 — «Доходы от франчайзи»: паушальный взнос and royalties, each for
@@ -12,6 +12,9 @@ import { formatUsd } from "@/lib/franchisePayments";
  * chart. Only paid invoices count as income; open ones are shown separately
  * («ожидается»). Used on «Оплаты франчайзи» (own period picker) and on the
  * franchise Главная (driven by the dashboard's period switcher).
+ *
+ * Refunds (round 51) are subtracted: from «за всё время» directly, and from
+ * a period by the refund's own date (money went back in that period).
  *
  * Which date decides the period:
  *   • паушальный взнос — paid_date (when the money came in);
@@ -52,14 +55,21 @@ export default function FranchiseRevenueWidget({ payments, period: externalPerio
     const royPaid = paid.filter((p) => p.kind === "royalty");
     const lumpInPeriod = lumpPaid.filter((p) => p.paid_date && inPeriod(period, p.paid_date));
     const royInPeriod = royPaid.filter((p) => inPeriod(period, `${royaltyMonth(p)}-01`));
+    const refundsInPeriod = (list: FranchisePayment[]) =>
+      list.filter((p) => p.refund_date && inPeriod(period, p.refund_date)).reduce((s, p) => s + refundedOf(p), 0);
+    const net = (list: FranchisePayment[]) => list.reduce((s, p) => s + netPaidOf(p), 0);
+    const lumpRefundPeriod = refundsInPeriod(lumpPaid);
+    const royRefundPeriod = refundsInPeriod(royPaid);
 
     return {
-      lumpPeriod: sum(lumpInPeriod),
+      lumpPeriod: sum(lumpInPeriod) - lumpRefundPeriod,
       lumpPeriodCount: lumpInPeriod.length,
-      lumpAll: sum(lumpPaid),
+      lumpRefundPeriod,
+      lumpAll: net(lumpPaid),
       lumpOpen: sum(open.filter((p) => p.kind === "lump_sum")),
-      royPeriod: sum(royInPeriod),
-      royAll: sum(royPaid),
+      royPeriod: sum(royInPeriod) - royRefundPeriod,
+      royRefundPeriod,
+      royAll: net(royPaid),
       royOpen: sum(open.filter((p) => p.kind === "royalty")),
       royalties: live.filter((p) => p.kind === "royalty"),
     };
@@ -74,7 +84,7 @@ export default function FranchiseRevenueWidget({ payments, period: externalPerio
     for (const p of stats.royalties) {
       const slot = byMonth.get(royaltyMonth(p));
       if (!slot) continue;
-      if (p.status === "paid") slot.paid += Number(p.amount);
+      if (p.status === "paid") slot.paid += netPaidOf(p);
       else slot.open += Number(p.amount);
     }
     const rows = months.map((m) => ({ month: m, ...byMonth.get(m)! }));
@@ -125,6 +135,7 @@ export default function FranchiseRevenueWidget({ payments, period: externalPerio
           title={t("fpKindLumpSum")}
           period={usd(stats.lumpPeriod)}
           periodHint={stats.lumpPeriodCount ? t("fpTileCount", { n: stats.lumpPeriodCount }) : null}
+          refunds={stats.lumpRefundPeriod > 0 ? usd(stats.lumpRefundPeriod) : null}
           all={usd(stats.lumpAll)}
           open={stats.lumpOpen > 0 ? usd(stats.lumpOpen) : null}
         />
@@ -132,6 +143,7 @@ export default function FranchiseRevenueWidget({ payments, period: externalPerio
           title={t("fpKindRoyalty")}
           period={usd(stats.royPeriod)}
           periodHint={null}
+          refunds={stats.royRefundPeriod > 0 ? usd(stats.royRefundPeriod) : null}
           all={usd(stats.royAll)}
           open={stats.royOpen > 0 ? usd(stats.royOpen) : null}
         />
@@ -200,7 +212,9 @@ function RevenueCard({
   periodHint,
   all,
   open,
+  refunds,
 }: {
+  refunds: string | null;
   title: string;
   period: string;
   periodHint: string | null;
@@ -222,6 +236,7 @@ function RevenueCard({
           <div className="font-display text-lg leading-tight text-ink-2">{all}</div>
         </div>
       </div>
+      {refunds && <div className="mt-2 text-[11px] text-accent-strong">{t("frRefundsInPeriod", { amount: refunds })}</div>}
       {open && <div className="mt-2 text-[11px] text-warn">{t("frOpenNow", { amount: open })}</div>}
     </div>
   );

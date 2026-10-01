@@ -31,6 +31,20 @@ export function isFranchisePaymentStatus(v: string): v is FranchisePaymentStatus
 export const kindLabelKey = (id: string) => FRANCHISE_PAYMENT_KINDS.find((k) => k.id === id)?.labelKey ?? id;
 export const statusLabelKey = (id: string) => FRANCHISE_PAYMENT_STATUSES.find((k) => k.id === id)?.labelKey ?? id;
 
+/** Round 51 — refunds. A paid invoice can be refunded in part or in full
+ * (franchisee terminates the agreement, etc.): status stays «paid», the
+ * refunded part lives in refunded_amount / refund_date / refund_reason.
+ * Income everywhere = amount − refunded_amount. */
+export function refundedOf(p: { status: string; refunded_amount?: number | null }): number {
+  return p.status === "paid" ? Number(p.refunded_amount ?? 0) : 0;
+}
+export function netPaidOf(p: { status: string; amount: number; refunded_amount?: number | null }): number {
+  return p.status === "paid" ? Number(p.amount) - refundedOf(p) : 0;
+}
+export function isFullyRefunded(p: { status: string; amount: number; refunded_amount?: number | null }): boolean {
+  return p.status === "paid" && refundedOf(p) > 0 && refundedOf(p) >= Number(p.amount);
+}
+
 /** An unpaid invoice whose due date has passed. */
 export function isOverdue(p: { status: string; due_date: string | null }, today: string): boolean {
   return p.status === "invoiced" && !!p.due_date && p.due_date < today;

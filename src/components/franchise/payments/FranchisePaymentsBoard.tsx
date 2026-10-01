@@ -4,12 +4,12 @@ import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useLocale } from "@/components/i18n/LocaleProvider";
 import type { FranchisePayment } from "@/app/franchise/payments/actions";
-import { FRANCHISE_PAYMENT_KINDS, FRANCHISE_PAYMENT_STATUSES, isOverdue } from "@/lib/franchisePayments";
+import { FRANCHISE_PAYMENT_KINDS, FRANCHISE_PAYMENT_STATUSES, isOverdue, netPaidOf, refundedOf } from "@/lib/franchisePayments";
 import { FRANCHISE_TERMINAL_STAGES, type FranchiseStageId } from "@/lib/franchise";
 import type { FranchiseCandidate } from "../types";
 import CandidateDetailModal from "../CandidateDetailModal";
 import FranchiseRevenueWidget from "./FranchiseRevenueWidget";
-import { FranchisePaymentForm, InvoiceLinks, PaymentActions, PaymentStatusPill, formatUsd, paymentKindText } from "./PaymentParts";
+import { FranchisePaymentForm, InvoiceLinks, PaymentActions, RefundNote, PaymentStatusPill, formatUsd, paymentKindText } from "./PaymentParts";
 
 function todayIso() {
   return new Date().toISOString().slice(0, 10);
@@ -45,15 +45,23 @@ export default function FranchisePaymentsBoard({
 
   const live = payments.filter((p) => p.status !== "cancelled");
   const sum = (list: FranchisePayment[]) => list.reduce((s, p) => s + Number(p.amount), 0);
-  const paidThisMonth = sum(live.filter((p) => p.status === "paid" && (p.paid_date ?? "").startsWith(month)));
-  const paidTotal = sum(live.filter((p) => p.status === "paid"));
+  // Round 51: income net of refunds — a refund counts in the month it was made.
+  const paidThisMonth =
+    sum(live.filter((p) => p.status === "paid" && (p.paid_date ?? "").startsWith(month))) -
+    live.filter((p) => (p.refund_date ?? "").startsWith(month)).reduce((s, p) => s + refundedOf(p), 0);
+  const paidTotal = live.reduce((s, p) => s + netPaidOf(p), 0);
+  const refundedTotal = live.reduce((s, p) => s + refundedOf(p), 0);
   const dueList = live.filter((p) => p.status === "invoiced");
   const overdueList = dueList.filter((p) => isOverdue(p, today));
 
   const q = search.trim().toLowerCase();
   const rows = payments.filter((p) => {
     if (kind !== "all" && p.kind !== kind) return false;
-    if (status === "overdue" ? !isOverdue(p, today) : status !== "all" && p.status !== status) return false;
+    if (status === "overdue") {
+      if (!isOverdue(p, today)) return false;
+    } else if (status === "refunded") {
+      if (refundedOf(p) <= 0) return false;
+    } else if (status !== "all" && p.status !== status) return false;
     if (q) {
       const c = byId.get(p.candidate_id);
       const hay = `${c?.name ?? ""} ${c?.billing_name ?? ""} ${c?.target_city ?? ""} ${p.note ?? ""} ${p.invoice_number ?? ""}`.toLowerCase();
@@ -79,7 +87,11 @@ export default function FranchisePaymentsBoard({
       <FranchiseRevenueWidget payments={payments} />
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
         <Tile label={t("fpTilePaidMonth")} value={formatUsd(paidThisMonth, locale)} />
-        <Tile label={t("fpTilePaidTotal")} value={formatUsd(paidTotal, locale)} />
+        <Tile
+          label={t("fpTilePaidTotal")}
+          value={formatUsd(paidTotal, locale)}
+          hint={refundedTotal > 0 ? t("fpRefundsTotal", { amount: formatUsd(refundedTotal, locale) }) : undefined}
+        />
         <Tile label={t("fpTileDue")} value={formatUsd(sum(dueList), locale)} hint={t("fpTileCount", { n: dueList.length })} />
         <Tile
           label={t("fpTileOverdue")}
@@ -112,6 +124,7 @@ export default function FranchisePaymentsBoard({
             </option>
           ))}
           <option value="overdue">{t("fpStatusOverdue")}</option>
+          <option value="refunded">{t("fpFilterRefunded")}</option>
         </select>
         {canEdit && !adding && (
           <button
@@ -169,6 +182,7 @@ export default function FranchisePaymentsBoard({
                     <td className="px-4 py-2">
                       {paymentKindText(p, t, locale)}
                       {p.note && <div className="text-xs text-muted">{p.note}</div>}
+                      <RefundNote payment={p} />
                     </td>
                     <td className="px-4 py-2 whitespace-nowrap font-semibold">{formatUsd(Number(p.amount), locale)}</td>
                     <td className="px-4 py-2 whitespace-nowrap text-ink-2">

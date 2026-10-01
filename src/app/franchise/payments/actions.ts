@@ -183,6 +183,8 @@ export async function setFranchisePaymentStatus(
     .update({
       status,
       paid_date: status === "paid" ? paidDate || today() : null,
+      // A refund only makes sense on a paid invoice — leaving «paid» clears it.
+      ...(status === "paid" ? {} : { refunded_amount: 0, refund_date: null, refund_reason: null }),
       updated_at: new Date().toISOString(),
     })
     .eq("id", paymentId)
@@ -194,6 +196,41 @@ export async function setFranchisePaymentStatus(
   const stage = await syncStageFromPayments(createAdminClient(), data.candidate_id, profile.id);
   revalidate();
   return { error: null, stage };
+}
+
+/**
+ * Round 51: record (or change, or with amount 0 — remove) a refund on a paid
+ * invoice. One refund per invoice: the amount is the TOTAL refunded so far,
+ * so a second partial refund is entered as the new running total.
+ */
+export async function setFranchiseRefund(
+  paymentId: string,
+  amount: number,
+  refundDate: string | null,
+  reason: string | null
+): Promise<PaymentActionResult> {
+  const profile = await billingProfile();
+  if (!profile) return { error: "errNotAuthorized" };
+  if (!Number.isFinite(amount) || amount < 0) return { error: "fpErrAmount" };
+
+  const supabase = await createClient();
+  const { data: p } = await supabase.from("franchise_payments").select("amount, status").eq("id", paymentId).maybeSingle();
+  if (!p) return { error: "errGeneric" };
+  if (p.status !== "paid") return { error: "fpErrRefundNotPaid" };
+  const value = Math.round(amount * 100) / 100;
+  if (value > Number(p.amount)) return { error: "fpErrRefundTooBig" };
+
+  const { error } = await supabase
+    .from("franchise_payments")
+    .update(
+      value > 0
+        ? { refunded_amount: value, refund_date: refundDate || today(), refund_reason: reason?.trim() || null }
+        : { refunded_amount: 0, refund_date: null, refund_reason: null }
+    )
+    .eq("id", paymentId);
+  if (error) return { error: error.message };
+  revalidate();
+  return { error: null };
 }
 
 export async function deleteFranchisePayment(paymentId: string): Promise<PaymentActionResult> {
