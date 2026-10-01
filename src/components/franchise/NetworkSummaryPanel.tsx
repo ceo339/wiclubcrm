@@ -49,14 +49,12 @@ export default function NetworkSummaryPanel({
   summary,
   structure,
   geography,
-  recentActivity,
 }: {
   summary: NetworkSummary;
   structure: NetworkStructure;
   geography: ApproxGeography;
-  recentActivity: RecentActivityItem[];
 }) {
-  const { locale, t } = useLocale();
+  const { t } = useLocale();
   const structureTotal = structure.beforeContract + structure.contractPlus + structure.terminal;
 
   return (
@@ -127,7 +125,17 @@ export default function NetworkSummaryPanel({
         </div>
       </div>
 
-      <div className="rounded-xl border border-border bg-background shadow-card">
+    </div>
+  );
+}
+
+/** «Недавняя активность» — split out of the panel above (1 Oct 2026,
+ * Anastasiia: «сделай недавнюю активность рядом с задачами») so the
+ * dashboard can place it in one row with the tasks widget. */
+export function RecentActivityCard({ recentActivity }: { recentActivity: RecentActivityItem[] }) {
+  const { locale, t } = useLocale();
+  return (
+    <div className="h-full rounded-xl border border-border bg-background shadow-card">
         <div className="border-b border-border px-5 py-4">
           <h3 className="text-sm font-semibold text-foreground">{t("headingRecentActivity")}</h3>
           <p className="text-xs text-muted">{t("subheadingRecentActivity")}</p>
@@ -179,7 +187,6 @@ export default function NetworkSummaryPanel({
           </div>
         )}
       </div>
-    </div>
   );
 }
 

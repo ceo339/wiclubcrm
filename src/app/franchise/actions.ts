@@ -297,8 +297,9 @@ export async function setCandidateTaskDone(taskId: string, done: boolean): Promi
   if (!canEdit) return { error: "errNotAuthorized" };
 
   const supabase = await createClient();
-  const { error } = await supabase.from("tasks").update({ done }).eq("id", taskId);
+  const { data: updated, error } = await supabase.from("tasks").update({ done }).eq("id", taskId).select("id");
   if (error) return { error: error.message };
+  if (!updated || updated.length === 0) return { error: "errNotAuthorized" };
 
   revalidatePath("/franchise");
   revalidatePath("/");

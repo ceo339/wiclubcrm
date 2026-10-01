@@ -31,7 +31,16 @@ export default function TasksWidget({
   function handleToggle(taskId: string) {
     setDoneIds((prev) => new Set(prev).add(taskId));
     startTransition(async () => {
-      await setHomeTaskDone(taskId, true);
+      const res = await setHomeTaskDone(taskId, true);
+      if (res.error) {
+        // Not saved — put the task back instead of pretending it's done.
+        setDoneIds((prev) => {
+          const next = new Set(prev);
+          next.delete(taskId);
+          return next;
+        });
+        window.alert(t(res.error));
+      }
     });
   }
 

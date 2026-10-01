@@ -17,7 +17,7 @@ import { interpolateHex } from "@/lib/leads";
 import { useLocale } from "@/components/i18n/LocaleProvider";
 import Sparkline from "@/components/dashboard/Sparkline";
 import TasksWidget from "@/components/home/TasksWidget";
-import NetworkSummaryPanel, { StatTile } from "./NetworkSummaryPanel";
+import NetworkSummaryPanel, { RecentActivityCard, StatTile } from "./NetworkSummaryPanel";
 import type { NetworkSummary, NetworkStructure, ApproxGeography, RecentActivityItem } from "@/lib/franchiseDashboard";
 
 // «Сделай нижние виджеты визуально как верхние» (Anastasiia, round 46) —
@@ -133,7 +133,6 @@ export default function FranchiseDashboard({
         summary={networkSummary}
         structure={networkStructure}
         geography={networkGeography}
-        recentActivity={recentActivity}
       />
 
       <div className="rounded-xl border border-border bg-background shadow-card p-4">
@@ -174,7 +173,11 @@ export default function FranchiseDashboard({
         <p className="mt-2 text-xs text-muted">{periodLabel(period, locale)}</p>
       </div>
 
-      <TasksWidget tasks={tasks} headingKey="headingFranchiseTasks" canEdit={canEditTasks} />
+      {/* Tasks and «Недавняя активность» side by side (1 Oct 2026). */}
+      <div className="grid grid-cols-1 items-stretch gap-4 lg:grid-cols-[minmax(0,24rem)_minmax(0,1fr)]">
+        <TasksWidget tasks={tasks} headingKey="headingFranchiseTasks" canEdit={canEditTasks} />
+        <RecentActivityCard recentActivity={recentActivity} />
+      </div>
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
         <StatTile

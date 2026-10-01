@@ -568,7 +568,8 @@ function TasksSection({
 
   function handleToggle(taskId: string, done: boolean) {
     startTransition(async () => {
-      await setCandidateTaskDone(taskId, done);
+      const res = await setCandidateTaskDone(taskId, done);
+      if (res.error) setError(res.error);
       onChanged();
     });
   }
