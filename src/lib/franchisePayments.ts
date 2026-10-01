@@ -4,13 +4,14 @@
 // (Anastasiia's choice); the `currency` column exists so that can change
 // later without a migration.
 
-export type FranchisePaymentKind = "lump_sum" | "royalty" | "training" | "other";
+export type FranchisePaymentKind = "lump_sum" | "royalty" | "training" | "equipment" | "other";
 export type FranchisePaymentStatus = "invoiced" | "paid" | "cancelled";
 
 export const FRANCHISE_PAYMENT_KINDS: { id: FranchisePaymentKind; labelKey: string }[] = [
   { id: "lump_sum", labelKey: "fpKindLumpSum" },
   { id: "royalty", labelKey: "fpKindRoyalty" },
   { id: "training", labelKey: "fpKindTraining" },
+  { id: "equipment", labelKey: "fpKindEquipment" },
   { id: "other", labelKey: "fpKindOther" },
 ];
 

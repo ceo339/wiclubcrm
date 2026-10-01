@@ -90,6 +90,8 @@ export function defaultInvoiceDescription(kind: string, periodMonth: string | nu
       return "Payment of the initial franchise fee (lump sum) under the Franchise Agreement";
     case "training":
       return "Payment for training services under the Franchise Agreement";
+    case "equipment":
+      return "Payment for fitness equipment under the Franchise Agreement";
     default:
       return "Payment under the Franchise Agreement";
   }
