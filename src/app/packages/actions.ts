@@ -149,6 +149,10 @@ export async function assignPackageItem(itemId: string, formData: FormData): Pro
       amount: allocatedPrice,
       status: "paid",
       paid_date: sale.paid_date,
+      // 2 Oct 2026: marks this as a share of the package — counted as
+      // revenue of the поток on Главная, but not listed in «Оплаты» a second
+      // time (the package itself is the cash payment there).
+      package_sale_id: item.package_sale_id,
     });
     if (paymentError) return { error: paymentError.message };
   }

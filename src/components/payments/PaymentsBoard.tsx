@@ -8,7 +8,6 @@ import {
   inPeriod,
   monthKeyOf,
   monthLabel,
-  paymentAttributionDate,
   pctChange,
   periodLabel,
   shiftMonthKey,
@@ -30,13 +29,13 @@ import PackageSaleDetailModal from "./PackageSaleDetailModal";
  * together (this page has no lead/enrollment rows to draw on). */
 function paymentMonthOptions(payments: Payment[], limit = 6): string[] {
   const set = new Set<string>([currentMonthKey()]);
-  payments.forEach((p) => set.add(monthKeyOf(paymentAttributionDate(p))));
+  payments.forEach((p) => set.add(monthKeyOf(p.paid_date)));
   return [...set].sort().reverse().slice(0, limit);
 }
 
 function paymentYearOptions(payments: Payment[]): string[] {
   const set = new Set<string>([currentMonthKey().slice(0, 4)]);
-  payments.forEach((p) => set.add(paymentAttributionDate(p).slice(0, 4)));
+  payments.forEach((p) => set.add(p.paid_date.slice(0, 4)));
   return [...set].sort().reverse();
 }
 
@@ -118,6 +117,7 @@ export default function PaymentsBoard({
 }) {
   const { locale, t } = useLocale();
   const [status, setStatus] = useState<string>("all");
+  const [kind, setKind] = useState<"all" | "prepay" | "partial" | "package">("all");
   const [period, setPeriod] = useState<Period>({ mode: "month", month: currentMonthKey() });
   const [showNew, setShowNew] = useState(false);
   const [showLink, setShowLink] = useState(false);
@@ -126,17 +126,36 @@ export default function PaymentsBoard({
 
   const isHq = !canEdit;
 
-  const monthOptions = useMemo(() => paymentMonthOptions(initialPayments), [initialPayments]);
-  const yearOptions = useMemo(() => paymentYearOptions(initialPayments), [initialPayments]);
+  // 2 Oct 2026 — «Оплаты — это движение денежных средств!» (Anastasiia).
+  // This page is now CASH: every row and tile is dated by when the money
+  // came in (paid_date), not by the поток start. The course-start
+  // attribution («выручка по оказанной услуге») stays on Главная.
+  // A package is one cash payment here; the shares that get moved onto
+  // потоки when one is assigned (payments.package_sale_id) are revenue
+  // records for Главная only — they're not listed here again.
+  const cashPayments = useMemo(() => initialPayments.filter((p) => !p.package_sale_id), [initialPayments]);
 
-  // "оплаты должны быть тоже по периодам" (Anastasiia, 11 сен 2026) — the
-  // table (and the tiles below, independent of the status dropdown) now
-  // follow the same course-start attribution as the rest of the dashboard,
-  // not just the status filter.
+  const monthOptions = useMemo(
+    () => paymentMonthOptions([...cashPayments, ...packageSales.map((k) => ({ paid_date: k.paid_date }) as Payment)]),
+    [cashPayments, packageSales]
+  );
+  const yearOptions = useMemo(
+    () => paymentYearOptions([...cashPayments, ...packageSales.map((k) => ({ paid_date: k.paid_date }) as Payment)]),
+    [cashPayments, packageSales]
+  );
+
+  // «Предоплата» = paid before her поток started; «Частичная» = marked as a
+  // partial payment (рассрочка); «Пакеты» = package sales only.
+  const isPrepay = (p: Payment) => !!p.enrollment?.start_date && p.paid_date < p.enrollment.start_date;
+
   const filtered = useMemo(() => {
-    const byStatus = status === "all" ? initialPayments : initialPayments.filter((p) => p.status === status);
-    return byStatus.filter((p) => inPeriod(period, paymentAttributionDate(p)));
-  }, [initialPayments, status, period]);
+    if (kind === "package") return [];
+    const byStatus = status === "all" ? cashPayments : cashPayments.filter((p) => p.status === status);
+    return byStatus
+      .filter((p) => inPeriod(period, p.paid_date))
+      .filter((p) => (kind === "prepay" ? isPrepay(p) : kind === "partial" ? !!p.is_partial : true));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cashPayments, status, period, kind]);
 
   // A package sale is always "already paid" money (it's a lump sum received
   // up front — see app/packages/actions.ts), so it only shows up under the
@@ -145,8 +164,9 @@ export default function PaymentsBoard({
   // per-course потоки aren't all known at the time it's paid).
   const filteredPackages = useMemo(() => {
     if (status !== "all" && status !== "paid") return [];
+    if (kind === "partial") return [];
     return packageSales.filter((pkg) => inPeriod(period, pkg.paid_date));
-  }, [packageSales, status, period]);
+  }, [packageSales, status, period, kind]);
 
   const selectedPackage = packageSales.find((p) => p.id === selectedPackageId) ?? null;
 
@@ -157,23 +177,30 @@ export default function PaymentsBoard({
   // period. Tile 3 stays a genuine all-time total on purpose (clearly
   // labelled as such — unlike the home dashboard, one lifetime figure next
   // to period figures isn't confusing as long as it's honest about what it is).
-  const paidPayments = useMemo(() => initialPayments.filter((p) => p.status === "paid"), [initialPayments]);
-  const pendingPayments = useMemo(() => initialPayments.filter((p) => p.status === "pending"), [initialPayments]);
+  // Cash in = paid payments (not package shares) + package sales, by paid_date.
+  const cashIn = useMemo(
+    () => [
+      ...cashPayments.filter((p) => p.status === "paid").map((p) => ({ date: p.paid_date, amount: Number(p.amount) })),
+      ...packageSales.map((k) => ({ date: k.paid_date, amount: Number(k.total_price) })),
+    ],
+    [cashPayments, packageSales]
+  );
+  const pendingPayments = useMemo(() => cashPayments.filter((p) => p.status === "pending"), [cashPayments]);
   const collectedInPeriod = useMemo(
-    () => paidPayments.filter((p) => inPeriod(period, paymentAttributionDate(p))).reduce((sum, p) => sum + Number(p.amount), 0),
-    [paidPayments, period]
+    () => cashIn.filter((c) => inPeriod(period, c.date)).reduce((sum, c) => sum + c.amount, 0),
+    [cashIn, period]
   );
   const collectedDelta = useMemo(() => {
     if (period.mode !== "month") return null;
     const previousMonth = shiftMonthKey(period.month, -1);
-    const collectedPrevious = paidPayments
-      .filter((p) => monthKeyOf(paymentAttributionDate(p)) === previousMonth)
-      .reduce((sum, p) => sum + Number(p.amount), 0);
+    const collectedPrevious = cashIn
+      .filter((c) => monthKeyOf(c.date) === previousMonth)
+      .reduce((sum, c) => sum + c.amount, 0);
     return pctChange(collectedInPeriod, collectedPrevious);
-  }, [paidPayments, period, collectedInPeriod]);
-  const collectedAllTime = useMemo(() => paidPayments.reduce((sum, p) => sum + Number(p.amount), 0), [paidPayments]);
+  }, [cashIn, period, collectedInPeriod]);
+  const collectedAllTime = useMemo(() => cashIn.reduce((sum, c) => sum + c.amount, 0), [cashIn]);
   const pendingInPeriod = useMemo(
-    () => pendingPayments.filter((p) => inPeriod(period, paymentAttributionDate(p))),
+    () => pendingPayments.filter((p) => inPeriod(period, p.paid_date)),
     [pendingPayments, period]
   );
   const totalExpected = useMemo(() => pendingInPeriod.reduce((sum, p) => sum + Number(p.amount), 0), [pendingInPeriod]);
@@ -242,6 +269,16 @@ export default function PaymentsBoard({
               {statusLabel(s.id, locale)}
             </option>
           ))}
+        </select>
+        <select
+          value={kind}
+          onChange={(e) => setKind(e.target.value as typeof kind)}
+          className="rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-accent focus:ring-1 focus:ring-accent"
+        >
+          <option value="all">{t("payKindAll")}</option>
+          <option value="prepay">{t("payKindPrepay")}</option>
+          <option value="partial">{t("payKindPartial")}</option>
+          <option value="package">{t("payKindPackage")}</option>
         </select>
 
         {canEdit && stripeEnabled && (

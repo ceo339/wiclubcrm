@@ -1049,6 +1049,7 @@ export type Database = {
           is_partial: boolean
           lead_id: string | null
           member_id: string | null
+          package_sale_id: string | null
           paid_date: string
           partner_id: string
           product_id: string | null
@@ -1064,6 +1065,7 @@ export type Database = {
           is_partial?: boolean
           lead_id?: string | null
           member_id?: string | null
+          package_sale_id?: string | null
           paid_date?: string
           partner_id: string
           product_id?: string | null
@@ -1079,6 +1081,7 @@ export type Database = {
           is_partial?: boolean
           lead_id?: string | null
           member_id?: string | null
+          package_sale_id?: string | null
           paid_date?: string
           partner_id?: string
           product_id?: string | null
