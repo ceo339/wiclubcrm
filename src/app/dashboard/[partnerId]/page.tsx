@@ -123,6 +123,7 @@ export default async function ClubDashboardPage({
     payments: clubPayments,
     enrollments: clubEnrollments,
     products: products ?? [],
+    period,
   });
 
   // See src/app/page.tsx — period-scoped like everything else on the page.

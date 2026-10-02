@@ -293,6 +293,7 @@ export default async function Home({
       enrollments: allEnrollments,
       products: products ?? [],
       partnerNamesById,
+      period: parsePeriodParams(params),
     });
 
     const period = parsePeriodParams(params);
@@ -500,6 +501,7 @@ export default async function Home({
     payments: clubPayments,
     enrollments: clubEnrollments,
     products: products ?? [],
+    period,
   });
 
   // See the HQ branch above — period-scoped like everything else on the page.

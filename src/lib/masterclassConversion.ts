@@ -27,7 +27,7 @@
 // МК itself and a later one for a СФ course, both traceable through the
 // same lead → member chain).
 
-import { pctOf } from "@/lib/dashboard";
+import { inPeriod, pctOf, type Period } from "@/lib/dashboard";
 
 const MASTERCLASS_PREFIXES = ["мк", "mk"];
 const TARGET_COURSE_PREFIXES = ["сф", "sf"];
@@ -61,6 +61,10 @@ export type MasterclassCohortStat = {
 export type MasterclassConversionResult = {
   perCohort: MasterclassCohortStat[];
   total: { attendedCount: number; boughtCount: number; conversion: number | null };
+  /** 2 Oct 2026 — «сверху считать по периоду, а ниже по МК за 30 дней»:
+   * the same totals over every МК поток that started in the dashboard's
+   * selected period (only when a period is passed). */
+  periodTotal?: { attendedCount: number; boughtCount: number; conversion: number | null };
 };
 
 // 2 Oct 2026 fix — «я проверила вручную и купило 2 человека СФ, почему у
@@ -87,6 +91,7 @@ export function computeMasterclassConversion({
   enrollments = [],
   products,
   partnerNamesById,
+  period,
   windowDays = 30,
   now = new Date(),
 }: {
@@ -103,6 +108,7 @@ export function computeMasterclassConversion({
   }[];
   products: { id: string; name: string }[];
   partnerNamesById?: Map<string, string>;
+  period?: Period;
   windowDays?: number;
   now?: Date;
 }): MasterclassConversionResult {
@@ -134,9 +140,7 @@ export function computeMasterclassConversion({
     }
   }
 
-  const perCohort: MasterclassCohortStat[] = cohorts
-    .filter((c) => masterclassProductIds.has(c.product_id) && c.start_date >= startWindow && c.start_date <= today)
-    .map((c) => {
+  const statFor = (c: (typeof cohorts)[number]): MasterclassCohortStat => {
       const samePartner = (pid?: string) => c.partner_id === undefined || pid === c.partner_id;
       const cohortEnrollments = enrollments.filter(
         (e) => e.member_id && e.product_id === c.product_id && e.start_date === c.start_date && samePartner(e.partner_id)
@@ -169,14 +173,23 @@ export function computeMasterclassConversion({
         conversion: pctOf(boughtCount, attendees.size),
         partnerName: partnerNamesById ? partnerNamesById.get(c.partner_id ?? "") : undefined,
       };
-    })
-    .sort((a, b) => b.startDate.localeCompare(a.startDate) || (a.courseName ?? "").localeCompare(b.courseName ?? "", "ru"));
+  };
 
-  const attendedCount = perCohort.reduce((sum, c) => sum + c.attendedCount, 0);
-  const boughtCount = perCohort.reduce((sum, c) => sum + c.boughtCount, 0);
+  const isPastMk = (c: (typeof cohorts)[number]) => masterclassProductIds.has(c.product_id) && c.start_date <= today;
+  const sumUp = (rows: MasterclassCohortStat[]) => {
+    const attended = rows.reduce((sum, c) => sum + c.attendedCount, 0);
+    const bought = rows.reduce((sum, c) => sum + c.boughtCount, 0);
+    return { attendedCount: attended, boughtCount: bought, conversion: pctOf(bought, attended) };
+  };
+
+  const perCohort: MasterclassCohortStat[] = cohorts
+    .filter((c) => isPastMk(c) && c.start_date >= startWindow)
+    .map(statFor)
+    .sort((a, b) => b.startDate.localeCompare(a.startDate) || (a.courseName ?? "").localeCompare(b.courseName ?? "", "ru"));
 
   return {
     perCohort,
-    total: { attendedCount, boughtCount, conversion: pctOf(boughtCount, attendedCount) },
+    total: sumUp(perCohort),
+    periodTotal: period ? sumUp(cohorts.filter((c) => isPastMk(c) && inPeriod(period, c.start_date)).map(statFor)) : undefined,
   };
 }

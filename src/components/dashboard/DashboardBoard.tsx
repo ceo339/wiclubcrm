@@ -611,17 +611,24 @@ function UpcomingEventsPanel({ events, showClub }: { events: UpcomingCohort[]; s
 function MasterclassConversionPanel({
   data,
   showClub,
+  period,
 }: {
   data: MasterclassConversionResult;
   showClub?: boolean;
+  period: Period;
 }) {
-  const { t } = useLocale();
-  const { perCohort, total } = data;
+  const { locale, t } = useLocale();
+  const { perCohort } = data;
+  // 2 Oct 2026: top tiles = all МК потоки of the selected period; the table
+  // below stays «МК за последние 30 дней».
+  const total = data.periodTotal ?? data.total;
   return (
     <div className="rounded-xl border border-border bg-background shadow-card">
       <div className="border-b border-border px-5 py-4">
         <h2 className="text-sm font-semibold text-foreground">{t("headingMasterclassConversion")}</h2>
-        <p className="mt-0.5 text-xs text-muted">{t("subheadingMasterclassConversion", { days: 30 })}</p>
+        <p className="mt-0.5 text-xs text-muted">
+          {data.periodTotal ? t("mkTotalsForPeriod", { period: periodLabel(period, locale) }) : t("subheadingMasterclassConversion", { days: 30 })}
+        </p>
       </div>
       <div className="grid grid-cols-3 gap-3 border-b border-border p-5">
         <div>
@@ -652,6 +659,11 @@ function MasterclassConversionPanel({
           </div>
         </div>
       </div>
+      {data.periodTotal && (
+        <p className="px-5 pt-4 text-xs font-medium uppercase tracking-wide text-muted">
+          {t("subheadingMasterclassConversion", { days: 30 })}
+        </p>
+      )}
       {perCohort.length === 0 ? (
         <p className="p-5 text-sm text-muted">{t("emptyNoMasterclassesPeriod")}</p>
       ) : (
@@ -793,7 +805,7 @@ export default function DashboardBoard({
 
       <UpcomingEventsPanel events={upcomingCohorts} showClub={!!clubs} />
 
-      <MasterclassConversionPanel data={masterclassConversion} showClub={!!clubs} />
+      <MasterclassConversionPanel data={masterclassConversion} showClub={!!clubs} period={period} />
 
       <p className="text-sm text-muted">
         {t("metricsForPrefix")} <span className="font-medium text-foreground">{periodLabel(period, locale)}</span>
