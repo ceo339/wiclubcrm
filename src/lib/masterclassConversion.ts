@@ -63,23 +63,45 @@ export type MasterclassConversionResult = {
   total: { attendedCount: number; boughtCount: number; conversion: number | null };
 };
 
+// 2 Oct 2026 fix — «я проверила вручную и купило 2 человека СФ, почему у
+// тебя 1?» (Anastasiia, МК Чувственность 24.09, София). The old version
+// counted ATTENDEES as МК leads (a person with two leads for the same МК
+// counted twice, a test lead counted, real attendees recorded only as
+// participants not counted at all) and BUYERS only through members.lead_id
+// of that exact lead. Now, whenever the МК поток has participant records
+// (member_enrollments), those are the attendees — minus «Не была на курсе» /
+// cancelled / refunded / not paid — counted once per person (contact).
+// A buyer is anyone of them who has a СФ enrollment (paid / completed) or a
+// paid СФ payment, matched by member OR by contact. The old lead-based
+// counting is kept only as a fallback for a МК поток with no participant
+// records at all.
+
+const ATTENDED_STATUSES = new Set(["sPaid", "sPartial", "sCompleted"]);
+const BOUGHT_STATUSES = new Set(["sPaid", "sPartial", "sCompleted"]);
+
 export function computeMasterclassConversion({
   cohorts,
   leads,
   members,
   payments,
+  enrollments = [],
   products,
   partnerNamesById,
   windowDays = 30,
   now = new Date(),
 }: {
   cohorts: { product_id: string; start_date: string; partner_id?: string }[];
-  leads: { id: string; product_id: string | null; cohort_start_date: string | null; partner_id?: string }[];
-  members: { id: string; lead_id: string | null }[];
+  leads: { id: string; product_id: string | null; cohort_start_date: string | null; partner_id?: string; contact_id?: string | null }[];
+  members: { id: string; lead_id: string | null; contact_id?: string | null }[];
   payments: { member_id: string | null; product_id: string | null; status: string | null }[];
+  enrollments?: {
+    member_id?: string | null;
+    product_id: string | null;
+    start_date: string | null;
+    status: string;
+    partner_id?: string;
+  }[];
   products: { id: string; name: string }[];
-  /** Only pass for a multi-club (network-wide) list — adds `partnerName` to
-   * each row, same convention as upcomingCohorts. */
   partnerNamesById?: Map<string, string>;
   windowDays?: number;
   now?: Date;
@@ -92,44 +114,59 @@ export function computeMasterclassConversion({
   const masterclassProductIds = new Set(products.filter((p) => isMasterclassProduct(p.name)).map((p) => p.id));
   const targetProductIds = new Set(products.filter((p) => isTargetCourseProduct(p.name)).map((p) => p.id));
 
-  // A lead converts into at most one member (members.lead_id) — walking
-  // that link is what makes a payment made well after the МК, under a
-  // member's own id, still traceable back to the original МК lead.
+  // One «person key» per human: contact if known, else the member id.
+  const memberById = new Map(members.map((m) => [m.id, m]));
+  const personOfMember = (memberId: string) => memberById.get(memberId)?.contact_id || `m:${memberId}`;
   const memberIdByLeadId = new Map(
-    members.filter((m): m is { id: string; lead_id: string } => !!m.lead_id).map((m) => [m.lead_id, m.id])
+    members.filter((m): m is typeof m & { lead_id: string } => !!m.lead_id).map((m) => [m.lead_id, m.id])
   );
 
-  // Plain Set lookup instead of re-filtering the whole `payments` array per
-  // lead — a club can have thousands of payment rows.
-  const membersWhoBoughtTarget = new Set(
-    payments
-      .filter((p) => p.status === "paid" && p.product_id && p.member_id && targetProductIds.has(p.product_id))
-      .map((p) => p.member_id as string)
-  );
-
-  function leadBoughtTarget(leadId: string): boolean {
-    const memberId = memberIdByLeadId.get(leadId);
-    return !!memberId && membersWhoBoughtTarget.has(memberId);
+  // Everyone (by person key) who bought a СФ.
+  const buyers = new Set<string>();
+  for (const p of payments) {
+    if (p.status === "paid" && p.product_id && p.member_id && targetProductIds.has(p.product_id)) {
+      buyers.add(personOfMember(p.member_id));
+    }
+  }
+  for (const e of enrollments) {
+    if (e.member_id && e.product_id && targetProductIds.has(e.product_id) && BOUGHT_STATUSES.has(e.status)) {
+      buyers.add(personOfMember(e.member_id));
+    }
   }
 
   const perCohort: MasterclassCohortStat[] = cohorts
     .filter((c) => masterclassProductIds.has(c.product_id) && c.start_date >= startWindow && c.start_date <= today)
     .map((c) => {
-      const attendees = leads.filter(
-        (l) =>
-          l.product_id === c.product_id &&
-          l.cohort_start_date === c.start_date &&
-          (c.partner_id === undefined || l.partner_id === c.partner_id)
+      const samePartner = (pid?: string) => c.partner_id === undefined || pid === c.partner_id;
+      const cohortEnrollments = enrollments.filter(
+        (e) => e.member_id && e.product_id === c.product_id && e.start_date === c.start_date && samePartner(e.partner_id)
       );
-      const bought = attendees.filter((l) => leadBoughtTarget(l.id));
+
+      let attendees: Set<string>;
+      if (cohortEnrollments.length > 0) {
+        attendees = new Set(
+          cohortEnrollments.filter((e) => ATTENDED_STATUSES.has(e.status)).map((e) => personOfMember(e.member_id!))
+        );
+      } else {
+        // Fallback: МК recorded only as leads.
+        attendees = new Set(
+          leads
+            .filter((l) => l.product_id === c.product_id && l.cohort_start_date === c.start_date && samePartner(l.partner_id))
+            .map((l) => {
+              const memberId = memberIdByLeadId.get(l.id);
+              return memberId ? personOfMember(memberId) : l.contact_id || `l:${l.id}`;
+            })
+        );
+      }
+      const boughtCount = [...attendees].filter((k) => buyers.has(k)).length;
       return {
         key: `${c.partner_id ?? ""}:${c.product_id}:${c.start_date}`,
         productId: c.product_id,
         courseName: productNamesById.get(c.product_id) ?? null,
         startDate: c.start_date,
-        attendedCount: attendees.length,
-        boughtCount: bought.length,
-        conversion: pctOf(bought.length, attendees.length),
+        attendedCount: attendees.size,
+        boughtCount,
+        conversion: pctOf(boughtCount, attendees.size),
         partnerName: partnerNamesById ? partnerNamesById.get(c.partner_id ?? "") : undefined,
       };
     })

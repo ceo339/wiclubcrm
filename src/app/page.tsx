@@ -241,8 +241,8 @@ export default async function Home({
         supabase
           .from("leads")
           .select("id, name, partner_id, stage, source, added_date, cohort_start_date, product_id, updated_at"),
-        supabase.from("members").select("id, partner_id, lead_id, created_at"),
-        supabase.from("member_enrollments").select("partner_id, product_id, created_at, start_date, status, price"),
+        supabase.from("members").select("id, partner_id, lead_id, contact_id, created_at"),
+        supabase.from("member_enrollments").select("partner_id, member_id, product_id, created_at, start_date, status, price"),
         supabase
           .from("payments")
           .select(
@@ -290,6 +290,7 @@ export default async function Home({
       leads: allLeads,
       members: allMembers,
       payments: allPayments,
+      enrollments: allEnrollments,
       products: products ?? [],
       partnerNamesById,
     });
@@ -438,10 +439,10 @@ export default async function Home({
         .from("leads")
         .select("id, stage, source, added_date, cohort_start_date, product_id")
         .eq("partner_id", partnerId),
-      supabase.from("members").select("id, lead_id, created_at").eq("partner_id", partnerId),
+      supabase.from("members").select("id, lead_id, contact_id, created_at").eq("partner_id", partnerId),
       supabase
         .from("member_enrollments")
-        .select("product_id, created_at, start_date, status, price")
+        .select("member_id, product_id, created_at, start_date, status, price")
         .eq("partner_id", partnerId),
       supabase
         .from("payments")
@@ -497,6 +498,7 @@ export default async function Home({
     leads: clubLeads,
     members: clubMembers,
     payments: clubPayments,
+    enrollments: clubEnrollments,
     products: products ?? [],
   });
 

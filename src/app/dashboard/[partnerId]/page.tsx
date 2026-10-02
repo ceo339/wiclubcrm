@@ -60,10 +60,10 @@ export default async function ClubDashboardPage({
         .from("leads")
         .select("id, stage, source, added_date, cohort_start_date, product_id")
         .eq("partner_id", partnerId),
-      supabase.from("members").select("id, lead_id, created_at").eq("partner_id", partnerId),
+      supabase.from("members").select("id, lead_id, contact_id, created_at").eq("partner_id", partnerId),
       supabase
         .from("member_enrollments")
-        .select("product_id, created_at, start_date, status, price")
+        .select("member_id, product_id, created_at, start_date, status, price")
         .eq("partner_id", partnerId),
       supabase
         .from("payments")
@@ -121,6 +121,7 @@ export default async function ClubDashboardPage({
     leads: clubLeads,
     members: clubMembers,
     payments: clubPayments,
+    enrollments: clubEnrollments,
     products: products ?? [],
   });
 
