@@ -418,6 +418,21 @@ function EnrollmentCard({
               )}
             </div>
           )}
+          {/* 2 Oct 2026 — «добавь сюда даты оплаты»: every payment of this
+              поток with its date. */}
+          {(enrollment.payments ?? []).length > 0 && (
+            <ul className="mt-1 flex flex-col gap-0.5 text-xs text-muted">
+              {enrollment.payments.map((p) => (
+                <li key={p.id} className={p.status === "refunded" ? "line-through" : ""}>
+                  {p.paid_date ? p.paid_date.split("-").reverse().join(".") : "—"}
+                  {" · "}
+                  <Money amountEur={Number(p.amount)} />
+                  {p.is_partial ? ` · ${t("tagPartial")}` : ""}
+                  {p.status === "pending" ? ` · ${t("payStatusPending").toLowerCase()}` : ""}
+                </li>
+              ))}
+            </ul>
+          )}
           {enrollment.note && <div className="mt-1 text-xs text-muted">{enrollment.note}</div>}
         </div>
         {canEdit && (

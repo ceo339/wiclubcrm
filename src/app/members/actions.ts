@@ -565,7 +565,7 @@ export type EnrollmentDetail = Tables<"member_enrollments"> & {
   product_price: number | null;
   product_sessions: number | null;
   /** Round 53 — payments linked to this поток (any status), oldest first. */
-  payments: { id: string; amount: number; status: string; paid_date: string | null }[];
+  payments: { id: string; amount: number; status: string; paid_date: string | null; is_partial?: boolean }[];
   /** Sum of the «paid» ones. */
   paid_sum: number;
 };
@@ -606,7 +606,7 @@ export async function getMemberDetail(memberId: string): Promise<MemberDetail> {
       .order("due_date", { ascending: true }),
     supabase
       .from("member_enrollments")
-      .select("*, products(name, price, sessions), payments(id, amount, status, paid_date)")
+      .select("*, products(name, price, sessions), payments(id, amount, status, paid_date, is_partial)")
       .eq("member_id", memberId)
       .order("created_at", { ascending: true }),
     loadContactHistory(supabase, memberRow?.contact_id ?? null),
@@ -622,7 +622,7 @@ export async function getMemberDetail(memberId: string): Promise<MemberDetail> {
       product_sessions:
         (e as { products?: { sessions: number | null } | null }).products?.sessions ?? null,
       payments: [
-        ...((e as { payments?: { id: string; amount: number; status: string; paid_date: string | null }[] })
+        ...((e as { payments?: { id: string; amount: number; status: string; paid_date: string | null; is_partial?: boolean }[] })
           .payments ?? []),
       ].sort((a, b) => (a.paid_date ?? "").localeCompare(b.paid_date ?? "")),
       paid_sum: ((e as { payments?: { amount: number; status: string }[] }).payments ?? [])
