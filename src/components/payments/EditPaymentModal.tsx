@@ -6,16 +6,19 @@ import { STATUSES, statusLabel } from "@/lib/payments";
 import Money from "@/components/currency/Money";
 import MoneyAmountField from "@/components/currency/MoneyAmountField";
 import { useLocale } from "@/components/i18n/LocaleProvider";
-import type { Payment } from "./types";
+import type { MemberOption, Payment } from "./types";
 
 const initialState: ActionResult = { error: null };
 
 export default function EditPaymentModal({
   payment,
+  enrollmentOptions = [],
   canEdit,
   onClose,
 }: {
   payment: Payment;
+  /** Round 53 — this member's потоки, to (re)link the payment. */
+  enrollmentOptions?: MemberOption[];
   canEdit: boolean;
   onClose: () => void;
 }) {
@@ -58,6 +61,24 @@ export default function EditPaymentModal({
                 defaultAmountEur={payment.amount}
                 required
               />
+
+              {payment.member_id && enrollmentOptions.length > 0 && (
+                <label className="flex flex-col gap-1.5 text-sm">
+                  <span className="font-medium text-ink-2">{t("fieldPaymentCohort")}</span>
+                  <select
+                    name="enrollment_id"
+                    defaultValue={payment.enrollment_id ?? ""}
+                    className="rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-accent focus:ring-1 focus:ring-accent"
+                  >
+                    <option value="">{t("optionNoCohortLinked")}</option>
+                    {enrollmentOptions.map((o) => (
+                      <option key={o.key} value={o.enrollmentId!}>
+                        {o.label.split(" — ").slice(1).join(" — ") || o.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              )}
 
               <label className="flex flex-col gap-1.5 text-sm">
                 <span className="font-medium text-ink-2">{t("colStatus")}</span>

@@ -51,29 +51,49 @@ export default async function PaymentsPage() {
   const { data: members } = canEdit
     ? await supabase
         .from("members")
-        .select("id, name, member_enrollments(id, price, products(name))")
+        .select("id, name, member_enrollments(id, price, start_date, status, products(name), payments(amount, status))")
         .order("name")
     : { data: [] };
+  const [{ data: products }, { data: cohorts }] = canEdit
+    ? await Promise.all([
+        supabase.from("products").select("id, name, price").order("name"),
+        supabase.from("product_cohorts").select("product_id, start_date").order("start_date"),
+      ])
+    : [{ data: [] }, { data: [] }];
 
   const { scope, fallback } = scopeForProfile(profile);
   const localeScope = localeScopeForProfile(profile);
 
+  // Round 53: one row per поток (course + start date), plus one bare row per
+  // member so a payment for a NEW поток can be started from her name.
+  type EnrollmentRow = {
+    id: string;
+    price: number;
+    start_date: string | null;
+    status: string;
+    products: { name: string } | null;
+    payments: { amount: number; status: string }[] | null;
+  };
+  const fmt = (d: string | null) => (d ? d.split("-").reverse().join(".") : null);
   const memberOptions: MemberOption[] = (members ?? []).flatMap((m): MemberOption[] => {
-    const enrollments =
-      (m as { member_enrollments?: { id: string; price: number; products: { name: string } | null }[] })
-        .member_enrollments ?? [];
-    if (enrollments.length === 0) {
-      return [{ key: `member:${m.id}`, memberId: m.id, enrollmentId: null, label: m.name, defaultAmount: null }];
-    }
-    return enrollments.map(
-      (e): MemberOption => ({
+    const enrollments = ((m as { member_enrollments?: EnrollmentRow[] }).member_enrollments ?? []).filter(
+      (e) => e.status !== "sNoShow"
+    );
+    const rows = enrollments.map((e): MemberOption => {
+      const paid = (e.payments ?? []).filter((p) => p.status === "paid").reduce((s, p) => s + Number(p.amount), 0);
+      const left = Number(e.price) - paid;
+      const remaining = left > 0.01 ? left : 0;
+      const parts = [e.products?.name, fmt(e.start_date) ? `поток ${fmt(e.start_date)}` : null].filter(Boolean);
+      return {
         key: e.id,
         memberId: m.id,
         enrollmentId: e.id,
-        label: e.products?.name ? `${m.name} — ${e.products.name}` : m.name,
-        defaultAmount: e.price,
-      })
-    );
+        label: parts.length ? `${m.name} — ${parts.join(" · ")}` : m.name,
+        defaultAmount: remaining > 0 ? remaining : e.price,
+        remaining,
+      };
+    });
+    return [...rows, { key: `member:${m.id}`, memberId: m.id, enrollmentId: null, label: m.name, defaultAmount: null }];
   });
 
   return (
@@ -114,6 +134,8 @@ export default async function PaymentsPage() {
             lead: (p as { leads?: { cohort_start_date: string | null; added_date: string } | null }).leads ?? null,
           }))}
           memberOptions={memberOptions}
+          products={products ?? []}
+          cohorts={cohorts ?? []}
           canEdit={canEdit}
           stripeEnabled={stripeEnabled}
           packageSales={packageSales}

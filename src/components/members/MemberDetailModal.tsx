@@ -3,7 +3,9 @@
 import { useEffect, useMemo, useState, useTransition } from "react";
 import {
   addEnrollment,
+  addEnrollmentPayment,
   addMemberComment,
+  markEnrollmentNoShow,
   addMemberTask,
   deleteEnrollment,
   getMemberDetail,
@@ -22,7 +24,7 @@ import {
   type PackageSaleDetail,
 } from "@/app/packages/actions";
 import { attendedArray, STATUSES, statusLabel, statusPillClasses } from "@/lib/members";
-import { stageLabel } from "@/lib/leads";
+import { DECLINE_REASONS, stageLabel } from "@/lib/leads";
 import { convertFromEur, convertToEur, currencySymbol, roundMoney } from "@/lib/currency";
 import Money from "@/components/currency/Money";
 import { useCurrency } from "@/components/currency/CurrencyProvider";
@@ -322,7 +324,7 @@ function EnrollmentsSection({
       ) : (
         <div className="mt-2 flex flex-col gap-2">
           {enrollments.map((e) => (
-            <EnrollmentCard key={e.id} enrollment={e} canEdit={canEdit} onChanged={onChanged} />
+            <EnrollmentCard key={e.id} enrollment={e} cohorts={cohorts} canEdit={canEdit} onChanged={onChanged} />
           ))}
         </div>
       )}
@@ -345,15 +347,22 @@ function EnrollmentsSection({
 
 function EnrollmentCard({
   enrollment,
+  cohorts,
   canEdit,
   onChanged,
 }: {
   enrollment: EnrollmentDetail;
+  cohorts: Tables<"product_cohorts">[];
   canEdit: boolean;
   onChanged: () => void;
 }) {
   const { locale, t } = useLocale();
   const [editing, setEditing] = useState(false);
+  const [panel, setPanel] = useState<"none" | "pay" | "noshow">("none");
+  const price = Number(enrollment.price) || 0;
+  const paidSum = enrollment.paid_sum ?? 0;
+  const remaining = Math.max(0, price - paidSum);
+  const isOpenForMoney = ["sAwaiting", "sPartial", "sPaid"].includes(enrollment.status);
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
@@ -395,6 +404,18 @@ function EnrollmentCard({
               <Money amountEur={enrollment.price} />
             </span>
           </div>
+          {price > 0 && paidSum > 0 && (
+            <div className="mt-1 text-xs text-ink-2">
+              {t("enrollPaidOf")} <Money amountEur={paidSum} /> / <Money amountEur={price} />
+              {remaining > 0.01 && (
+                <span className="text-warn">
+                  {" · "}
+                  {t("enrollRemaining")} <Money amountEur={remaining} />
+                </span>
+              )}
+            </div>
+          )}
+          {enrollment.note && <div className="mt-1 text-xs text-muted">{enrollment.note}</div>}
         </div>
         {canEdit && (
           <div className="flex shrink-0 items-center gap-2">
@@ -417,9 +438,233 @@ function EnrollmentCard({
         )}
       </div>
       {error && <p className="mt-1 text-xs text-accent-strong">{t(error)}</p>}
-      {enrollment.product_sessions ? (
+
+      {canEdit && enrollment.status !== "sNoShow" && panel === "none" && (
+        <div className="mt-2 flex flex-wrap gap-2">
+          {isOpenForMoney && price > 0 && remaining > 0.01 && (
+            <button
+              type="button"
+              onClick={() => setPanel("pay")}
+              className="rounded-md border border-border px-2 py-0.5 text-xs font-medium text-ink-2 hover:bg-surface-2"
+            >
+              {paidSum > 0 ? t("btnTopUp") : t("btnFirstPayment")}
+            </button>
+          )}
+          {enrollment.status !== "sCompleted" && enrollment.status !== "sRefunded" && (
+            <button
+              type="button"
+              onClick={() => setPanel("noshow")}
+              className="rounded-md border border-border px-2 py-0.5 text-xs font-medium text-ink-2 hover:bg-surface-2"
+            >
+              {t("btnNoShow")}
+            </button>
+          )}
+        </div>
+      )}
+      {panel === "pay" && (
+        <TopUpForm
+          enrollmentId={enrollment.id}
+          defaultEur={remaining}
+          onCancel={() => setPanel("none")}
+          onSaved={() => {
+            setPanel("none");
+            onChanged();
+          }}
+        />
+      )}
+      {panel === "noshow" && (
+        <NoShowForm
+          enrollment={enrollment}
+          cohorts={cohorts}
+          onCancel={() => setPanel("none")}
+          onSaved={() => {
+            setPanel("none");
+            onChanged();
+          }}
+        />
+      )}
+
+      {enrollment.product_sessions && enrollment.status !== "sNoShow" ? (
         <EnrollmentAttendance enrollment={enrollment} canEdit={canEdit} onChanged={onChanged} />
       ) : null}
+    </div>
+  );
+}
+
+const smallInput =
+  "rounded-lg border border-border bg-background px-2 py-1.5 text-xs outline-none focus:border-accent focus:ring-1 focus:ring-accent";
+
+/** Round 53 — «+ Доплата»: one more payment for this exact поток. */
+function TopUpForm({
+  enrollmentId,
+  defaultEur,
+  onCancel,
+  onSaved,
+}: {
+  enrollmentId: string;
+  defaultEur: number;
+  onCancel: () => void;
+  onSaved: () => void;
+}) {
+  const t = useT();
+  const { currency, rates } = useCurrency();
+  const [amount, setAmount] = useState(String(roundMoney(convertFromEur(defaultEur, currency, rates), currency)));
+  const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
+  const [pending, startTransition] = useTransition();
+  const [error, setError] = useState<string | null>(null);
+
+  function save() {
+    setError(null);
+    startTransition(async () => {
+      const res = await addEnrollmentPayment(
+        enrollmentId,
+        convertToEur(parseFloat(amount.replace(",", ".")) || 0, currency, rates),
+        date
+      );
+      if (res.error) setError(res.error);
+      else onSaved();
+    });
+  }
+
+  return (
+    <div className="mt-2 flex flex-col gap-2 border-t border-border pt-2">
+      <div className="grid grid-cols-2 gap-2">
+        <label className="flex flex-col gap-1 text-xs">
+          <span className="font-medium text-ink-2">
+            {t("fieldAmount")} ({currencySymbol(currency)})
+          </span>
+          <input type="number" min="0" step="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} className={smallInput} />
+        </label>
+        <label className="flex flex-col gap-1 text-xs">
+          <span className="font-medium text-ink-2">{t("colDate")}</span>
+          <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className={smallInput} />
+        </label>
+      </div>
+      {error && <p className="text-xs text-accent-strong">{t(error)}</p>}
+      <div className="flex justify-end gap-2">
+        <button type="button" onClick={onCancel} className="rounded-lg border border-border px-3 py-1 text-xs font-medium text-ink-2 hover:bg-surface-2">
+          {t("cancel")}
+        </button>
+        <button
+          type="button"
+          disabled={pending || !amount}
+          onClick={save}
+          className="rounded-lg bg-foreground px-3 py-1 text-xs font-medium text-background disabled:opacity-50"
+        >
+          {pending ? "..." : t("save")}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Round 53 — «Не была на курсе»: either move her (with her payments) to
+ * another поток of the same course, or close it as «Отказ» with a reason
+ * (her lead goes to «Отказ» too). See markEnrollmentNoShow.
+ */
+function NoShowForm({
+  enrollment,
+  cohorts,
+  onCancel,
+  onSaved,
+}: {
+  enrollment: EnrollmentDetail;
+  cohorts: Tables<"product_cohorts">[];
+  onCancel: () => void;
+  onSaved: () => void;
+}) {
+  const { locale, t } = useLocale();
+  const [mode, setMode] = useState<"transfer" | "decline">("transfer");
+  const today = new Date().toISOString().slice(0, 10);
+  const otherCohorts = cohorts
+    .filter((c) => c.product_id === enrollment.product_id && c.start_date !== enrollment.start_date)
+    .sort((a, b) => a.start_date.localeCompare(b.start_date));
+  const upcoming = otherCohorts.filter((c) => c.start_date >= today);
+  const [startDate, setStartDate] = useState(upcoming[0]?.start_date ?? "");
+  const [reason, setReason] = useState<string>("declineNoTime");
+  const [note, setNote] = useState("");
+  const [pending, startTransition] = useTransition();
+  const [error, setError] = useState<string | null>(null);
+
+  function save() {
+    setError(null);
+    startTransition(async () => {
+      const res = await markEnrollmentNoShow(
+        enrollment.id,
+        mode === "transfer" ? { mode, startDate } : { mode, reason, note: note || null }
+      );
+      if (res.error) setError(res.error);
+      else onSaved();
+    });
+  }
+
+  const tab = (m: "transfer" | "decline", label: string) => (
+    <button
+      type="button"
+      onClick={() => setMode(m)}
+      className={`rounded-md px-2.5 py-1 text-xs font-medium ${mode === m ? "bg-foreground text-background" : "bg-surface-2 text-ink-2"}`}
+    >
+      {label}
+    </button>
+  );
+
+  return (
+    <div className="mt-2 flex flex-col gap-2 border-t border-border pt-2">
+      <div className="text-xs font-medium text-ink-2">{t("noShowHeading")}</div>
+      <div className="flex flex-wrap gap-1.5">
+        {tab("transfer", t("noShowTransfer"))}
+        {tab("decline", t("noShowDecline"))}
+      </div>
+      {mode === "transfer" ? (
+        <label className="flex flex-col gap-1 text-xs">
+          <span className="font-medium text-ink-2">{t("fieldCohortStart")}</span>
+          {otherCohorts.length > 0 ? (
+            <select value={startDate} onChange={(e) => setStartDate(e.target.value)} className={smallInput}>
+              <option value="">—</option>
+              {otherCohorts.map((c) => (
+                <option key={c.id} value={c.start_date}>
+                  {c.start_date.split("-").reverse().join(".")}
+                  {c.start_date < today ? ` (${t("noShowPastCohort")})` : ""}
+                </option>
+              ))}
+            </select>
+          ) : (
+            <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className={smallInput} />
+          )}
+          <span className="text-muted">{t("noShowTransferHint")}</span>
+        </label>
+      ) : (
+        <div className="flex flex-col gap-2">
+          <label className="flex flex-col gap-1 text-xs">
+            <span className="font-medium text-ink-2">{t("fieldDeclineReason")}</span>
+            <select value={reason} onChange={(e) => setReason(e.target.value)} className={smallInput}>
+              {DECLINE_REASONS.map((r) => (
+                <option key={r} value={r}>
+                  {t(r)}
+                </option>
+              ))}
+            </select>
+          </label>
+          <input value={note} onChange={(e) => setNote(e.target.value)} placeholder={t("noShowNotePlaceholder")} className={smallInput} />
+          <span className="text-xs text-muted">{t("noShowDeclineHint")}</span>
+        </div>
+      )}
+      {error && <p className="text-xs text-accent-strong">{t(error)}</p>}
+      <div className="flex justify-end gap-2">
+        <button type="button" onClick={onCancel} className="rounded-lg border border-border px-3 py-1 text-xs font-medium text-ink-2 hover:bg-surface-2">
+          {t("cancel")}
+        </button>
+        <button
+          type="button"
+          disabled={pending || (mode === "transfer" && !startDate)}
+          onClick={save}
+          className="rounded-lg bg-foreground px-3 py-1 text-xs font-medium text-background disabled:opacity-50"
+        >
+          {pending ? "..." : t("save")}
+        </button>
+      </div>
+      {void locale}
     </div>
   );
 }
@@ -946,21 +1191,32 @@ function AssignPackageItemForm({
       <div className="grid grid-cols-2 gap-2">
         <label className="flex flex-col gap-1 text-xs">
           <span className="font-medium text-ink-2">{t("fieldCohortStart")}</span>
-          <input
-            name="start_date"
-            type="date"
-            list={`cohorts-${item.id}`}
-            value={startDate}
-            onChange={(e) => setStartDate(e.target.value)}
-            required
-            className="rounded-lg border border-border bg-background px-2 py-1.5 text-xs outline-none focus:border-accent focus:ring-1 focus:ring-accent"
-          />
-          {productCohorts.length > 0 && (
-            <datalist id={`cohorts-${item.id}`}>
+          {/* Round 53: a real list of this course's потоки (a <datalist> on a
+              date input isn't shown by Safari/Chrome date pickers at all). */}
+          {productCohorts.length > 0 ? (
+            <select
+              name="start_date"
+              value={startDate}
+              onChange={(e) => setStartDate(e.target.value)}
+              required
+              className="rounded-lg border border-border bg-background px-2 py-1.5 text-xs outline-none focus:border-accent focus:ring-1 focus:ring-accent"
+            >
+              <option value="">—</option>
               {productCohorts.map((c) => (
-                <option key={c.id} value={c.start_date} />
+                <option key={c.id} value={c.start_date}>
+                  {c.start_date.split("-").reverse().join(".")}
+                </option>
               ))}
-            </datalist>
+            </select>
+          ) : (
+            <input
+              name="start_date"
+              type="date"
+              value={startDate}
+              onChange={(e) => setStartDate(e.target.value)}
+              required
+              className="rounded-lg border border-border bg-background px-2 py-1.5 text-xs outline-none focus:border-accent focus:ring-1 focus:ring-accent"
+            />
           )}
         </label>
         <label className="flex flex-col gap-1 text-xs">

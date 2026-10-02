@@ -36,7 +36,9 @@ export default async function MembersPage() {
   // nested array rather than flat columns on the member row itself.
   let membersQuery = supabase
     .from("members")
-    .select("*, partners(name), member_enrollments(*, products(name, price, sessions))")
+    .select(
+      "*, partners(name), member_enrollments(*, products(name, price, sessions)), package_sales(id, label, package_sale_items(enrollment_id))"
+    )
     .order("created_at", { ascending: false });
   if (scopePartnerId) membersQuery = membersQuery.eq("partner_id", scopePartnerId);
   const { data: members, error } = await membersQuery;
@@ -84,10 +86,18 @@ export default async function MembersPage() {
               member_enrollments?: (Tables<"member_enrollments"> & {
                 products?: { name: string; price: number; sessions: number | null } | null;
               })[];
+              package_sales?: { id: string; label: string; package_sale_items: { enrollment_id: string | null }[] }[];
             };
             return {
               ...m,
               partner_name: raw.partners?.name ?? null,
+              // Round 53 — packages visible right in the list.
+              packages: (raw.package_sales ?? []).map((p) => ({
+                id: p.id,
+                label: p.label,
+                total: p.package_sale_items.length,
+                assigned: p.package_sale_items.filter((i) => i.enrollment_id).length,
+              })),
               enrollments: (raw.member_enrollments ?? []).map((e) => ({
                 ...e,
                 product_name: e.products?.name ?? null,

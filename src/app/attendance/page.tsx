@@ -32,7 +32,10 @@ export default async function AttendancePage() {
     .order("start_date", { ascending: false });
   let enrollmentsQuery = supabase
     .from("member_enrollments")
-    .select("id, partner_id, product_id, start_date, attended, members(name)");
+    .select("id, partner_id, product_id, start_date, attended, members(name)")
+    // Round 53: «Не была на курсе» (often moved to another поток) isn't
+    // part of this поток's attendance list any more.
+    .neq("status", "sNoShow");
   if (scopePartnerId) {
     cohortsQuery = cohortsQuery.eq("partner_id", scopePartnerId);
     enrollmentsQuery = enrollmentsQuery.eq("partner_id", scopePartnerId);

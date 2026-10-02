@@ -17,19 +17,23 @@ import { t, type Locale } from "@/lib/i18n";
 
 export type MemberStatus =
   | "sAwaiting"
+  | "sPartial"
   | "sPaid"
   | "sFailed"
   | "sCompleted"
   | "sRefunded"
-  | "sCancelled";
+  | "sCancelled"
+  | "sNoShow";
 
 export const STATUSES: { id: MemberStatus }[] = [
   { id: "sAwaiting" },
+  { id: "sPartial" },
   { id: "sPaid" },
   { id: "sCompleted" },
   { id: "sFailed" },
   { id: "sRefunded" },
   { id: "sCancelled" },
+  { id: "sNoShow" },
 ];
 
 export const statusLabel = (id: string, locale: Locale) => t(locale, id);
@@ -52,7 +56,9 @@ export function statusPillClasses(status: string): string {
     case "sCompleted":
       return "bg-surface-3 text-ink-2";
     case "sAwaiting":
+    case "sPartial":
       return "bg-warn-soft text-warn";
+    case "sNoShow":
     case "sFailed":
     case "sRefunded":
       return "bg-accent-soft text-accent-strong";

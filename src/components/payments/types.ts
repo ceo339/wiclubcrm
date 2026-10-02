@@ -27,4 +27,7 @@ export type MemberOption = {
   enrollmentId: string | null;
   label: string;
   defaultAmount: number | null;
+  /** Round 53 — for a поток: still to pay (price − paid so far), shown as
+   * the default amount so a «доплата» pre-fills with the remainder. */
+  remaining?: number | null;
 };

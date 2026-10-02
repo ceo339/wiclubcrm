@@ -6,6 +6,8 @@ import { getCurrentProfile } from "@/lib/auth";
 import { currentMonthYear, enrollmentIsDueForCompletion, STATUSES } from "@/lib/members";
 import { todayIso } from "@/lib/payments";
 import { findOrCreateContact, loadContactHistory, type ContactHistory } from "@/lib/server/contacts";
+import { recomputeEnrollmentStatus, syncEnrollmentPaymentRows } from "@/lib/server/enrollmentPayments";
+import { DECLINE_REASONS } from "@/lib/leads";
 import type { Tables } from "@/types/database";
 
 export type ActionResult = { error: string | null };
@@ -51,61 +53,9 @@ export async function syncEnrollmentPayment(
     status: string;
   }
 ): Promise<void> {
-  const { partnerId, memberId, enrollmentId, productId, price, status } = params;
-
-  // "если в контактах меняется статус на возврат, то в оплатах нужно
-  // фиксировать это" (coach marina, Анастасия 23 сен 2026) — раньше эта
-  // функция реагировала только на sPaid/sCompleted и просто выходила на
-  // любом другом статусе, так что перевод курса на «Возврат» (sRefunded) в
-  // карточке контакта/участницы (updateEnrollment) никогда не трогал уже
-  // существующий платёж — он молча оставался «Оплачено» в «Оплатах» и в
-  // итогах выручки. Теперь: если для этого enrollment уже есть платёж —
-  // он переводится в payments.status = "refunded" (сумма не меняется, это
-  // исторический факт того, сколько реально было получено до возврата).
-  if (status === "sRefunded") {
-    const { data: existingPayment } = await supabase
-      .from("payments")
-      .select("id, status")
-      .eq("enrollment_id", enrollmentId)
-      .maybeSingle();
-    if (existingPayment && existingPayment.status !== "refunded") {
-      await supabase.from("payments").update({ status: "refunded" }).eq("id", existingPayment.id);
-    }
-    return;
-  }
-
-  if (status !== "sPaid" && status !== "sCompleted") return;
-  if (price <= 0) return;
-
-  const { data: existingPayment } = await supabase
-    .from("payments")
-    .select("id, amount, status")
-    .eq("enrollment_id", enrollmentId)
-    .maybeSingle();
-
-  if (existingPayment) {
-    // Симметрично п. выше — если статус курса вернули с «Возврат» обратно
-    // на «Оплачено»/«Курс пройден» (например, ошиблись и исправили), сам
-    // платёж тоже должен выйти из "refunded" обратно в "paid", а не
-    // остаться зависшим возвратом навсегда.
-    const patch: { amount?: number; status?: string } = {};
-    if (existingPayment.amount !== price) patch.amount = price;
-    if (existingPayment.status !== "paid") patch.status = "paid";
-    if (Object.keys(patch).length > 0) {
-      await supabase.from("payments").update(patch).eq("id", existingPayment.id);
-    }
-    return;
-  }
-
-  await supabase.from("payments").insert({
-    partner_id: partnerId,
-    member_id: memberId,
-    enrollment_id: enrollmentId,
-    product_id: productId,
-    amount: price,
-    status: "paid",
-    paid_date: todayIso(),
-  });
+  // Round 53: multi-payment aware — see lib/server/enrollmentPayments.ts.
+  await syncEnrollmentPaymentRows(supabase, params);
+  await recomputeEnrollmentStatus(supabase, params.enrollmentId);
 }
 
 /**
@@ -585,6 +535,10 @@ export type EnrollmentDetail = Tables<"member_enrollments"> & {
   product_name: string | null;
   product_price: number | null;
   product_sessions: number | null;
+  /** Round 53 — payments linked to this поток (any status), oldest first. */
+  payments: { id: string; amount: number; status: string; paid_date: string | null }[];
+  /** Sum of the «paid» ones. */
+  paid_sum: number;
 };
 
 export type MemberDetail = {
@@ -623,7 +577,7 @@ export async function getMemberDetail(memberId: string): Promise<MemberDetail> {
       .order("due_date", { ascending: true }),
     supabase
       .from("member_enrollments")
-      .select("*, products(name, price, sessions)")
+      .select("*, products(name, price, sessions), payments(id, amount, status, paid_date)")
       .eq("member_id", memberId)
       .order("created_at", { ascending: true }),
     loadContactHistory(supabase, memberRow?.contact_id ?? null),
@@ -638,6 +592,13 @@ export async function getMemberDetail(memberId: string): Promise<MemberDetail> {
       product_price: (e as { products?: { price: number } | null }).products?.price ?? null,
       product_sessions:
         (e as { products?: { sessions: number | null } | null }).products?.sessions ?? null,
+      payments: [
+        ...((e as { payments?: { id: string; amount: number; status: string; paid_date: string | null }[] })
+          .payments ?? []),
+      ].sort((a, b) => (a.paid_date ?? "").localeCompare(b.paid_date ?? "")),
+      paid_sum: ((e as { payments?: { amount: number; status: string }[] }).payments ?? [])
+        .filter((p) => p.status === "paid")
+        .reduce((sum, p) => sum + Number(p.amount), 0),
     })),
     contactHistory,
   };
@@ -709,5 +670,136 @@ export async function setMemberTaskDone(taskId: string, done: boolean): Promise<
   if (error) return { error: error.message };
 
   revalidatePath("/members");
+  return { error: null };
+}
+
+/**
+ * Round 53 — «+ Доплата» on an enrollment card: records one more payment
+ * for this exact поток (amount in EUR, like every stored amount), then lets
+ * the status follow the money (see recomputeEnrollmentStatus).
+ */
+export async function addEnrollmentPayment(
+  enrollmentId: string,
+  amountEur: number,
+  paidDate: string | null
+): Promise<ActionResult> {
+  const profile = await getCurrentProfile();
+  if (!profile) return { error: "errNotAuthorized" };
+  if (!profile.partner_id) return { error: "errHqNoClubAddPayments" };
+  if (!Number.isFinite(amountEur) || amountEur <= 0) return { error: "errEnterAmount" };
+
+  const supabase = await createClient();
+  const { data: e } = await supabase
+    .from("member_enrollments")
+    .select("id, member_id, product_id, members(lead_id)")
+    .eq("id", enrollmentId)
+    .eq("partner_id", profile.partner_id)
+    .maybeSingle();
+  if (!e) return { error: "errGeneric" };
+
+  const { error } = await supabase.from("payments").insert({
+    partner_id: profile.partner_id,
+    member_id: e.member_id,
+    enrollment_id: e.id,
+    product_id: e.product_id,
+    lead_id: (e as { members?: { lead_id: string | null } | null }).members?.lead_id ?? null,
+    amount: Math.round(amountEur * 100) / 100,
+    status: "paid",
+    paid_date: paidDate || todayIso(),
+  });
+  if (error) return { error: error.message };
+
+  await recomputeEnrollmentStatus(supabase, e.id);
+  revalidatePath("/members");
+  revalidatePath("/payments");
+  revalidatePath("/attendance", "layout");
+  revalidatePath("/");
+  return { error: null };
+}
+
+export type NoShowChoice =
+  | { mode: "transfer"; startDate: string }
+  | { mode: "decline"; reason: string; note: string | null };
+
+/**
+ * Round 53 — «Не была на курсе» (Anastasiia, 2 Oct 2026). Two outcomes:
+ *
+ *  • transfer — she moves to another поток of the same course. A new
+ *    enrollment is created for that поток with the same price, and every
+ *    payment of the old one moves with her (no second charge, revenue now
+ *    attributed to the new поток). The old enrollment stays in history as
+ *    «Не была» with a note, price 0 (its money went to the new one).
+ *
+ *  • decline — the old enrollment becomes «Не была» with the reason as its
+ *    note, and her lead goes to «Отказ» with that reason, as on the kanban.
+ *    Payments are left untouched (a refund, if any, is a separate step —
+ *    «Возврат» in Оплаты). Free courses work the same way, just with no
+ *    money involved.
+ */
+export async function markEnrollmentNoShow(enrollmentId: string, choice: NoShowChoice): Promise<ActionResult> {
+  const profile = await getCurrentProfile();
+  if (!profile) return { error: "errNotAuthorized" };
+  if (!profile.partner_id) return { error: "errHqNoClubEdit" };
+
+  const supabase = await createClient();
+  const { data: e } = await supabase
+    .from("member_enrollments")
+    .select("id, member_id, product_id, start_date, price, status, members(lead_id)")
+    .eq("id", enrollmentId)
+    .eq("partner_id", profile.partner_id)
+    .maybeSingle();
+  if (!e) return { error: "errGeneric" };
+  const fmt = (d: string | null) => (d ? d.split("-").reverse().join(".") : "—");
+
+  if (choice.mode === "transfer") {
+    const startDate = choice.startDate?.trim();
+    if (!startDate) return { error: "errEnterCohortStartDate" };
+    if (startDate === e.start_date) return { error: "errNoShowSameCohort" };
+
+    const { data: created, error } = await supabase
+      .from("member_enrollments")
+      .insert({
+        partner_id: profile.partner_id,
+        member_id: e.member_id,
+        product_id: e.product_id,
+        start_date: startDate,
+        price: e.price,
+        status: "sAwaiting",
+        paid: false,
+        attended: [],
+        note: `Перенесена с потока ${fmt(e.start_date)}`,
+      })
+      .select("id")
+      .single();
+    if (error || !created) return { error: error?.message ?? "errGeneric" };
+
+    await supabase.from("payments").update({ enrollment_id: created.id }).eq("enrollment_id", e.id);
+    await supabase
+      .from("member_enrollments")
+      .update({ status: "sNoShow", paid: false, price: 0, note: `Не была. Перенесена на поток ${fmt(startDate)}` })
+      .eq("id", e.id);
+    await recomputeEnrollmentStatus(supabase, created.id);
+  } else {
+    const reason = (DECLINE_REASONS as readonly string[]).includes(choice.reason) ? choice.reason : "declineOther";
+    const note = choice.note?.trim() || null;
+    await supabase
+      .from("member_enrollments")
+      .update({ status: "sNoShow", note: note ? `Не была: ${note}` : "Не была" })
+      .eq("id", e.id);
+    const leadId = (e as { members?: { lead_id: string | null } | null }).members?.lead_id ?? null;
+    if (leadId) {
+      await supabase
+        .from("leads")
+        .update({ stage: "declined", decline_reason: reason, decline_note: note })
+        .eq("id", leadId)
+        .eq("partner_id", profile.partner_id);
+    }
+  }
+
+  revalidatePath("/members");
+  revalidatePath("/leads");
+  revalidatePath("/payments");
+  revalidatePath("/attendance", "layout");
+  revalidatePath("/");
   return { error: null };
 }

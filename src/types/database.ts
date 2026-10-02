@@ -777,6 +777,7 @@ export type Database = {
           created_at: string
           id: string
           member_id: string
+          note: string | null
           paid: boolean
           partner_id: string
           price: number
@@ -789,6 +790,7 @@ export type Database = {
           created_at?: string
           id?: string
           member_id: string
+          note?: string | null
           paid?: boolean
           partner_id: string
           price?: number
@@ -801,6 +803,7 @@ export type Database = {
           created_at?: string
           id?: string
           member_id?: string
+          note?: string | null
           paid?: boolean
           partner_id?: string
           price?: number

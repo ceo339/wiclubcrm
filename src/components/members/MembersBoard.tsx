@@ -293,8 +293,23 @@ export default function MembersBoard({
                     </td>
                     {isHq && <td className="px-4 py-3 text-muted">{m.partner_name ?? "—"}</td>}
                     <td className="px-4 py-3">
+                      {(m.packages ?? []).map((p) => (
+                        <div key={p.id} className="mb-1 flex flex-wrap items-center gap-2">
+                          <span className="rounded-full bg-surface-3 px-2 py-0.5 text-xs font-medium text-ink-2">
+                            {t("packageBadgeLabel")}
+                          </span>
+                          <span className="text-ink-2">{p.label}</span>
+                          <span
+                            className={`rounded-full px-2 py-0.5 text-xs font-medium ${
+                              p.assigned < p.total ? "bg-warn-soft text-warn" : "bg-surface-2 text-muted"
+                            }`}
+                          >
+                            {t("packageAssignedOf", { n: p.assigned, total: p.total })}
+                          </span>
+                        </div>
+                      ))}
                       {rowEnrollments.length === 0 ? (
-                        <span className="text-muted">—</span>
+                        (m.packages ?? []).length === 0 && <span className="text-muted">—</span>
                       ) : (
                         <div className="flex flex-col gap-1">
                           {rowEnrollments.map((e) => (

@@ -96,12 +96,17 @@ function PaymentPeriodTabs({
 export default function PaymentsBoard({
   initialPayments,
   memberOptions,
+  products,
+  cohorts,
   canEdit,
   stripeEnabled,
   packageSales,
 }: {
   initialPayments: Payment[];
   memberOptions: MemberOption[];
+  /** Round 53 — for «новый поток» in the new-payment form. */
+  products: { id: string; name: string; price: number }[];
+  cohorts: { product_id: string; start_date: string }[];
   canEdit: boolean;
   stripeEnabled: boolean;
   /** "Продажа пакета" (round 46/47) — each is ONE real payment shown as a
@@ -358,13 +363,19 @@ export default function PaymentsBoard({
         </div>
       )}
 
-      {showNew && <NewPaymentModal members={memberOptions} onClose={() => setShowNew(false)} />}
+      {showNew && <NewPaymentModal
+          members={memberOptions}
+          products={products}
+          cohorts={cohorts}
+          onClose={() => setShowNew(false)}
+        />}
       {showLink && <PaymentLinkModal members={memberOptions} onClose={() => setShowLink(false)} />}
       {selectedPackage && <PackageSaleDetailModal pkg={selectedPackage} onClose={() => setSelectedPackageId(null)} />}
       {selected && (
         <EditPaymentModal
           key={selected.id}
           payment={selected}
+          enrollmentOptions={memberOptions.filter((m) => m.enrollmentId && m.memberId === selected.member_id)}
           canEdit={canEdit}
           onClose={() => setSelectedId(null)}
         />

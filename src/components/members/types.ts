@@ -13,4 +13,7 @@ export type Enrollment = Tables<"member_enrollments"> & {
 export type Member = Tables<"members"> & {
   partner_name: string | null;
   enrollments: Enrollment[];
+  /** Round 53 — package sales of this member («Пакет: СФ0–СФ3, потоки
+   * назначены 1 из 4»). Optional so other places building a Member still compile. */
+  packages?: { id: string; label: string; total: number; assigned: number }[];
 };

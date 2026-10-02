@@ -7,6 +7,7 @@ import { getCurrentProfile } from "@/lib/auth";
 import { getStripeClient } from "@/lib/stripe";
 import { STATUSES, todayIso } from "@/lib/payments";
 import { findOrCreateContact } from "@/lib/server/contacts";
+import { recomputeEnrollmentStatus } from "@/lib/server/enrollmentPayments";
 
 export type ActionResult = { error: string | null };
 export type PaymentLinkResult = { error: string | null; url?: string };
@@ -144,6 +145,39 @@ export async function createPayment(formData: FormData): Promise<ActionResult> {
   const resolved = await resolvePaymentTarget(supabase, profile.partner_id, target);
   if (!resolved) return { error: "errMemberNotFound" };
 
+  // Round 53 — «в оплатах нельзя выбрать поток»: the picker can now also
+  // say «new поток» (course + start date) for this member. Creates the
+  // enrollment first (full course price), then the payment is linked to it
+  // and its status follows the money (partial / paid).
+  const newProductId = String(formData.get("new_product_id") || "").trim();
+  if (newProductId) {
+    const newStart = String(formData.get("new_start_date") || "").trim() || null;
+    const { data: product } = await supabase
+      .from("products")
+      .select("id, price")
+      .eq("id", newProductId)
+      .eq("partner_id", profile.partner_id)
+      .maybeSingle();
+    if (!product) return { error: "errGeneric" };
+    const { data: enrollment, error: enrollError } = await supabase
+      .from("member_enrollments")
+      .insert({
+        partner_id: profile.partner_id,
+        member_id: resolved.memberId,
+        product_id: product.id,
+        start_date: newStart,
+        price: Number(product.price) || amount,
+        status: "sAwaiting",
+        paid: false,
+        attended: [],
+      })
+      .select("id")
+      .single();
+    if (enrollError || !enrollment) return { error: enrollError?.message ?? "errGeneric" };
+    resolved.enrollmentId = enrollment.id;
+    resolved.productId = product.id;
+  }
+
   const leadId = await ensureLeadForMember(supabase, profile.partner_id, resolved.memberId, resolved.productId, amount);
 
   const { error } = await supabase.from("payments").insert({
@@ -158,8 +192,10 @@ export async function createPayment(formData: FormData): Promise<ActionResult> {
   });
 
   if (error) return { error: error.message };
+  if (resolved.enrollmentId) await recomputeEnrollmentStatus(supabase, resolved.enrollmentId);
 
   revalidatePath("/payments");
+  revalidatePath("/members");
   revalidatePath("/leads");
   revalidatePath("/contacts");
   return { error: null };
@@ -180,14 +216,43 @@ export async function updatePayment(paymentId: string, formData: FormData): Prom
   const paidDate = String(formData.get("paid_date") || "").trim() || todayIso();
 
   const supabase = await createClient();
-  const { error } = await supabase
+  const { data: before } = await supabase
     .from("payments")
-    .update({ amount, status, paid_date: paidDate })
-    .eq("id", paymentId);
+    .select("enrollment_id, member_id")
+    .eq("id", paymentId)
+    .maybeSingle();
+  if (!before) return { error: "errGeneric" };
 
+  // Round 53 — the payment's поток can be (re)chosen here too, e.g. a
+  // payment that was recorded without one. Only this member's own
+  // enrollments are accepted.
+  const patch: { amount: number; status: string; paid_date: string; enrollment_id?: string | null; product_id?: string | null } =
+    { amount, status, paid_date: paidDate };
+  if (formData.has("enrollment_id")) {
+    const enrollmentId = String(formData.get("enrollment_id") || "").trim() || null;
+    if (enrollmentId) {
+      const { data: e } = await supabase
+        .from("member_enrollments")
+        .select("id, product_id, member_id")
+        .eq("id", enrollmentId)
+        .eq("partner_id", profile.partner_id)
+        .maybeSingle();
+      if (!e || (before.member_id && e.member_id !== before.member_id)) return { error: "errGeneric" };
+      patch.enrollment_id = e.id;
+      patch.product_id = e.product_id;
+    } else {
+      patch.enrollment_id = null;
+    }
+  }
+
+  const { error } = await supabase.from("payments").update(patch).eq("id", paymentId);
   if (error) return { error: error.message };
 
+  const touched = new Set([before.enrollment_id, patch.enrollment_id].filter(Boolean) as string[]);
+  for (const id of touched) await recomputeEnrollmentStatus(supabase, id);
+
   revalidatePath("/payments");
+  revalidatePath("/members");
   return { error: null };
 }
 
@@ -306,9 +371,12 @@ export async function deletePayment(paymentId: string): Promise<ActionResult> {
   if (!profile.partner_id) return { error: "errHqNoClubGeneric" };
 
   const supabase = await createClient();
+  const { data: before } = await supabase.from("payments").select("enrollment_id").eq("id", paymentId).maybeSingle();
   const { error } = await supabase.from("payments").delete().eq("id", paymentId);
   if (error) return { error: error.message };
+  if (before?.enrollment_id) await recomputeEnrollmentStatus(supabase, before.enrollment_id);
 
   revalidatePath("/payments");
+  revalidatePath("/members");
   return { error: null };
 }
