@@ -59,6 +59,9 @@ export async function recomputeEnrollmentStatus(
     }
   }
   if (Object.keys(patch).length) await db.from("member_enrollments").update(patch).eq("id", enrollmentId);
+  if (patch.price !== undefined) {
+    await db.from("package_sale_items").update({ allocated_price: patch.price }).eq("enrollment_id", enrollmentId);
+  }
 }
 
 /**

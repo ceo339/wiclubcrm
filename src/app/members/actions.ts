@@ -465,6 +465,15 @@ export async function updateEnrollment(enrollmentId: string, formData: FormData)
     });
   }
 
+  // A поток assigned from a package shows its share on the package card
+  // (package_sale_items.allocated_price) — keep it equal to the поток price
+  // when the price is edited here (2 Oct 2026: «поменяла сумму в СФ1, но
+  // внизу в пакете осталась прежней»).
+  await supabase
+    .from("package_sale_items")
+    .update({ allocated_price: price })
+    .eq("enrollment_id", enrollmentId);
+
   revalidatePath("/members");
   revalidatePath("/attendance", "layout");
   revalidatePath("/payments");
