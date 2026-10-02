@@ -475,18 +475,38 @@ export async function updateEnrollment(enrollmentId: string, formData: FormData)
 
 /** Removes one course from a member's card — she stays a member, just no
  * longer enrolled in that particular course. Doesn't touch any payment
- * already recorded against it (payments.enrollment_id just goes null). */
+ * already recorded against it (payments.enrollment_id just goes null —
+ * that FK is ON DELETE SET NULL).
+ *
+ * "удалить → update or delete on table member_enrollments violates foreign
+ * key constraint package_sale_items_enrollment_id_fkey" (Anastasiia, 2 окт
+ * 2026) — unlike payments, package_sale_items.enrollment_id has no ON
+ * DELETE behaviour at all, so deleting an enrollment that a "Продажа
+ * пакета" item had been assigned to (see assignPackageItem,
+ * packages/actions.ts) hit a DB error instead of deleting. Reverting that
+ * package_sale_items row back to "pending" (enrollment_id/allocated_price/
+ * start_date all null — the same shape it had before a поток was ever
+ * assigned) before the delete both satisfies the FK and puts the package
+ * item back where "Назначить поток" can pick it up again. */
 export async function deleteEnrollment(enrollmentId: string): Promise<ActionResult> {
   const profile = await getCurrentProfile();
   if (!profile) return { error: "errNotAuthorized" };
   if (!profile.partner_id) return { error: "errHqNoClubGeneric" };
 
   const supabase = await createClient();
+
+  const { error: unlinkError } = await supabase
+    .from("package_sale_items")
+    .update({ enrollment_id: null, allocated_price: null, start_date: null })
+    .eq("enrollment_id", enrollmentId);
+  if (unlinkError) return { error: unlinkError.message };
+
   const { error } = await supabase.from("member_enrollments").delete().eq("id", enrollmentId);
   if (error) return { error: error.message };
 
   revalidatePath("/members");
   revalidatePath("/attendance", "layout");
+  revalidatePath("/payments");
   return { error: null };
 }
 
