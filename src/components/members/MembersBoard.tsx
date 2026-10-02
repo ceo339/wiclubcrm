@@ -118,6 +118,29 @@ export default function MembersBoard({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialMembers, search, status, productId, startDate]);
 
+  // "не нужно считать тех, кто не был в виджетах. только те, кто в
+  // статусе оплаты, а те, кто не был удалить из статистик" (Anastasiia, 2
+  // окт 2026) — the headline count and "Оплатили X из Y" used to be based
+  // on every matching enrollment regardless of status, so a поток with 12
+  // "Не была на курсе" rows (sNoShow, price zeroed out — see round 53) and
+  // 5 real paying участниц showed up as "17", which read as if 17 people
+  // were actually in the course. These two widgets (below the filter bar,
+  // once a course is picked) now only count enrollments that are actually
+  // in a payment status — sPartial/sPaid/sCompleted — so sNoShow (and
+  // sAwaiting/sCancelled/sRefunded/sFailed) never inflate them. The table
+  // below is untouched: picking "Не была на курсе" in the Статус filter
+  // still lists those rows, same as before.
+  const PAYMENT_STATUSES = ["sPartial", "sPaid", "sCompleted"];
+  function hasPaymentStatus(m: Member) {
+    return matchingEnrollments(m).some((e) => PAYMENT_STATUSES.includes(e.status));
+  }
+
+  const statsFiltered = useMemo(() => {
+    if (productId === "all") return filtered;
+    return filtered.filter(hasPaymentStatus);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filtered, productId]);
+
   // "нужен виджет кол-во участниц на выбранный курс, поток" (Anastasiia,
   // 11 сен 2026) — a plain-language readout of how many rows the current
   // course/stream filters actually match, since counting table rows by eye
@@ -125,13 +148,13 @@ export default function MembersBoard({
   const countLabel = useMemo(() => {
     const courseName = productId !== "all" ? productOptions.find((p) => p.id === productId)?.name ?? "" : "";
     if (productId !== "all" && startDate !== "all") {
-      return t("countInStream", { course: courseName, date: startDate, count: String(filtered.length) });
+      return t("countInStream", { course: courseName, date: startDate, count: String(statsFiltered.length) });
     }
     if (productId !== "all") {
-      return t("countInCourse", { course: courseName, count: String(filtered.length) });
+      return t("countInCourse", { course: courseName, count: String(statsFiltered.length) });
     }
     return t("countTotalMembers", { count: String(filtered.length) });
-  }, [productId, startDate, filtered.length, productOptions, t]);
+  }, [productId, startDate, statsFiltered.length, filtered.length, productOptions, t]);
 
   // "сверху писать сколько чел. столько оплачено, какая итого сумма"
   // (Anastasiia, 13 сен 2026) — once a specific course is selected, add the
@@ -140,12 +163,13 @@ export default function MembersBoard({
   // sCompleted — a finished course was paid for first), and the real money
   // collected from them. Deliberately scoped to the SAME matching
   // enrollment as the table rows below (see matchingEnrollments), not the
-  // member's whole history, for the same reason as that fix.
+  // member's whole history, for the same reason as that fix. Base set is
+  // statsFiltered (see above) so sNoShow/sAwaiting rows don't count here either.
   const streamStats = useMemo(() => {
     if (productId === "all") return null;
     let paidCount = 0;
     let totalSum = 0;
-    filtered.forEach((m) => {
+    statsFiltered.forEach((m) => {
       const paidEnrollments = matchingEnrollments(m).filter(
         (e) => e.status === "sPaid" || e.status === "sCompleted"
       );
@@ -154,7 +178,7 @@ export default function MembersBoard({
     });
     return { paidCount, totalSum };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filtered, productId, startDate, status]);
+  }, [statsFiltered, productId, startDate, status]);
 
   const selected = initialMembers.find((m) => m.id === selectedId) ?? null;
 
@@ -240,7 +264,7 @@ export default function MembersBoard({
         <p className="text-sm font-medium text-ink-2">{countLabel}</p>
         {streamStats && (
           <p className="text-sm text-muted">
-            {t("streamPaidCount", { paid: String(streamStats.paidCount), total: String(filtered.length) })}
+            {t("streamPaidCount", { paid: String(streamStats.paidCount), total: String(statsFiltered.length) })}
             {" · "}
             {t("streamTotalSum")}: <Money amountEur={streamStats.totalSum} />
           </p>
