@@ -371,10 +371,15 @@ export default function PaymentsBoard({
                           <Avatar name={row.payment.member_name ?? row.payment.lead_name ?? "?"} size={28} />
                           <div className="min-w-0">
                             <div className="font-medium text-foreground">
-                              {row.payment.member_name ?? row.payment.lead_name ?? "—"}
+                              {row.payment.member_name ??
+                                row.payment.lead_name ??
+                                (row.payment.dsk_order_id ? t("paymentDskOnline") : "—")}
                             </div>
                             {!row.payment.member_name && row.payment.lead_name && (
                               <div className="text-xs text-muted">{t("paymentFromLeadOnly")}</div>
+                            )}
+                            {!row.payment.member_name && !row.payment.lead_name && row.payment.dsk_order_id && (
+                              <div className="text-xs text-warn">{t("paymentDskUnlinked")}</div>
                             )}
                           </div>
                         </div>
@@ -417,7 +422,9 @@ export default function PaymentsBoard({
         <EditPaymentModal
           key={selected.id}
           payment={selected}
-          enrollmentOptions={memberOptions.filter((m) => m.enrollmentId && m.memberId === selected.member_id)}
+          enrollmentOptions={memberOptions.filter(
+            (m) => m.enrollmentId && (!selected.member_id || m.memberId === selected.member_id)
+          )}
           canEdit={canEdit}
           onClose={() => setSelectedId(null)}
         />

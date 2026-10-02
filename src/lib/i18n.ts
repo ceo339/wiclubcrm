@@ -823,6 +823,9 @@ export const DICT: Record<string, Entry> = {
 
   // ---- edit payment modal ----
   fallbackPaymentTitle: { ru: "Оплата", bg: "Плащане" },
+  paymentDskOnline: { ru: "Онлайн-оплата DSK", bg: "Онлайн плащане DSK" },
+  paymentDskUnlinked: { ru: "не привязана к участнице — откройте и выберите поток", bg: "не е свързано с участничка — отворете и изберете поток" },
+  paymentDskLinkHint: { ru: "Пришла из банка автоматически. Выберите участницу и поток ниже.", bg: "Дойде автоматично от банката. Изберете участничка и поток по-долу." },
   paymentFromLeadOnly: { ru: "из лида, ещё не участница", bg: "от запитване, все още не е участничка" },
 
   // ---- payment link modal ----

@@ -49,7 +49,12 @@ export default function EditPaymentModal({
         className="w-full max-w-sm rounded-2xl border border-border bg-background p-6 shadow-lg"
         onClick={(e) => e.stopPropagation()}
       >
-        <h3 className="text-base font-semibold text-foreground">{payment.member_name ?? payment.lead_name ?? t("fallbackPaymentTitle")}</h3>
+        <h3 className="text-base font-semibold text-foreground">
+          {payment.member_name ?? payment.lead_name ?? (payment.dsk_order_id ? t("paymentDskOnline") : t("fallbackPaymentTitle"))}
+        </h3>
+        {!payment.member_id && payment.dsk_order_id && (
+          <p className="mt-1 text-xs text-muted">{t("paymentDskLinkHint")}</p>
+        )}
         {payment.product_name && <p className="mt-1 text-sm text-muted">{payment.product_name}</p>}
 
         {canEdit ? (
@@ -62,7 +67,7 @@ export default function EditPaymentModal({
                 required
               />
 
-              {payment.member_id && enrollmentOptions.length > 0 && (
+              {enrollmentOptions.length > 0 && (
                 <label className="flex flex-col gap-1.5 text-sm">
                   <span className="font-medium text-ink-2">{t("fieldPaymentCohort")}</span>
                   <select
@@ -73,7 +78,7 @@ export default function EditPaymentModal({
                     <option value="">{t("optionNoCohortLinked")}</option>
                     {enrollmentOptions.map((o) => (
                       <option key={o.key} value={o.enrollmentId!}>
-                        {o.label.split(" — ").slice(1).join(" — ") || o.label}
+                        {payment.member_id ? o.label.split(" — ").slice(1).join(" — ") || o.label : o.label}
                       </option>
                     ))}
                   </select>

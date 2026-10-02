@@ -236,6 +236,7 @@ export async function updatePayment(paymentId: string, formData: FormData): Prom
     paid_date: string;
     enrollment_id?: string | null;
     product_id?: string | null;
+    member_id?: string;
     is_partial?: boolean;
   } = { amount, status, paid_date: paidDate };
   if (formData.has("is_partial_present")) patch.is_partial = formData.get("is_partial") === "on";
@@ -251,6 +252,9 @@ export async function updatePayment(paymentId: string, formData: FormData): Prom
       if (!e || (before.member_id && e.member_id !== before.member_id)) return { error: "errGeneric" };
       patch.enrollment_id = e.id;
       patch.product_id = e.product_id;
+      // Round 55: an online DSK payment arrives without a member — linking
+      // it to a поток assigns the member too.
+      if (!before.member_id) patch.member_id = e.member_id;
     } else {
       patch.enrollment_id = null;
     }

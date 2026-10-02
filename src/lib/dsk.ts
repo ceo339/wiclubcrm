@@ -57,3 +57,29 @@ export function verifyDskChecksum(params: URLSearchParams, secret: string): bool
 export function isDskCallbackPaid(params: URLSearchParams): boolean {
   return params.get("operation") === "deposited" && params.get("status") === "1";
 }
+
+export type DskOutcome = "paid" | "approved" | "declined" | "refunded" | "other";
+
+/**
+ * Round 55: classify a verified callback. `operation` is what happened
+ * (approved / deposited / declinedByTimeout / reversed / refunded),
+ * `status` 1 = success of that operation, 0 = failure. Still to be
+ * confirmed by the bank / a real test payment — integration_events keeps the
+ * raw params of every callback, so the mapping can be corrected later.
+ */
+export function dskOutcome(params: URLSearchParams): DskOutcome {
+  const op = (params.get("operation") ?? "").toLowerCase();
+  const ok = params.get("status") === "1";
+  if (op === "deposited" && ok) return "paid";
+  if ((op === "refunded" || op === "reversed") && ok) return "refunded";
+  if (op === "approved" && ok) return "approved";
+  if (op.startsWith("declined") || !ok) return "declined";
+  return "other";
+}
+
+/** Amount in EUR if the callback carries one (gateway sends minor units). */
+export function dskAmountEur(params: URLSearchParams): number | null {
+  const raw = params.get("amount") ?? params.get("depositAmount");
+  if (!raw || !/^\d+$/.test(raw)) return null;
+  return Number(raw) / 100;
+}
