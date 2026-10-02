@@ -681,7 +681,8 @@ export async function setMemberTaskDone(taskId: string, done: boolean): Promise<
 export async function addEnrollmentPayment(
   enrollmentId: string,
   amountEur: number,
-  paidDate: string | null
+  paidDate: string | null,
+  isPartial = true
 ): Promise<ActionResult> {
   const profile = await getCurrentProfile();
   if (!profile) return { error: "errNotAuthorized" };
@@ -706,10 +707,11 @@ export async function addEnrollmentPayment(
     amount: Math.round(amountEur * 100) / 100,
     status: "paid",
     paid_date: paidDate || todayIso(),
+    is_partial: isPartial,
   });
   if (error) return { error: error.message };
 
-  await recomputeEnrollmentStatus(supabase, e.id);
+  await recomputeEnrollmentStatus(supabase, e.id, { fullPayment: !isPartial });
   revalidatePath("/members");
   revalidatePath("/payments");
   revalidatePath("/attendance", "layout");

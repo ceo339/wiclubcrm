@@ -140,6 +140,7 @@ export async function createPayment(formData: FormData): Promise<ActionResult> {
 
   const status = normalizeStatus(String(formData.get("status") || ""));
   const paidDate = String(formData.get("paid_date") || "").trim() || todayIso();
+  const isPartial = formData.get("is_partial") === "on" || formData.get("is_partial") === "true";
 
   const supabase = await createClient();
   const resolved = await resolvePaymentTarget(supabase, profile.partner_id, target);
@@ -189,10 +190,13 @@ export async function createPayment(formData: FormData): Promise<ActionResult> {
     amount,
     status,
     paid_date: paidDate,
+    is_partial: isPartial,
   });
 
   if (error) return { error: error.message };
-  if (resolved.enrollmentId) await recomputeEnrollmentStatus(supabase, resolved.enrollmentId);
+  if (resolved.enrollmentId) {
+    await recomputeEnrollmentStatus(supabase, resolved.enrollmentId, { fullPayment: !isPartial && status === "paid" });
+  }
 
   revalidatePath("/payments");
   revalidatePath("/members");
@@ -226,8 +230,15 @@ export async function updatePayment(paymentId: string, formData: FormData): Prom
   // Round 53 — the payment's поток can be (re)chosen here too, e.g. a
   // payment that was recorded without one. Only this member's own
   // enrollments are accepted.
-  const patch: { amount: number; status: string; paid_date: string; enrollment_id?: string | null; product_id?: string | null } =
-    { amount, status, paid_date: paidDate };
+  const patch: {
+    amount: number;
+    status: string;
+    paid_date: string;
+    enrollment_id?: string | null;
+    product_id?: string | null;
+    is_partial?: boolean;
+  } = { amount, status, paid_date: paidDate };
+  if (formData.has("is_partial_present")) patch.is_partial = formData.get("is_partial") === "on";
   if (formData.has("enrollment_id")) {
     const enrollmentId = String(formData.get("enrollment_id") || "").trim() || null;
     if (enrollmentId) {

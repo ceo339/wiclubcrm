@@ -27,7 +27,6 @@ export type MemberStatus =
 
 export const STATUSES: { id: MemberStatus }[] = [
   { id: "sAwaiting" },
-  { id: "sPartial" },
   { id: "sPaid" },
   { id: "sCompleted" },
   { id: "sFailed" },

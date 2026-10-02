@@ -1046,6 +1046,7 @@ export type Database = {
           dsk_order_id: string | null
           enrollment_id: string | null
           id: string
+          is_partial: boolean
           lead_id: string | null
           member_id: string | null
           paid_date: string
@@ -1060,6 +1061,7 @@ export type Database = {
           dsk_order_id?: string | null
           enrollment_id?: string | null
           id?: string
+          is_partial?: boolean
           lead_id?: string | null
           member_id?: string | null
           paid_date?: string
@@ -1074,6 +1076,7 @@ export type Database = {
           dsk_order_id?: string | null
           enrollment_id?: string | null
           id?: string
+          is_partial?: boolean
           lead_id?: string | null
           member_id?: string | null
           paid_date?: string

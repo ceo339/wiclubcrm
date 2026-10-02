@@ -80,6 +80,12 @@ export default function EditPaymentModal({
                 </label>
               )}
 
+              <input type="hidden" name="is_partial_present" value="1" />
+              <label className="flex items-center gap-2 text-sm text-ink-2">
+                <input type="checkbox" name="is_partial" defaultChecked={!!payment.is_partial} className="h-4 w-4" />
+                {t("fieldIsPartial")}
+              </label>
+
               <label className="flex flex-col gap-1.5 text-sm">
                 <span className="font-medium text-ink-2">{t("colStatus")}</span>
                 <select

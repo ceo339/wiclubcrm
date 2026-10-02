@@ -163,6 +163,10 @@ export default function NewPaymentModal({
               <input type="hidden" name="amount" value={String(convertToEur(parseFloat(amount) || 0, currency, rates))} />
             </label>
 
+            <label className="flex items-center gap-2 text-sm text-ink-2">
+              <input type="checkbox" name="is_partial" className="h-4 w-4" />
+              {t("fieldIsPartial")}
+            </label>
             <label className="flex flex-col gap-1.5 text-sm">
               <span className="font-medium text-ink-2">{t("colStatus")}</span>
               <select name="status" defaultValue="paid" className={inputCls}>

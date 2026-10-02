@@ -399,6 +399,9 @@ function EnrollmentCard({
             <span className={`rounded-full px-2 py-0.5 font-medium ${statusPillClasses(enrollment.status)}`}>
               {statusLabel(enrollment.status, locale)}
             </span>
+            {enrollment.status === "sPaid" && price > 0 && remaining > 0.01 && (
+              <span className="rounded-full bg-warn-soft px-2 py-0.5 font-medium text-warn">{t("tagPartial")}</span>
+            )}
             {enrollment.start_date && <span>{enrollment.start_date}</span>}
             <span className="text-ink-2">
               <Money amountEur={enrollment.price} />
@@ -510,6 +513,7 @@ function TopUpForm({
   const { currency, rates } = useCurrency();
   const [amount, setAmount] = useState(String(roundMoney(convertFromEur(defaultEur, currency, rates), currency)));
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
+  const [partial, setPartial] = useState(false);
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
@@ -519,7 +523,8 @@ function TopUpForm({
       const res = await addEnrollmentPayment(
         enrollmentId,
         convertToEur(parseFloat(amount.replace(",", ".")) || 0, currency, rates),
-        date
+        date,
+        partial
       );
       if (res.error) setError(res.error);
       else onSaved();
@@ -540,6 +545,11 @@ function TopUpForm({
           <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className={smallInput} />
         </label>
       </div>
+      <label className="flex items-center gap-2 text-xs text-ink-2">
+        <input type="checkbox" checked={partial} onChange={(e) => setPartial(e.target.checked)} className="h-3.5 w-3.5" />
+        {t("fieldIsPartial")}
+      </label>
+      {!partial && <p className="text-xs text-muted">{t("hintNotPartial")}</p>}
       {error && <p className="text-xs text-accent-strong">{t(error)}</p>}
       <div className="flex justify-end gap-2">
         <button type="button" onClick={onCancel} className="rounded-lg border border-border px-3 py-1 text-xs font-medium text-ink-2 hover:bg-surface-2">

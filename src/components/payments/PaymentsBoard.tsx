@@ -350,6 +350,11 @@ export default function PaymentsBoard({
                         >
                           {statusLabel(row.payment.status ?? "paid", locale)}
                         </span>
+                        {row.payment.is_partial && (
+                          <span className="ml-1.5 rounded-full bg-warn-soft px-2 py-0.5 text-xs font-medium text-warn">
+                            {t("tagPartial")}
+                          </span>
+                        )}
                       </td>
                       <td className="px-4 py-3 text-muted">{row.payment.paid_date}</td>
                       <td className="px-4 py-3 text-right font-medium text-foreground">

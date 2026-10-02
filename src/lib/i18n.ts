@@ -119,7 +119,7 @@ export const DICT: Record<string, Entry> = {
   // ---- member statuses ----
   sAwaiting: { ru: "Записалась · не оплатила", bg: "Записана · не платила" },
   sPaid: { ru: "Оплачено", bg: "Платено" },
-  sPartial: { ru: "Частично оплачено", bg: "Частично платено" },
+  sPartial: { ru: "Оплачено частично", bg: "Платено частично" },
   sNoShow: { ru: "Не была на курсе", bg: "Не дойде на курса" },
   // Round 53 — partial payments, «Не была на курсе», поток in payments
   enrollPaidOf: { ru: "Оплачено", bg: "Платено" },
@@ -141,6 +141,9 @@ export const DICT: Record<string, Entry> = {
   optionNewCohort: { ru: "Новый поток…", bg: "Нов поток…" },
   labelRemainingShort: { ru: "остаток", bg: "остатък" },
   fieldCourse: { ru: "Курс", bg: "Курс" },
+  fieldIsPartial: { ru: "Частичная оплата", bg: "Частично плащане" },
+  tagPartial: { ru: "частично", bg: "частично" },
+  hintNotPartial: { ru: "Не частичная — цена потока станет равной сумме всех оплат.", bg: "Не е частично — цената на потока става равна на сумата на плащанията." },
   packageAssignedOf: { ru: "потоки: {n} из {total}", bg: "потоци: {n} от {total}" },
   sCompleted: { ru: "Завершила курс", bg: "Завърши курса" },
   sFailed: { ru: "Не прошло", bg: "Не се състоя" },

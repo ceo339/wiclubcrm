@@ -10,9 +10,11 @@ import { todayIso } from "@/lib/payments";
 // Now an enrollment has a full price (member_enrollments.price) and any
 // number of payments linked by enrollment_id; the card shows «оплачено X
 // из Y», and the status follows the money:
-//   sum = 0        → «Записалась · не оплатила» (sAwaiting)
-//   0 < sum < price → «Частично оплачено» (sPartial)
-//   sum ≥ price    → «Оплачено» (sPaid)
+//   sum = 0 → «Записалась · не оплатила» (sAwaiting)
+//   sum > 0 → «Оплачено» (sPaid), even if partial (Anastasiia, 2 Oct:
+//             «считается оплаченным даже при частичной оплате»); a payment
+//             is flagged partial by hand (payments.is_partial), and the card
+//             shows «оплачено X из Y · остаток Z».
 // Only those three statuses are ever recomputed — «Курс пройден», «Возврат»,
 // «Не была», «Отменила запись» are set by hand / by other flows and left
 // alone. Free courses (price 0) are never recomputed either.
@@ -27,23 +29,36 @@ export async function enrollmentPaidSum(db: Db, enrollmentId: string): Promise<n
   return (data ?? []).filter((p) => p.status === "paid").reduce((s, p) => s + Number(p.amount), 0);
 }
 
-export async function recomputeEnrollmentStatus(db: Db, enrollmentId: string): Promise<void> {
+export async function recomputeEnrollmentStatus(
+  db: Db,
+  enrollmentId: string,
+  opts: { fullPayment?: boolean } = {}
+): Promise<void> {
   const { data: e } = await db
     .from("member_enrollments")
     .select("id, status, price")
     .eq("id", enrollmentId)
     .maybeSingle();
-  if (!e || !MONEY_STATUSES.has(e.status) || Number(e.price) <= 0) return;
+  if (!e || !MONEY_STATUSES.has(e.status)) return;
 
   const sum = await enrollmentPaidSum(db, enrollmentId);
-  const price = Number(e.price);
-  const next = sum <= 0 ? "sAwaiting" : sum + 0.01 < price ? "sPartial" : "sPaid";
-  if (next !== e.status) {
-    await db
-      .from("member_enrollments")
-      .update({ status: next, paid: next === "sPaid" })
-      .eq("id", enrollmentId);
+  const patch: { status?: string; paid?: boolean; price?: number } = {};
+
+  // «Цена потока может быть разной» (2 Oct 2026): a payment NOT marked as
+  // partial means «this is what this поток costs for her» — the price
+  // follows what she actually paid. A partial one keeps the price, and the
+  // card shows the remainder.
+  if (opts.fullPayment && sum > 0 && Math.abs(sum - Number(e.price)) > 0.01) patch.price = Math.round(sum * 100) / 100;
+
+  // «Считается оплаченным даже при частичной оплате»: any money in → «Оплачено».
+  if (Number(e.price) > 0 || sum > 0) {
+    const next = sum > 0 ? "sPaid" : "sAwaiting";
+    if (next !== e.status) {
+      patch.status = next;
+      patch.paid = next === "sPaid";
+    }
   }
+  if (Object.keys(patch).length) await db.from("member_enrollments").update(patch).eq("id", enrollmentId);
 }
 
 /**
