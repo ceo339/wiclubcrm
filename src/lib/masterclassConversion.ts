@@ -80,7 +80,9 @@ export type MasterclassConversionResult = {
 // counting is kept only as a fallback for a МК поток with no participant
 // records at all.
 
-const ATTENDED_STATUSES = new Set(["sPaid", "sPartial", "sCompleted"]);
+// 2 Oct 2026: «Записалась · не оплатила» counts as attended too; only
+// «Не была на курсе» / cancelled / refunded / failed are excluded.
+const ATTENDED_STATUSES = new Set(["sAwaiting", "sPaid", "sPartial", "sCompleted"]);
 const BOUGHT_STATUSES = new Set(["sPaid", "sPartial", "sCompleted"]);
 
 export function computeMasterclassConversion({

@@ -130,7 +130,9 @@ export default function MembersBoard({
   // sAwaiting/sCancelled/sRefunded/sFailed) never inflate them. The table
   // below is untouched: picking "Не была на курсе" in the Статус filter
   // still lists those rows, same as before.
-  const PAYMENT_STATUSES = ["sPartial", "sPaid", "sCompleted"];
+  // 2 Oct 2026 (Anastasiia): «Записалась · не оплатила» counts too — only
+  // «Не была на курсе» / cancelled / refunded / failed are left out.
+  const PAYMENT_STATUSES = ["sAwaiting", "sPartial", "sPaid", "sCompleted"];
   function hasPaymentStatus(m: Member) {
     return matchingEnrollments(m).some((e) => PAYMENT_STATUSES.includes(e.status));
   }
