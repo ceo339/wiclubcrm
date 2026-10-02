@@ -77,7 +77,11 @@ export const FRANCHISE_STAGES: {
   { id: "fin_model_sent", labelKey: "fStageFinModelSent" },
   { id: "kristina_scheduled", labelKey: "fStageKristinaScheduled" },
   { id: "kristina_done", labelKey: "fStageKristinaDone" },
-  { id: "lyudmila_scheduled", labelKey: "fStageLyudmilaScheduled" },
+  // Round 54 (2 окт 2026 — "убери стадию встреча с людмилой"): the other
+  // half of this pair ("Встреча с Людмилой пройдена") was already retired
+  // in round 44; no candidate was sitting on this one either (checked in
+  // production before retiring).
+  { id: "lyudmila_scheduled", labelKey: "fStageLyudmilaScheduled", retired: true },
   { id: "lyudmila_done", labelKey: "fStageLyudmilaDone", retired: true },
   { id: "contract_sent", labelKey: "fStageContractSent" },
   { id: "contract_signed", labelKey: "fStageContractSigned" },
