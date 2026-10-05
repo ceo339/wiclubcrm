@@ -469,7 +469,16 @@ function EnrollmentCard({
 
       {canEdit && enrollment.status !== "sNoShow" && panel === "none" && (
         <div className="mt-2 flex flex-wrap gap-2">
-          {isOpenForMoney && price > 0 && remaining > 0.01 && (
+          {/* 5 окт 2026 — «отдельная кнопка доплата»: раньше кнопка
+              пряталась, как только enrollRemaining доходил до нуля, и для
+              уже полностью оплаченного потока (как СФ0: €66/€66) добавить
+              доплату сверху было нечем. Теперь кнопка есть всегда, пока по
+              этому потоку вообще идёт речь о деньгах (isOpenForMoney) —
+              включая уже завершённый курс (sCompleted), по той же логике,
+              что и кнопка "Не была на курсе" чуть выше. TopUpForm сама
+              подставляет remaining как defaultEur только как подсказку —
+              сумму можно вписать любую. */}
+          {(isOpenForMoney || enrollment.status === "sCompleted") && price > 0 && (
             <button
               type="button"
               onClick={() => setPanel("pay")}
