@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { duplicateKey, normalizeEmail, normalizePhone } from "@/lib/leads";
+import { BASE_CURRENCY, convertToEur, fetchRates, isCurrencyCode, roundMoney, type CurrencyCode } from "@/lib/currency";
 
 // Needs the Node runtime, same as the Stripe/Resend webhooks — this route
 // isn't Edge-safe (uses the full supabase-js admin client).
@@ -85,6 +86,17 @@ const COHORT_ALIASES = ["cohort", "cohort_date", "start_date", "поток", "д
 // same way as PRODUCT_ALIASES above — so "продукт передаётся точно" already
 // carries its price with it, with zero extra setup on the landing page.
 const PRICE_ALIASES = ["price", "цена", "value", "сумма", "amount"];
+
+// Round 57 — «нужно учитывать валюту из заявки» (bug report relayed via a
+// third-party integration tool, 5 окт 2026): a landing page selling in a
+// non-EUR currency (e.g. WiClub Batumi, lari) can send this one extra
+// hidden field alongside `price` so the raw number isn't silently treated
+// as EUR. Accepted values match CurrencyCode (lib/currency.ts) case-
+// insensitively: EUR, USD, GEL, UAH. Absent (the default, and the only
+// thing every existing landing page before this round ever sent) means
+// "price is already in EUR" — unchanged behaviour, zero setup needed for
+// a club that only ever sells in euros (e.g. WiClub Sofia).
+const CURRENCY_ALIASES = ["currency", "валюта", "валюта_продажи", "curr"];
 
 // Accepts the two formats a hidden landing-page field is realistically
 // filled in with by hand: the same "YYYY-MM-DD" that <input type="date">
@@ -273,11 +285,44 @@ export async function POST(request: Request, { params }: { params: Promise<{ key
   // Explicit price from the landing page's own hidden field wins (see
   // PRICE_ALIASES above); otherwise fall back to the matched course's own
   // price so a resolved product never leaves the lead's value at 0.
+  //
+  // Round 57 — currency-aware: `leads.value` is always EUR (same rule as
+  // every other money column in this app, see lib/currency.ts's
+  // BASE_CURRENCY), so an explicit price sent in another currency (see
+  // CURRENCY_ALIASES above) gets converted here — the same live-rate
+  // conversion MoneyAmountField already does client-side when someone
+  // types an amount in lari/dollars/hryvnia instead of euros. The raw
+  // number exactly as sent is kept in `value_local`/`local_currency` (the
+  // existing *_local pattern from payments/member_enrollments) so the lead
+  // always shows "130 ₾", not a rounded EUR-converted figure.
   const priceRaw = pick(fields, PRICE_ALIASES);
+  const currencyRaw = pick(fields, CURRENCY_ALIASES);
+  const currencyCode =
+    currencyRaw && isCurrencyCode(currencyRaw.toUpperCase()) ? (currencyRaw.toUpperCase() as CurrencyCode) : null;
+
   let value = 0;
+  let valueLocal: number | null = null;
+  let localCurrency: CurrencyCode | null = null;
+
   if (priceRaw) {
     const parsed = Number(priceRaw.replace(",", "."));
-    value = Number.isFinite(parsed) ? parsed : 0;
+    const rawAmount = Number.isFinite(parsed) ? parsed : 0;
+
+    if (currencyCode && currencyCode !== BASE_CURRENCY) {
+      const rates = await fetchRates();
+      if (rates) {
+        value = roundMoney(convertToEur(rawAmount, currencyCode, rates));
+      } else if (matchedProductPrice !== null) {
+        // Live rate fetch failed (network hiccup) — fall back to the
+        // course's own EUR catalog price rather than storing a raw
+        // non-EUR number as if it were EUR.
+        value = matchedProductPrice;
+      }
+      valueLocal = roundMoney(rawAmount, currencyCode);
+      localCurrency = currencyCode;
+    } else {
+      value = rawAmount; // EUR, explicit or default — unchanged from before round 57
+    }
   } else if (matchedProductPrice !== null) {
     value = matchedProductPrice;
   }
@@ -344,6 +389,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ key
     product_id: productId,
     cohort_start_date: cohortStartDate,
     value,
+    value_local: valueLocal,
+    local_currency: localCurrency,
   });
 
   if (error) return json({ ok: false, error: error.message }, 500);
