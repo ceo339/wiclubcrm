@@ -5,6 +5,7 @@ import { createPayment, type ActionResult } from "@/app/payments/actions";
 import { STATUSES, statusLabel, todayIso } from "@/lib/payments";
 import { convertFromEur, convertToEur, currencySymbol, roundMoney } from "@/lib/currency";
 import { useCurrency } from "@/components/currency/CurrencyProvider";
+import LocalAmountInputs from "@/components/currency/LocalAmountInputs";
 import { useLocale } from "@/components/i18n/LocaleProvider";
 import type { MemberOption } from "./types";
 
@@ -161,6 +162,7 @@ export default function NewPaymentModal({
                 className={inputCls}
               />
               <input type="hidden" name="amount" value={String(convertToEur(parseFloat(amount) || 0, currency, rates))} />
+              <LocalAmountInputs name="amount" value={amount} />
             </label>
 
             <label className="flex items-center gap-2 text-sm text-ink-2">

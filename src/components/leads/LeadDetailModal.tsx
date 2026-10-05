@@ -27,7 +27,7 @@ import {
   type StageId,
 } from "@/lib/leads";
 import { statusLabel } from "@/lib/members";
-import { convertFromEur, convertToEur, currencySymbol, roundMoney } from "@/lib/currency";
+import { convertFromEur, convertToEur, currencySymbol, roundMoney, localOf } from "@/lib/currency";
 import Money from "@/components/currency/Money";
 import MoneyAmountField from "@/components/currency/MoneyAmountField";
 import { useCurrency } from "@/components/currency/CurrencyProvider";
@@ -304,7 +304,7 @@ function ReadView({
           <>
             <dt className="text-muted">{t("colAmount")}</dt>
             <dd className="text-ink-2">
-              <Money amountEur={lead.value} />
+              <Money amountEur={lead.value} local={localOf((lead as { value_local?: unknown }).value_local, (lead as { local_currency?: unknown }).local_currency)} />
             </dd>
           </>
         ) : null}
@@ -593,6 +593,7 @@ function ConvertToMemberButton({
         productId: productId || null,
         cohortStartDate: cohortDate || null,
         price: convertToEur(Number(String(price).replace(",", ".")) || 0, currency, rates),
+        priceLocal: currency === "EUR" ? null : { local: Number(String(price).replace(",", ".")) || 0, currency },
       });
       if (res.error) setError(res.error);
       else {
@@ -976,7 +977,12 @@ function EditForm({
 
       <Field label={t("fieldBirthday")} name="birthday" type="date" defaultValue={lead.birthday ?? ""} />
       <Field label={t("fieldMessenger")} name="messenger" defaultValue={lead.messenger ?? ""} />
-      <MoneyAmountField label={t("fieldAmount")} name="value" defaultAmountEur={lead.value ?? 0} />
+      <MoneyAmountField label={t("fieldAmount")} name="value" defaultAmountEur={lead.value ?? 0}
+        defaultLocal={localOf(
+          (lead as { value_local?: unknown }).value_local,
+          (lead as { local_currency?: unknown }).local_currency
+        )}
+      />
 
       <label className="flex flex-col gap-1.5 text-sm">
         <span className="font-medium text-ink-2">{t("fieldNote")}</span>

@@ -25,9 +25,10 @@ import {
 } from "@/app/packages/actions";
 import { attendedArray, STATUSES, statusLabel, statusPillClasses } from "@/lib/members";
 import { DECLINE_REASONS, stageLabel } from "@/lib/leads";
-import { convertFromEur, convertToEur, currencySymbol, roundMoney } from "@/lib/currency";
+import { convertFromEur, convertToEur, currencySymbol, localOf, roundMoney, sumLocal } from "@/lib/currency";
 import Money from "@/components/currency/Money";
 import { useCurrency } from "@/components/currency/CurrencyProvider";
+import LocalAmountInputs from "@/components/currency/LocalAmountInputs";
 import { useLocale, useT } from "@/components/i18n/LocaleProvider";
 import SendEmailButton from "@/components/email/SendEmailButton";
 import type { Tables } from "@/types/database";
@@ -362,6 +363,15 @@ function EnrollmentCard({
   const price = Number(enrollment.price) || 0;
   const paidSum = enrollment.paid_sum ?? 0;
   const remaining = Math.max(0, price - paidSum);
+  // Round 56: the same three numbers in the club's own currency, exactly as typed.
+  const priceLocal = localOf(enrollment.price_local, enrollment.local_currency);
+  const paidLocal = sumLocal(
+    (enrollment.payments ?? []).filter((p) => p.status === "paid").map((p) => localOf(p.amount_local, p.local_currency))
+  );
+  const remainingLocal =
+    priceLocal && paidLocal && priceLocal.currency === paidLocal.currency
+      ? { amount: Math.max(0, Number(priceLocal.amount) - Number(paidLocal.amount)), currency: priceLocal.currency }
+      : null;
   const isOpenForMoney = ["sAwaiting", "sPartial", "sPaid"].includes(enrollment.status);
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -404,16 +414,16 @@ function EnrollmentCard({
             )}
             {enrollment.start_date && <span>{enrollment.start_date}</span>}
             <span className="text-ink-2">
-              <Money amountEur={enrollment.price} />
+              <Money amountEur={enrollment.price} local={priceLocal} />
             </span>
           </div>
           {price > 0 && paidSum > 0 && (
             <div className="mt-1 text-xs text-ink-2">
-              {t("enrollPaidOf")} <Money amountEur={paidSum} /> / <Money amountEur={price} />
+              {t("enrollPaidOf")} <Money amountEur={paidSum} local={paidLocal} /> / <Money amountEur={price} local={priceLocal} />
               {remaining > 0.01 && (
                 <span className="text-warn">
                   {" · "}
-                  {t("enrollRemaining")} <Money amountEur={remaining} />
+                  {t("enrollRemaining")} <Money amountEur={remaining} local={remainingLocal} />
                 </span>
               )}
             </div>
@@ -426,7 +436,7 @@ function EnrollmentCard({
                 <li key={p.id} className={p.status === "refunded" ? "line-through" : ""}>
                   {p.paid_date ? p.paid_date.split("-").reverse().join(".") : "—"}
                   {" · "}
-                  <Money amountEur={Number(p.amount)} />
+                  <Money amountEur={Number(p.amount)} local={localOf(p.amount_local, p.local_currency)} />
                   {p.is_partial ? ` · ${t("tagPartial")}` : ""}
                   {p.status === "pending" ? ` · ${t("payStatusPending").toLowerCase()}` : ""}
                 </li>
@@ -489,6 +499,7 @@ function EnrollmentCard({
         <TopUpForm
           enrollmentId={enrollment.id}
           defaultEur={remaining}
+          defaultLocal={remainingLocal}
           onCancel={() => setPanel("none")}
           onSaved={() => {
             setPanel("none");
@@ -522,17 +533,23 @@ const smallInput =
 function TopUpForm({
   enrollmentId,
   defaultEur,
+  defaultLocal,
   onCancel,
   onSaved,
 }: {
   enrollmentId: string;
   defaultEur: number;
+  defaultLocal?: { amount: number | null | undefined; currency: string | null | undefined } | null;
   onCancel: () => void;
   onSaved: () => void;
 }) {
   const t = useT();
   const { currency, rates } = useCurrency();
-  const [amount, setAmount] = useState(String(roundMoney(convertFromEur(defaultEur, currency, rates), currency)));
+  const [amount, setAmount] = useState(
+    defaultLocal && defaultLocal.amount !== null && defaultLocal.amount !== undefined && defaultLocal.currency === currency
+      ? String(Number(defaultLocal.amount))
+      : String(roundMoney(convertFromEur(defaultEur, currency, rates), currency))
+  );
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
   const [partial, setPartial] = useState(false);
   const [pending, startTransition] = useTransition();
@@ -545,7 +562,8 @@ function TopUpForm({
         enrollmentId,
         convertToEur(parseFloat(amount.replace(",", ".")) || 0, currency, rates),
         date,
-        partial
+        partial,
+        currency === "EUR" ? null : { local: parseFloat(amount.replace(",", ".")) || 0, currency }
       );
       if (res.error) setError(res.error);
       else onSaved();
@@ -832,6 +850,7 @@ function EnrollmentFieldset({
           name="price"
           value={String(convertToEur(parseFloat(price) || 0, currency, rates))}
         />
+        <LocalAmountInputs name="price" value={price} />
       </label>
     </>
   );
@@ -850,7 +869,11 @@ function EditEnrollmentForm({
   const { currency, rates } = useCurrency();
   const [status, setStatus] = useState(enrollment.status);
   const [startDate, setStartDate] = useState(enrollment.start_date ?? "");
-  const [price, setPrice] = useState(String(roundMoney(convertFromEur(enrollment.price, currency, rates), currency)));
+  const [price, setPrice] = useState(
+    enrollment.price_local !== null && enrollment.price_local !== undefined && enrollment.local_currency === currency
+      ? String(Number(enrollment.price_local))
+      : String(roundMoney(convertFromEur(enrollment.price, currency, rates), currency))
+  );
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
@@ -1121,7 +1144,7 @@ function PackageSaleCard({
             </span>
             <span>{pkg.paid_date}</span>
             <span className="text-ink-2">
-              <Money amountEur={pkg.total_price} />
+              <Money amountEur={pkg.total_price} local={localOf(pkg.total_price_local, pkg.local_currency)} />
             </span>
           </div>
         </div>
@@ -1147,7 +1170,7 @@ function PackageSaleCard({
                 <span className="flex items-center gap-2 text-muted">
                   <span>{t("packageItemAssignedOn", { date: item.start_date ?? "" })}</span>
                   <span className="text-ink-2">
-                    <Money amountEur={item.allocated_price ?? 0} />
+                    <Money amountEur={item.allocated_price ?? 0} local={localOf(item.allocated_price_local, item.local_currency)} />
                   </span>
                 </span>
               ) : canEdit ? (
@@ -1268,6 +1291,7 @@ function AssignPackageItemForm({
             name="allocated_price"
             value={String(convertToEur(parseFloat(price) || 0, currency, rates))}
           />
+          <LocalAmountInputs name="allocated_price" value={price} />
         </label>
       </div>
       {error && <p className="text-xs text-accent-strong">{t(error)}</p>}
@@ -1377,6 +1401,7 @@ function NewPackageSaleForm({
               name="total_price"
               value={String(convertToEur(parseFloat(totalPrice) || 0, currency, rates))}
             />
+            <LocalAmountInputs name="total_price" value={totalPrice} />
           </label>
           <label className="flex flex-col gap-1.5 text-sm">
             <span className="font-medium text-ink-2">{t("fieldPaidDate")}</span>

@@ -242,11 +242,11 @@ export default async function Home({
           .from("leads")
           .select("id, name, partner_id, stage, source, added_date, cohort_start_date, product_id, updated_at"),
         supabase.from("members").select("id, partner_id, lead_id, contact_id, created_at"),
-        supabase.from("member_enrollments").select("partner_id, member_id, product_id, created_at, start_date, status, price"),
+        supabase.from("member_enrollments").select("partner_id, member_id, product_id, created_at, start_date, status, price, price_local, local_currency"),
         supabase
           .from("payments")
           .select(
-            "partner_id, member_id, product_id, amount, status, paid_date, member_enrollments(start_date, created_at), leads(cohort_start_date, added_date)"
+            "partner_id, member_id, product_id, amount, amount_local, local_currency, status, paid_date, member_enrollments(start_date, created_at), leads(cohort_start_date, added_date)"
           ),
         supabase.from("products").select("id, name"),
         supabase.from("product_cohorts").select("partner_id, product_id, start_date"),
@@ -443,12 +443,12 @@ export default async function Home({
       supabase.from("members").select("id, lead_id, contact_id, created_at").eq("partner_id", partnerId),
       supabase
         .from("member_enrollments")
-        .select("member_id, product_id, created_at, start_date, status, price")
+        .select("member_id, product_id, created_at, start_date, status, price, price_local, local_currency")
         .eq("partner_id", partnerId),
       supabase
         .from("payments")
         .select(
-          "member_id, product_id, amount, status, paid_date, member_enrollments(start_date, created_at), leads(cohort_start_date, added_date)"
+          "member_id, product_id, amount, amount_local, local_currency, status, paid_date, member_enrollments(start_date, created_at), leads(cohort_start_date, added_date)"
         )
         .eq("partner_id", partnerId),
       supabase.from("products").select("id, name").eq("partner_id", partnerId),

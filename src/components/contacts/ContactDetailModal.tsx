@@ -6,6 +6,7 @@ import { STATUSES, statusLabel } from "@/lib/members";
 import { updateEnrollment } from "@/app/members/actions";
 import Money from "@/components/currency/Money";
 import MoneyAmountField from "@/components/currency/MoneyAmountField";
+import { localOf } from "@/lib/currency";
 import { useLocale, useT } from "@/components/i18n/LocaleProvider";
 import { addContactComment, getContactDetail, updateContact, type ContactDetail } from "@/app/contacts/actions";
 import { contactPaidTotal, type Contact, type ContactEnrollment } from "./types";
@@ -339,7 +340,7 @@ function ContactEnrollmentsList({
             </div>
             <div className="mt-1 flex items-center justify-between gap-2 text-xs text-muted">
               <span>{e.start_date ?? "—"}</span>
-              <span>{e.price ? <Money amountEur={e.price} /> : "—"}</span>
+              <span>{e.price ? <Money amountEur={e.price} local={localOf((e as { price_local?: unknown }).price_local, (e as { local_currency?: unknown }).local_currency)} /> : "—"}</span>
             </div>
             {canEdit && (
               <button
@@ -417,7 +418,12 @@ function EditEnrollmentForm({
             className="rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-accent focus:ring-1 focus:ring-accent"
           />
         </label>
-        <MoneyAmountField label={t("fieldAmount")} name="price" defaultAmountEur={enrollment.price ?? 0} />
+        <MoneyAmountField label={t("fieldAmount")} name="price" defaultAmountEur={enrollment.price ?? 0}
+        defaultLocal={localOf(
+          (enrollment as { price_local?: unknown }).price_local,
+          (enrollment as { local_currency?: unknown }).local_currency
+        )}
+      />
       </div>
       {error && <p className="mt-2 text-xs text-accent-strong">{t(error)}</p>}
       <div className="mt-3 flex justify-end gap-2">

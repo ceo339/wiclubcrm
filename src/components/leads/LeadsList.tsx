@@ -2,6 +2,7 @@
 
 import { stageLabel, sourceLabel, declineReasonLabel } from "@/lib/leads";
 import Money from "@/components/currency/Money";
+import { localOf } from "@/lib/currency";
 import { useLocale } from "@/components/i18n/LocaleProvider";
 import type { Lead } from "./types";
 
@@ -62,7 +63,7 @@ export default function LeadsList({
                   </div>
                 )}
               </td>
-              <td className="px-4 py-3 text-muted">{lead.value ? <Money amountEur={lead.value} /> : "—"}</td>
+              <td className="px-4 py-3 text-muted">{lead.value ? <Money amountEur={lead.value} local={localOf((lead as { value_local?: unknown }).value_local, (lead as { local_currency?: unknown }).local_currency)} /> : "—"}</td>
               <td className="px-4 py-3 text-muted">
                 {lead.phone || lead.email || "—"}
               </td>

@@ -6,6 +6,7 @@ import { currentMonthYear, STATUSES, statusLabel } from "@/lib/members";
 import { convertFromEur, convertToEur, currencySymbol, roundMoney } from "@/lib/currency";
 import Money from "@/components/currency/Money";
 import { useCurrency } from "@/components/currency/CurrencyProvider";
+import LocalAmountInputs from "@/components/currency/LocalAmountInputs";
 import { useLocale } from "@/components/i18n/LocaleProvider";
 import type { Tables } from "@/types/database";
 
@@ -197,6 +198,7 @@ export default function NewMemberModal({
                   name="price"
                   value={String(convertToEur(parseFloat(price) || 0, currency, rates))}
                 />
+                <LocalAmountInputs name="price" value={price} />
               </label>
             </>
           )}

@@ -1,5 +1,6 @@
 import type { createClient } from "@/lib/supabase/server";
 import { todayIso } from "@/lib/payments";
+import { sumLocalRows } from "./localMoney";
 
 // Round 53 (2 Oct 2026) — partial payments per поток.
 //
@@ -41,14 +42,31 @@ export async function recomputeEnrollmentStatus(
     .maybeSingle();
   if (!e || !MONEY_STATUSES.has(e.status)) return;
 
-  const sum = await enrollmentPaidSum(db, enrollmentId);
-  const patch: { status?: string; paid?: boolean; price?: number } = {};
+  const { data: pays } = await db
+    .from("payments")
+    .select("amount, status, amount_local, local_currency")
+    .eq("enrollment_id", enrollmentId);
+  const paid = (pays ?? []).filter((p) => p.status === "paid");
+  const sum = paid.reduce((s, p) => s + Number(p.amount), 0);
+  const patch: {
+    status?: string;
+    paid?: boolean;
+    price?: number;
+    price_local?: number | null;
+    local_currency?: string | null;
+  } = {};
 
   // «Цена потока может быть разной» (2 Oct 2026): a payment NOT marked as
   // partial means «this is what this поток costs for her» — the price
   // follows what she actually paid. A partial one keeps the price, and the
   // card shows the remainder.
-  if (opts.fullPayment && sum > 0 && Math.abs(sum - Number(e.price)) > 0.01) patch.price = Math.round(sum * 100) / 100;
+  if (opts.fullPayment && sum > 0 && Math.abs(sum - Number(e.price)) > 0.01) {
+    patch.price = Math.round(sum * 100) / 100;
+    // Round 56: and in the club's currency, the sum of what was typed.
+    const local = sumLocalRows(paid.map((p) => ({ local: p.amount_local, currency: p.local_currency })));
+    patch.price_local = local.local;
+    patch.local_currency = local.currency;
+  }
 
   // «Считается оплаченным даже при частичной оплате»: any money in → «Оплачено».
   if (Number(e.price) > 0 || sum > 0) {
@@ -60,7 +78,14 @@ export async function recomputeEnrollmentStatus(
   }
   if (Object.keys(patch).length) await db.from("member_enrollments").update(patch).eq("id", enrollmentId);
   if (patch.price !== undefined) {
-    await db.from("package_sale_items").update({ allocated_price: patch.price }).eq("enrollment_id", enrollmentId);
+    await db
+      .from("package_sale_items")
+      .update({
+        allocated_price: patch.price,
+        allocated_price_local: patch.price_local ?? null,
+        local_currency: patch.local_currency ?? null,
+      })
+      .eq("enrollment_id", enrollmentId);
   }
 }
 
@@ -84,9 +109,16 @@ export async function syncEnrollmentPaymentRows(
     productId: string | null;
     price: number;
     status: string;
+    /** Round 56: the price in the club's currency, if known. */
+    priceLocal?: number | null;
+    localCurrency?: string | null;
   }
 ): Promise<void> {
   const { partnerId, memberId, enrollmentId, productId, price, status } = params;
+  const local =
+    params.priceLocal !== null && params.priceLocal !== undefined && params.localCurrency
+      ? { amount_local: params.priceLocal, local_currency: params.localCurrency }
+      : { amount_local: null, local_currency: null };
   const { data: rows } = await db.from("payments").select("id, amount, status").eq("enrollment_id", enrollmentId);
   const payments = rows ?? [];
 
@@ -106,6 +138,7 @@ export async function syncEnrollmentPaymentRows(
       enrollment_id: enrollmentId,
       product_id: productId,
       amount: price,
+      ...local,
       status: "paid",
       paid_date: todayIso(),
     });
@@ -114,8 +147,8 @@ export async function syncEnrollmentPaymentRows(
 
   if (payments.length === 1) {
     const only = payments[0];
-    const patch: { amount?: number; status?: string } = {};
-    if (Number(only.amount) > price) patch.amount = price;
+    const patch: { amount?: number; status?: string; amount_local?: number | null; local_currency?: string | null } = {};
+    if (Number(only.amount) > price) Object.assign(patch, { amount: price, ...local });
     if (only.status !== "paid") patch.status = "paid";
     if (Object.keys(patch).length) await db.from("payments").update(patch).eq("id", only.id);
   }

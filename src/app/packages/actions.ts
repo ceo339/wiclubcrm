@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { readLocal } from "@/lib/server/localMoney";
 import { getCurrentProfile } from "@/lib/auth";
 import { todayIso } from "@/lib/payments";
 
@@ -34,6 +35,7 @@ export async function createPackageSale(memberId: string, formData: FormData): P
   if (!label) return { error: "errEnterPackageLabel" };
 
   const totalPrice = parseAmount(formData.get("total_price"));
+  const totalLocal = readLocal(formData, "total_price");
   const paidDate = String(formData.get("paid_date") || "").trim() || todayIso();
   const productIds = formData.getAll("product_id").map(String).filter(Boolean);
   if (productIds.length === 0) return { error: "errSelectPackageCourses" };
@@ -65,6 +67,8 @@ export async function createPackageSale(memberId: string, formData: FormData): P
       member_id: memberId,
       label,
       total_price: totalPrice,
+      total_price_local: totalLocal.local,
+      local_currency: totalLocal.currency,
       paid_date: paidDate,
     })
     .select("id")
@@ -109,6 +113,7 @@ export async function assignPackageItem(itemId: string, formData: FormData): Pro
   const startDate = String(formData.get("start_date") || "").trim();
   if (!startDate) return { error: "errEnterCohortStartDate" };
   const allocatedPrice = parseAmount(formData.get("allocated_price"));
+  const allocLocal = readLocal(formData, "allocated_price");
 
   const supabase = await createClient();
 
@@ -132,6 +137,8 @@ export async function assignPackageItem(itemId: string, formData: FormData): Pro
       product_id: item.product_id,
       start_date: startDate,
       price: allocatedPrice,
+      price_local: allocLocal.local,
+      local_currency: allocLocal.currency,
       status: "sPaid",
       paid: true,
       attended: [],
@@ -147,6 +154,8 @@ export async function assignPackageItem(itemId: string, formData: FormData): Pro
       enrollment_id: enrollment.id,
       product_id: item.product_id,
       amount: allocatedPrice,
+      amount_local: allocLocal.local,
+      local_currency: allocLocal.currency,
       status: "paid",
       paid_date: sale.paid_date,
       // 2 Oct 2026: marks this as a share of the package — counted as
@@ -159,7 +168,13 @@ export async function assignPackageItem(itemId: string, formData: FormData): Pro
 
   const { error: updateError } = await supabase
     .from("package_sale_items")
-    .update({ start_date: startDate, allocated_price: allocatedPrice, enrollment_id: enrollment.id })
+    .update({
+      start_date: startDate,
+      allocated_price: allocatedPrice,
+      allocated_price_local: allocLocal.local,
+      local_currency: allocLocal.currency,
+      enrollment_id: enrollment.id,
+    })
     .eq("id", itemId);
   if (updateError) return { error: updateError.message };
 
@@ -205,6 +220,8 @@ export type PackageSaleItemDetail = {
   product_id: string | null;
   product_name: string | null;
   allocated_price: number | null;
+  allocated_price_local: number | null;
+  local_currency: string | null;
   start_date: string | null;
   enrollment_id: string | null;
 };
@@ -213,6 +230,8 @@ export type PackageSaleDetail = {
   id: string;
   label: string;
   total_price: number;
+  total_price_local: number | null;
+  local_currency: string | null;
   paid_date: string;
   items: PackageSaleItemDetail[];
 };
@@ -226,7 +245,7 @@ export async function getPackageSalesForMember(memberId: string): Promise<Packag
   const supabase = await createClient();
   const { data } = await supabase
     .from("package_sales")
-    .select("id, label, total_price, paid_date, package_sale_items(id, product_id, allocated_price, start_date, enrollment_id, products(name))")
+    .select("id, label, total_price, total_price_local, local_currency, paid_date, package_sale_items(id, product_id, allocated_price, allocated_price_local, local_currency, start_date, enrollment_id, products(name))")
     .eq("member_id", memberId)
     .order("created_at", { ascending: false });
 
@@ -234,6 +253,8 @@ export async function getPackageSalesForMember(memberId: string): Promise<Packag
     id: sale.id,
     label: sale.label,
     total_price: sale.total_price,
+    total_price_local: sale.total_price_local,
+    local_currency: sale.local_currency,
     paid_date: sale.paid_date,
     items: (
       (sale as unknown as {
@@ -241,6 +262,8 @@ export async function getPackageSalesForMember(memberId: string): Promise<Packag
           id: string;
           product_id: string | null;
           allocated_price: number | null;
+          allocated_price_local: number | null;
+          local_currency: string | null;
           start_date: string | null;
           enrollment_id: string | null;
           products: { name: string } | null;
@@ -251,6 +274,8 @@ export async function getPackageSalesForMember(memberId: string): Promise<Packag
       product_id: item.product_id,
       product_name: item.products?.name ?? null,
       allocated_price: item.allocated_price,
+      allocated_price_local: item.allocated_price_local,
+      local_currency: item.local_currency,
       start_date: item.start_date,
       enrollment_id: item.enrollment_id,
     })),
@@ -277,7 +302,7 @@ export async function getPackageSalesForPayments(scopePartnerId: string | null):
   let query = supabase
     .from("package_sales")
     .select(
-      "id, label, total_price, paid_date, members(name), partners(name), package_sale_items(id, product_id, allocated_price, start_date, enrollment_id, products(name))"
+      "id, label, total_price, total_price_local, local_currency, paid_date, members(name), partners(name), package_sale_items(id, product_id, allocated_price, allocated_price_local, local_currency, start_date, enrollment_id, products(name))"
     )
     .order("paid_date", { ascending: false });
   if (scopePartnerId) query = query.eq("partner_id", scopePartnerId);
@@ -287,6 +312,8 @@ export async function getPackageSalesForPayments(scopePartnerId: string | null):
     id: sale.id,
     label: sale.label,
     total_price: sale.total_price,
+    total_price_local: sale.total_price_local,
+    local_currency: sale.local_currency,
     paid_date: sale.paid_date,
     member_name: (sale as { members?: { name: string } | null }).members?.name ?? null,
     partner_name: (sale as { partners?: { name: string } | null }).partners?.name ?? null,
@@ -296,6 +323,8 @@ export async function getPackageSalesForPayments(scopePartnerId: string | null):
           id: string;
           product_id: string | null;
           allocated_price: number | null;
+          allocated_price_local: number | null;
+          local_currency: string | null;
           start_date: string | null;
           enrollment_id: string | null;
           products: { name: string } | null;
@@ -306,6 +335,8 @@ export async function getPackageSalesForPayments(scopePartnerId: string | null):
       product_id: item.product_id,
       product_name: item.products?.name ?? null,
       allocated_price: item.allocated_price,
+      allocated_price_local: item.allocated_price_local,
+      local_currency: item.local_currency,
       start_date: item.start_date,
       enrollment_id: item.enrollment_id,
     })),

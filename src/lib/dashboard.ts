@@ -1,4 +1,5 @@
 import { ROYALTY_PERCENT } from "@/lib/royalty";
+import { localOf, sumLocal, type LocalAmount } from "@/lib/currency";
 import { STAGES } from "@/lib/leads";
 import { t, type Locale } from "@/lib/i18n";
 
@@ -392,10 +393,10 @@ export function computeSourceConversion(leads: { source: string | null; stage: s
 }
 
 export type CoreMetrics = {
-  revenue: { amount: number; delta: number | null };
+  revenue: { amount: number; delta: number | null; local?: LocalAmount | null };
   membersAdded: number;
   conversion: { value: number | null; previous: number | null };
-  royalty: { amount: number; percent: number };
+  royalty: { amount: number; percent: number; local?: LocalAmount | null };
   funnel: FunnelStage[];
   declinedCount: number;
   sourceConversion: SourceConversion[];
@@ -415,13 +416,20 @@ export function computeCoreMetrics({
 }: {
   leads: { stage: string; added_date: string; cohort_start_date: string | null; source: string | null }[];
   enrollments: { start_date: string | null; created_at: string }[];
-  payments: (PaymentContext & { amount: number; status: string | null })[];
+  payments: (PaymentContext & {
+    amount: number;
+    status: string | null;
+    amount_local?: number | null;
+    local_currency?: string | null;
+  })[];
   period: Period;
 }): CoreMetrics {
   const paid = payments.filter((p) => p.status === "paid");
-  const revenue = paid
-    .filter((p) => inPeriod(period, paymentAttributionDate(p)))
-    .reduce((s, p) => s + Number(p.amount), 0);
+  const paidInPeriod = paid.filter((p) => inPeriod(period, paymentAttributionDate(p)));
+  const revenue = paidInPeriod.reduce((s, p) => s + Number(p.amount), 0);
+  // Round 56: the same total in the club's own currency, exactly as typed —
+  // null for a mix of clubs/currencies (the EUR total is converted then).
+  const revenueLocal = sumLocal(paidInPeriod.map((p) => localOf(p.amount_local, p.local_currency)));
   const revenuePrevious = paid
     .filter((p) => inPreviousMonth(period, paymentAttributionDate(p)))
     .reduce((s, p) => s + Number(p.amount), 0);
@@ -448,10 +456,20 @@ export function computeCoreMetrics({
   const royaltyAmount = Math.round((revenue * ROYALTY_PERCENT) / 100);
 
   return {
-    revenue: { amount: revenue, delta: period.mode === "month" ? pctChange(revenue, revenuePrevious) : null },
+    revenue: {
+      amount: revenue,
+      delta: period.mode === "month" ? pctChange(revenue, revenuePrevious) : null,
+      local: revenueLocal,
+    },
     membersAdded,
     conversion: { value: conversion, previous: conversionPrevious },
-    royalty: { amount: royaltyAmount, percent: ROYALTY_PERCENT },
+    royalty: {
+      amount: royaltyAmount,
+      percent: ROYALTY_PERCENT,
+      local: revenueLocal
+        ? { amount: Math.round((Number(revenueLocal.amount) * ROYALTY_PERCENT) / 100), currency: revenueLocal.currency }
+        : null,
+    },
     funnel: computeFunnel(leadsInPeriod),
     declinedCount: leadsInPeriod.filter((l) => l.stage === "declined").length,
     sourceConversion: computeSourceConversion(leadsInPeriod),
@@ -565,6 +583,8 @@ export type UpcomingCohort = {
   /** EUR, like every other revenue figure on this page — render through
    * <Money amountEur=.../> for the currently selected display currency. */
   revenue: number;
+  /** Round 56: revenue in the club's own currency, exactly as typed. */
+  revenueLocal?: LocalAmount | null;
   /** Only set when this list spans more than one club (the network-wide
    * Главная) — omitted for a single club's own dashboard, where every row
    * is obviously that same club's. */
@@ -588,7 +608,15 @@ export function upcomingCohorts({
   now = new Date(),
 }: {
   cohorts: { product_id: string; start_date: string; partner_id?: string }[];
-  enrollments: { product_id: string | null; start_date: string | null; status: string; price: number; partner_id?: string }[];
+  enrollments: {
+    product_id: string | null;
+    start_date: string | null;
+    status: string;
+    price: number;
+    partner_id?: string;
+    price_local?: number | null;
+    local_currency?: string | null;
+  }[];
   productNamesById: Map<string, string>;
   /** Pass only for a multi-club (network-wide) list — adds `partnerName` to
    * each row and scopes the enrollment match to the same club as the
@@ -622,6 +650,7 @@ export function upcomingCohorts({
         enrolledCount: matching.length,
         paidCount: paid.length,
         revenue: paid.reduce((sum, e) => sum + Number(e.price), 0),
+        revenueLocal: sumLocal(paid.map((e) => localOf(e.price_local, e.local_currency))),
         partnerName: partnerNamesById ? partnerNamesById.get(c.partner_id ?? "") : undefined,
       };
     })

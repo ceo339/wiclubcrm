@@ -5,6 +5,7 @@ import { STAGES, declineReasonLabel, sourceColor, sourceLabel, type StageId } fr
 import { assignLeadProduct, updateLeadStage } from "@/app/leads/actions";
 import { computeFunnel, STALE_LEAD_DAYS } from "@/lib/dashboard";
 import Money from "@/components/currency/Money";
+import { localOf, sumLocal } from "@/lib/currency";
 import { useLocale } from "@/components/i18n/LocaleProvider";
 import type { Tables } from "@/types/database";
 import type { Lead } from "./types";
@@ -118,6 +119,7 @@ export default function KanbanBoard({
         {STAGES.map((stage) => {
           const stageLeads = items.filter((l) => l.stage === stage.id);
           const stageValue = stageLeads.reduce((sum, l) => sum + (l.value ?? 0), 0);
+          const stageValueLocal = sumLocal(stageLeads.map((l) => localOf((l as { value_local?: unknown }).value_local, (l as { local_currency?: unknown }).local_currency)));
           const pctReached = funnelByStage.get(stage.id)?.pctFromFirst ?? null;
           return (
             <div
@@ -141,7 +143,7 @@ export default function KanbanBoard({
                 </span>
                 {stageValue > 0 && (
                   <span className="ml-auto text-xs font-medium text-muted">
-                    <Money amountEur={stageValue} />
+                    <Money amountEur={stageValue} local={stageValueLocal} />
                   </span>
                 )}
               </div>
@@ -161,7 +163,7 @@ export default function KanbanBoard({
                       <div className="flex items-center justify-between gap-2">
                         <span className="truncate font-medium text-foreground">{lead.name}</span>
                         <span className="shrink-0 font-semibold text-foreground">
-                          {lead.value ? <Money amountEur={lead.value} /> : "—"}
+                          {lead.value ? <Money amountEur={lead.value} local={localOf((lead as { value_local?: unknown }).value_local, (lead as { local_currency?: unknown }).local_currency)} /> : "—"}
                         </span>
                       </div>
                       <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted">

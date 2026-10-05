@@ -5,6 +5,7 @@ import { addCohort, deleteCohort, deleteProduct, rescheduleCohort, updateProduct
 import { todayIso } from "@/lib/payments";
 import Money from "@/components/currency/Money";
 import MoneyAmountField from "@/components/currency/MoneyAmountField";
+import { localOf } from "@/lib/currency";
 import { useT } from "@/components/i18n/LocaleProvider";
 import type { Cohort, Product } from "./types";
 import NewProductModal from "./NewProductModal";
@@ -155,7 +156,7 @@ function ProductCard({
           <div>
             <div className="font-medium text-foreground">{product.name}</div>
             <div className="mt-0.5 text-xs text-muted">
-              <Money amountEur={product.price} />
+              <Money amountEur={product.price} local={localOf(product.price_local, product.local_currency)} />
               {product.sessions ? ` · ${t("sessionsSuffix", { n: product.sessions })}` : ""}
               {showPartner && product.partner_name ? ` · ${product.partner_name}` : ""}
             </div>
@@ -318,7 +319,12 @@ function EditProductForm({
         />
       </label>
 
-      <MoneyAmountField label={t("fieldPrice")} name="price" defaultAmountEur={product.price} required />
+      <MoneyAmountField label={t("fieldPrice")} name="price" defaultAmountEur={product.price} required
+        defaultLocal={localOf(
+          (product as { price_local?: unknown }).price_local,
+          (product as { local_currency?: unknown }).local_currency
+        )}
+      />
 
       <label className="flex flex-col gap-1.5 text-sm">
         <span className="font-medium text-ink-2">{t("fieldSessionsOptional")}</span>

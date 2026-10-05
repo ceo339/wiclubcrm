@@ -7,6 +7,7 @@ import { HIGH_VALUE_THRESHOLD, SOURCES, sourceColor, sourceLabel } from "@/lib/l
 import { STALE_LEAD_DAYS, currentMonthKey, monthKeyOf } from "@/lib/dashboard";
 import { useLocale } from "@/components/i18n/LocaleProvider";
 import Money from "@/components/currency/Money";
+import { localOf, sumLocal } from "@/lib/currency";
 import type { Tables } from "@/types/database";
 import type { Lead } from "./types";
 import KanbanBoard from "./KanbanBoard";
@@ -137,6 +138,7 @@ export default function LeadsBoard({
     [periodLeads]
   );
   const pipelineValue = pipelineLeads.reduce((sum, l) => sum + (l.value ?? 0), 0);
+  const pipelineValueLocal = sumLocal(pipelineLeads.map((l) => localOf((l as { value_local?: unknown }).value_local, (l as { local_currency?: unknown }).local_currency)));
   const newThisWeekCount = periodLeads.filter((l) => daysSince(l.added_date, now) <= 7).length;
 
   const sourceRows = SOURCES.map((s) => ({
@@ -236,7 +238,7 @@ export default function LeadsBoard({
         <LeadStat label={t("statLeadsPipeline")} value={String(pipelineLeads.length)} caption={t("deltaLeadsPipeline")} />
         <LeadStat
           label={t("statPipelineValue")}
-          value={<Money amountEur={pipelineValue} />}
+          value={<Money amountEur={pipelineValue} local={pipelineValueLocal} />}
           caption={t("deltaPipelineValue")}
         />
         <LeadStat label={t("statNewThisWeek")} value={String(newThisWeekCount)} caption={t("deltaNewThisWeek")} />

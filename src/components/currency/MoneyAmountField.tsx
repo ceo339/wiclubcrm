@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { convertFromEur, convertToEur, currencySymbol, roundMoney } from "@/lib/currency";
+import { BASE_CURRENCY, convertFromEur, convertToEur, currencySymbol, roundMoney, type LocalAmount } from "@/lib/currency";
 import { useCurrency } from "./CurrencyProvider";
 
 /**
@@ -24,27 +24,33 @@ export default function MoneyAmountField({
   name,
   label,
   defaultAmountEur,
+  defaultLocal,
   required,
 }: {
   name: string;
   label: string;
   defaultAmountEur: number;
+  /** Round 56: the stored amount in the club's own currency — shown as-is
+   * when the screen is in that currency (35 stays 35, never 34.99). */
+  defaultLocal?: LocalAmount | null;
   required?: boolean;
 }) {
   const { currency, rates } = useCurrency();
-  const [display, setDisplay] = useState(() =>
-    String(roundMoney(convertFromEur(defaultAmountEur, currency, rates), currency))
-  );
+  const initial = (): string =>
+    defaultLocal && defaultLocal.amount !== null && defaultLocal.amount !== undefined && defaultLocal.currency === currency
+      ? String(Number(defaultLocal.amount))
+      : String(roundMoney(convertFromEur(defaultAmountEur, currency, rates), currency));
+  const [display, setDisplay] = useState(initial);
   // Once the person starts typing, live rate updates (or a currency switch
   // mid-edit) must never clobber what they're mid-way through entering.
   const touched = useRef(false);
 
   useEffect(() => {
     if (touched.current) return;
-    setDisplay(String(roundMoney(convertFromEur(defaultAmountEur, currency, rates), currency)));
+    setDisplay(initial());
     // Only re-sync when the conversion inputs change, not on every keystroke.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [rates, currency, defaultAmountEur]);
+  }, [rates, currency, defaultAmountEur, defaultLocal?.amount, defaultLocal?.currency]);
 
   const eurValue = convertToEur(parseFloat(display) || 0, currency, rates);
 
@@ -66,6 +72,13 @@ export default function MoneyAmountField({
         className="rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-accent focus:ring-1 focus:ring-accent"
       />
       <input type="hidden" name={name} value={String(eurValue)} />
+      {/* Round 56: the typed amount itself, in its own currency (see lib/server/localMoney). */}
+      {currency !== BASE_CURRENCY && (
+        <>
+          <input type="hidden" name={`${name}_local`} value={display} />
+          <input type="hidden" name={`${name}_local_currency`} value={currency} />
+        </>
+      )}
     </label>
   );
 }

@@ -655,6 +655,8 @@ export type Database = {
       }
       leads: {
         Row: {
+          local_currency: string | null
+          value_local: number | null
           added_date: string
           age: number
           birthday: string | null
@@ -686,6 +688,8 @@ export type Database = {
           value: number
         }
         Insert: {
+          local_currency?: string | null
+          value_local?: number | null
           added_date?: string
           age?: number
           birthday?: string | null
@@ -717,6 +721,8 @@ export type Database = {
           value?: number
         }
         Update: {
+          local_currency?: string | null
+          value_local?: number | null
           added_date?: string
           age?: number
           birthday?: string | null
@@ -773,6 +779,8 @@ export type Database = {
       }
       member_enrollments: {
         Row: {
+          local_currency: string | null
+          price_local: number | null
           attended: Json
           created_at: string
           id: string
@@ -786,6 +794,8 @@ export type Database = {
           status: string
         }
         Insert: {
+          local_currency?: string | null
+          price_local?: number | null
           attended?: Json
           created_at?: string
           id?: string
@@ -799,6 +809,8 @@ export type Database = {
           status?: string
         }
         Update: {
+          local_currency?: string | null
+          price_local?: number | null
           attended?: Json
           created_at?: string
           id?: string
@@ -904,6 +916,8 @@ export type Database = {
       }
       package_sale_items: {
         Row: {
+          local_currency: string | null
+          allocated_price_local: number | null
           allocated_price: number | null
           created_at: string
           enrollment_id: string | null
@@ -914,6 +928,8 @@ export type Database = {
           start_date: string | null
         }
         Insert: {
+          local_currency?: string | null
+          allocated_price_local?: number | null
           allocated_price?: number | null
           created_at?: string
           enrollment_id?: string | null
@@ -924,6 +940,8 @@ export type Database = {
           start_date?: string | null
         }
         Update: {
+          local_currency?: string | null
+          allocated_price_local?: number | null
           allocated_price?: number | null
           created_at?: string
           enrollment_id?: string | null
@@ -966,6 +984,8 @@ export type Database = {
       }
       package_sales: {
         Row: {
+          local_currency: string | null
+          total_price_local: number | null
           created_at: string
           id: string
           label: string
@@ -975,6 +995,8 @@ export type Database = {
           total_price: number
         }
         Insert: {
+          local_currency?: string | null
+          total_price_local?: number | null
           created_at?: string
           id?: string
           label: string
@@ -984,6 +1006,8 @@ export type Database = {
           total_price?: number
         }
         Update: {
+          local_currency?: string | null
+          total_price_local?: number | null
           created_at?: string
           id?: string
           label?: string
@@ -1041,6 +1065,8 @@ export type Database = {
       }
       payments: {
         Row: {
+          local_currency: string | null
+          amount_local: number | null
           amount: number
           created_at: string
           dsk_order_id: string | null
@@ -1057,6 +1083,8 @@ export type Database = {
           stripe_checkout_session_id: string | null
         }
         Insert: {
+          local_currency?: string | null
+          amount_local?: number | null
           amount: number
           created_at?: string
           dsk_order_id?: string | null
@@ -1073,6 +1101,8 @@ export type Database = {
           stripe_checkout_session_id?: string | null
         }
         Update: {
+          local_currency?: string | null
+          amount_local?: number | null
           amount?: number
           created_at?: string
           dsk_order_id?: string | null
@@ -1164,6 +1194,8 @@ export type Database = {
       }
       products: {
         Row: {
+          local_currency: string | null
+          price_local: number | null
           created_at: string
           id: string
           name: string
@@ -1172,6 +1204,8 @@ export type Database = {
           sessions: number | null
         }
         Insert: {
+          local_currency?: string | null
+          price_local?: number | null
           created_at?: string
           id?: string
           name: string
@@ -1180,6 +1214,8 @@ export type Database = {
           sessions?: number | null
         }
         Update: {
+          local_currency?: string | null
+          price_local?: number | null
           created_at?: string
           id?: string
           name?: string

@@ -8,6 +8,7 @@ import { getStripeClient } from "@/lib/stripe";
 import { STATUSES, todayIso } from "@/lib/payments";
 import { findOrCreateContact } from "@/lib/server/contacts";
 import { recomputeEnrollmentStatus } from "@/lib/server/enrollmentPayments";
+import { readLocal } from "@/lib/server/localMoney";
 
 export type ActionResult = { error: string | null };
 export type PaymentLinkResult = { error: string | null; url?: string };
@@ -141,6 +142,7 @@ export async function createPayment(formData: FormData): Promise<ActionResult> {
   const status = normalizeStatus(String(formData.get("status") || ""));
   const paidDate = String(formData.get("paid_date") || "").trim() || todayIso();
   const isPartial = formData.get("is_partial") === "on" || formData.get("is_partial") === "true";
+  const local = readLocal(formData, "amount");
 
   const supabase = await createClient();
   const resolved = await resolvePaymentTarget(supabase, profile.partner_id, target);
@@ -155,7 +157,7 @@ export async function createPayment(formData: FormData): Promise<ActionResult> {
     const newStart = String(formData.get("new_start_date") || "").trim() || null;
     const { data: product } = await supabase
       .from("products")
-      .select("id, price")
+      .select("id, price, price_local, local_currency")
       .eq("id", newProductId)
       .eq("partner_id", profile.partner_id)
       .maybeSingle();
@@ -168,6 +170,9 @@ export async function createPayment(formData: FormData): Promise<ActionResult> {
         product_id: product.id,
         start_date: newStart,
         price: Number(product.price) || amount,
+        ...(Number(product.price)
+          ? { price_local: product.price_local, local_currency: product.local_currency }
+          : { price_local: local.local, local_currency: local.currency }),
         status: "sAwaiting",
         paid: false,
         attended: [],
@@ -188,6 +193,8 @@ export async function createPayment(formData: FormData): Promise<ActionResult> {
     product_id: resolved.productId,
     lead_id: leadId,
     amount,
+    amount_local: local.local,
+    local_currency: local.currency,
     status,
     paid_date: paidDate,
     is_partial: isPartial,
@@ -238,7 +245,13 @@ export async function updatePayment(paymentId: string, formData: FormData): Prom
     product_id?: string | null;
     member_id?: string;
     is_partial?: boolean;
+    amount_local?: number | null;
+    local_currency?: string | null;
   } = { amount, status, paid_date: paidDate };
+  // Round 56: the amount as typed in the club's currency (null when typed in EUR).
+  const local = readLocal(formData, "amount");
+  patch.amount_local = local.local;
+  patch.local_currency = local.currency;
   if (formData.has("is_partial_present")) patch.is_partial = formData.get("is_partial") === "on";
   if (formData.has("enrollment_id")) {
     const enrollmentId = String(formData.get("enrollment_id") || "").trim() || null;

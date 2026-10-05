@@ -17,6 +17,7 @@ import { formatDateRu, formatPctDelta, formatPointsDelta, monthLabel, periodLabe
 import type { MonthlyCount } from "@/lib/dashboard";
 import type { MasterclassConversionResult } from "@/lib/masterclassConversion";
 import Money from "@/components/currency/Money";
+import type { LocalAmount } from "@/lib/currency";
 import { interpolateHex, sourceColor, sourceLabel, stageLabel } from "@/lib/leads";
 import { useLocale } from "@/components/i18n/LocaleProvider";
 import Sparkline from "./Sparkline";
@@ -584,7 +585,7 @@ function UpcomingEventsPanel({ events, showClub }: { events: UpcomingCohort[]; s
                       {e.paidCount}
                     </td>
                     <td className="px-5 py-3 text-right font-semibold text-foreground">
-                      <Money amountEur={e.revenue} />
+                      <Money amountEur={e.revenue} local={e.revenueLocal} />
                     </td>
                   </tr>
                 );
@@ -759,7 +760,7 @@ export default function DashboardBoard({
   yearOptions: string[];
   /** "/dashboard" for the network view, "/dashboard/<id>" for a club's own. */
   basePath: string;
-  revenue: { amount: number; delta: number | null };
+  revenue: { amount: number; delta: number | null; local?: LocalAmount | null };
   revenueTrend: MonthlyRevenue[];
   /** Real running member-count trend behind the "Участниц" tile's
    * sparkline — see monthlyMemberTotal in lib/dashboard.ts. */
@@ -769,7 +770,7 @@ export default function DashboardBoard({
   conversionTrend: MonthlyCount[];
   membersAdded: number;
   conversion: { value: number | null; previous: number | null };
-  royalty: { amount: number; percent: number };
+  royalty: { amount: number; percent: number; local?: LocalAmount | null };
   productsPeriod: ProductCount[];
   productsAllTime: ProductCount[];
   /** "Ближайшие события" — every course/поток starting in the next 30 days,
@@ -814,7 +815,7 @@ export default function DashboardBoard({
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <StatTile
           label={t("statRevenue")}
-          value={<Money amountEur={revenue.amount} />}
+          value={<Money amountEur={revenue.amount} local={revenue.local} />}
           delta={noPrevComparison ? t("deltaForPeriod") : formatPctDelta(revenue.delta, locale)}
           spark={{ values: revenueTrend.map((m) => m.amount), color: "var(--accent)" }}
         />
@@ -826,7 +827,7 @@ export default function DashboardBoard({
         />
         <StatTile
           label={t("statRoyaltyDue")}
-          value={<Money amountEur={royalty.amount} />}
+          value={<Money amountEur={royalty.amount} local={royalty.local} />}
           delta={t("deltaRoyaltyPercent", { percent: royalty.percent })}
         />
         <StatTile

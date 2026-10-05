@@ -134,6 +134,52 @@ export function formatMoney(
   return `${currencySymbol(target)}${Math.round(converted)}`;
 }
 
+/**
+ * Round 56 — «хранить сумму в лари». Every money row keeps, next to the
+ * canonical EUR value, the amount exactly as it was typed in the club's own
+ * currency (`*_local` + `local_currency`, e.g. 35 GEL). Shown as-is whenever
+ * the screen is in that same currency, so 12 × 35 ₾ always adds up to 420 ₾
+ * no matter how the rate moved between the days they were entered. EUR stays
+ * the number every cross-club report adds up.
+ */
+export type LocalAmount = { amount: number | null | undefined; currency: string | null | undefined };
+
+/** A row's local amount, or null when it doesn't have one. */
+export function localOf(amount: unknown, currency: unknown): LocalAmount | null {
+  if (amount === null || amount === undefined || !currency) return null;
+  const n = Number(amount);
+  return Number.isFinite(n) ? { amount: n, currency: String(currency) } : null;
+}
+
+/** Sum of local amounts — only when EVERY item has one, all in the same
+ * currency; otherwise null (the caller then converts the EUR sum). */
+export function sumLocal(items: (LocalAmount | null | undefined)[]): LocalAmount | null {
+  let cur: string | null = null;
+  let total = 0;
+  for (const it of items) {
+    if (!it || it.amount === null || it.amount === undefined || !it.currency) return null;
+    if (cur && cur !== it.currency) return null;
+    cur = it.currency;
+    total += Number(it.amount);
+  }
+  return cur ? { amount: Math.round(total * 100) / 100, currency: cur } : null;
+}
+
+/** formatMoney, but an exact local amount wins when it is in the currency on screen. */
+export function formatMoneyExact(
+  amountEur: number,
+  target: CurrencyCode,
+  rates: Record<string, number> | null,
+  local?: LocalAmount | null
+): string {
+  if (local && local.amount !== null && local.amount !== undefined && local.currency === target) {
+    const n = Number(local.amount);
+    const shown = Number.isInteger(n) ? String(n) : n.toFixed(2);
+    return `${currencySymbol(target)}${shown}`;
+  }
+  return formatMoney(amountEur, target, rates);
+}
+
 const RATES_ENDPOINT = "https://open.er-api.com/v6/latest/EUR";
 
 /** Returns null on any failure (network, bad response) rather than

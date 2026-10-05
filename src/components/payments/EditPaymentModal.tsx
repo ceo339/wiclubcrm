@@ -5,6 +5,7 @@ import { updatePayment, deletePayment, type ActionResult } from "@/app/payments/
 import { STATUSES, statusLabel } from "@/lib/payments";
 import Money from "@/components/currency/Money";
 import MoneyAmountField from "@/components/currency/MoneyAmountField";
+import { localOf } from "@/lib/currency";
 import { useLocale } from "@/components/i18n/LocaleProvider";
 import type { MemberOption, Payment } from "./types";
 
@@ -64,6 +65,7 @@ export default function EditPaymentModal({
                 label={t("fieldAmount")}
                 name="amount"
                 defaultAmountEur={payment.amount}
+                defaultLocal={localOf(payment.amount_local, payment.local_currency)}
                 required
               />
 

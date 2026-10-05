@@ -7,6 +7,7 @@ import { currentMonthYear, enrollmentIsDueForCompletion, STATUSES } from "@/lib/
 import { todayIso } from "@/lib/payments";
 import { findOrCreateContact, loadContactHistory, type ContactHistory } from "@/lib/server/contacts";
 import { recomputeEnrollmentStatus, syncEnrollmentPaymentRows } from "@/lib/server/enrollmentPayments";
+import { readLocal } from "@/lib/server/localMoney";
 import { DECLINE_REASONS } from "@/lib/leads";
 import type { Tables } from "@/types/database";
 
@@ -51,6 +52,8 @@ export async function syncEnrollmentPayment(
     productId: string | null;
     price: number;
     status: string;
+    priceLocal?: number | null;
+    localCurrency?: string | null;
   }
 ): Promise<void> {
   // Round 53: multi-payment aware — see lib/server/enrollmentPayments.ts.
@@ -125,6 +128,7 @@ export async function createMember(formData: FormData): Promise<ActionResult> {
     const status = normalizeStatus(String(formData.get("status") || ""));
     const startDate = String(formData.get("start_date") || "").trim() || null;
     const price = parsePrice(formData.get("price"));
+    const local = readLocal(formData, "price");
     const paid = status === "sPaid" || status === "sCompleted";
 
     const { data: enrollment, error: enrollError } = await supabase
@@ -135,6 +139,8 @@ export async function createMember(formData: FormData): Promise<ActionResult> {
         product_id: verifiedProductId,
         start_date: startDate,
         price,
+        price_local: local.local,
+        local_currency: local.currency,
         status,
         paid,
         attended: [],
@@ -156,6 +162,8 @@ export async function createMember(formData: FormData): Promise<ActionResult> {
       productId: verifiedProductId,
       price,
       status,
+      priceLocal: local.local,
+      localCurrency: local.currency,
     });
   }
 
@@ -307,6 +315,7 @@ export async function addEnrollment(memberId: string, formData: FormData): Promi
   const status = normalizeStatus(String(formData.get("status") || ""));
   const startDate = String(formData.get("start_date") || "").trim() || null;
   const price = parsePrice(formData.get("price"));
+  const local = readLocal(formData, "price");
   const paid = status === "sPaid" || status === "sCompleted";
 
   const { data: enrollment, error } = await supabase
@@ -317,6 +326,8 @@ export async function addEnrollment(memberId: string, formData: FormData): Promi
       product_id: verifiedProductId,
       start_date: startDate,
       price,
+      price_local: local.local,
+      local_currency: local.currency,
       status,
       paid,
       attended: [],
@@ -333,6 +344,8 @@ export async function addEnrollment(memberId: string, formData: FormData): Promi
     productId: verifiedProductId,
     price,
     status,
+    priceLocal: local.local,
+    localCurrency: local.currency,
   });
 
   if (status === "sAwaiting") {
@@ -438,6 +451,7 @@ export async function updateEnrollment(enrollmentId: string, formData: FormData)
   const status = normalizeStatus(String(formData.get("status") || ""));
   const startDate = String(formData.get("start_date") || "").trim() || null;
   const price = parsePrice(formData.get("price"));
+  const local = readLocal(formData, "price");
   const paid = status === "sPaid" || status === "sCompleted";
 
   const supabase = await createClient();
@@ -449,7 +463,7 @@ export async function updateEnrollment(enrollmentId: string, formData: FormData)
 
   const { error } = await supabase
     .from("member_enrollments")
-    .update({ status, start_date: startDate, price, paid })
+    .update({ status, start_date: startDate, price, paid, price_local: local.local, local_currency: local.currency })
     .eq("id", enrollmentId);
 
   if (error) return { error: error.message };
@@ -462,6 +476,8 @@ export async function updateEnrollment(enrollmentId: string, formData: FormData)
       productId: existing.product_id,
       price,
       status,
+      priceLocal: local.local,
+      localCurrency: local.currency,
     });
   }
 
@@ -471,7 +487,7 @@ export async function updateEnrollment(enrollmentId: string, formData: FormData)
   // внизу в пакете осталась прежней»).
   await supabase
     .from("package_sale_items")
-    .update({ allocated_price: price })
+    .update({ allocated_price: price, allocated_price_local: local.local, local_currency: local.currency })
     .eq("enrollment_id", enrollmentId);
 
   revalidatePath("/members");
@@ -506,7 +522,7 @@ export async function deleteEnrollment(enrollmentId: string): Promise<ActionResu
 
   const { error: unlinkError } = await supabase
     .from("package_sale_items")
-    .update({ enrollment_id: null, allocated_price: null, start_date: null })
+    .update({ enrollment_id: null, allocated_price: null, allocated_price_local: null, local_currency: null, start_date: null })
     .eq("enrollment_id", enrollmentId);
   if (unlinkError) return { error: unlinkError.message };
 
@@ -565,7 +581,7 @@ export type EnrollmentDetail = Tables<"member_enrollments"> & {
   product_price: number | null;
   product_sessions: number | null;
   /** Round 53 — payments linked to this поток (any status), oldest first. */
-  payments: { id: string; amount: number; status: string; paid_date: string | null; is_partial?: boolean }[];
+  payments: { id: string; amount: number; status: string; paid_date: string | null; is_partial?: boolean; amount_local?: number | null; local_currency?: string | null }[];
   /** Sum of the «paid» ones. */
   paid_sum: number;
 };
@@ -606,7 +622,7 @@ export async function getMemberDetail(memberId: string): Promise<MemberDetail> {
       .order("due_date", { ascending: true }),
     supabase
       .from("member_enrollments")
-      .select("*, products(name, price, sessions), payments(id, amount, status, paid_date, is_partial)")
+      .select("*, products(name, price, sessions), payments(id, amount, status, paid_date, is_partial, amount_local, local_currency)")
       .eq("member_id", memberId)
       .order("created_at", { ascending: true }),
     loadContactHistory(supabase, memberRow?.contact_id ?? null),
@@ -622,7 +638,7 @@ export async function getMemberDetail(memberId: string): Promise<MemberDetail> {
       product_sessions:
         (e as { products?: { sessions: number | null } | null }).products?.sessions ?? null,
       payments: [
-        ...((e as { payments?: { id: string; amount: number; status: string; paid_date: string | null; is_partial?: boolean }[] })
+        ...((e as { payments?: { id: string; amount: number; status: string; paid_date: string | null; is_partial?: boolean; amount_local?: number | null; local_currency?: string | null }[] })
           .payments ?? []),
       ].sort((a, b) => (a.paid_date ?? "").localeCompare(b.paid_date ?? "")),
       paid_sum: ((e as { payments?: { amount: number; status: string }[] }).payments ?? [])
@@ -711,7 +727,9 @@ export async function addEnrollmentPayment(
   enrollmentId: string,
   amountEur: number,
   paidDate: string | null,
-  isPartial = true
+  isPartial = true,
+  /** Round 56: the amount as typed in the club's currency (null when typed in EUR). */
+  local: { local: number; currency: string } | null = null
 ): Promise<ActionResult> {
   const profile = await getCurrentProfile();
   if (!profile) return { error: "errNotAuthorized" };
@@ -734,6 +752,11 @@ export async function addEnrollmentPayment(
     product_id: e.product_id,
     lead_id: (e as { members?: { lead_id: string | null } | null }).members?.lead_id ?? null,
     amount: Math.round(amountEur * 100) / 100,
+    amount_local:
+      local && Number.isFinite(local.local) && /^(GEL|UAH|USD)$/.test(local.currency)
+        ? Math.round(local.local * 100) / 100
+        : null,
+    local_currency: local && /^(GEL|UAH|USD)$/.test(local.currency) ? local.currency : null,
     status: "paid",
     paid_date: paidDate || todayIso(),
     is_partial: isPartial,
@@ -775,7 +798,7 @@ export async function markEnrollmentNoShow(enrollmentId: string, choice: NoShowC
   const supabase = await createClient();
   const { data: e } = await supabase
     .from("member_enrollments")
-    .select("id, member_id, product_id, start_date, price, status, members(lead_id)")
+    .select("id, member_id, product_id, start_date, price, price_local, local_currency, status, members(lead_id)")
     .eq("id", enrollmentId)
     .eq("partner_id", profile.partner_id)
     .maybeSingle();
@@ -795,6 +818,8 @@ export async function markEnrollmentNoShow(enrollmentId: string, choice: NoShowC
         product_id: e.product_id,
         start_date: startDate,
         price: e.price,
+        price_local: e.price_local,
+        local_currency: e.local_currency,
         status: "sAwaiting",
         paid: false,
         attended: [],
@@ -807,7 +832,7 @@ export async function markEnrollmentNoShow(enrollmentId: string, choice: NoShowC
     await supabase.from("payments").update({ enrollment_id: created.id }).eq("enrollment_id", e.id);
     await supabase
       .from("member_enrollments")
-      .update({ status: "sNoShow", paid: false, price: 0, note: `Не была. Перенесена на поток ${fmt(startDate)}` })
+      .update({ status: "sNoShow", paid: false, price: 0, price_local: 0, note: `Не была. Перенесена на поток ${fmt(startDate)}` })
       .eq("id", e.id);
     await recomputeEnrollmentStatus(supabase, created.id);
   } else {

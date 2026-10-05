@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { STATUSES, statusLabel, statusPillClasses } from "@/lib/members";
 import Money from "@/components/currency/Money";
+import { localOf, sumLocal, type LocalAmount } from "@/lib/currency";
 import Avatar from "@/components/ui/Avatar";
 import { useLocale } from "@/components/i18n/LocaleProvider";
 import type { Tables } from "@/types/database";
@@ -171,14 +172,17 @@ export default function MembersBoard({
     if (productId === "all") return null;
     let paidCount = 0;
     let totalSum = 0;
+    const locals: (LocalAmount | null)[] = [];
     statsFiltered.forEach((m) => {
       const paidEnrollments = matchingEnrollments(m).filter(
         (e) => e.status === "sPaid" || e.status === "sCompleted"
       );
       if (paidEnrollments.length > 0) paidCount += 1;
       totalSum += paidEnrollments.reduce((sum, e) => sum + Number(e.price), 0);
+      paidEnrollments.forEach((e) => locals.push(localOf(e.price_local, e.local_currency)));
     });
-    return { paidCount, totalSum };
+    // Round 56: in lari, the sum of what was typed (12 × 35 = 420, not 418).
+    return { paidCount, totalSum, totalLocal: sumLocal(locals) };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [statsFiltered, productId, startDate, status]);
 
@@ -268,7 +272,7 @@ export default function MembersBoard({
           <p className="text-sm text-muted">
             {t("streamPaidCount", { paid: String(streamStats.paidCount), total: String(statsFiltered.length) })}
             {" · "}
-            {t("streamTotalSum")}: <Money amountEur={streamStats.totalSum} />
+            {t("streamTotalSum")}: <Money amountEur={streamStats.totalSum} local={streamStats.totalLocal} />
           </p>
         )}
       </div>
@@ -298,6 +302,7 @@ export default function MembersBoard({
                 // for a course that isn't the one being filtered for.
                 const rowEnrollments = hasEnrollmentFilter ? matchingEnrollments(m) : m.enrollments;
                 const totalPrice = rowEnrollments.reduce((sum, e) => sum + Number(e.price), 0);
+                const totalLocal = sumLocal(rowEnrollments.map((e) => localOf(e.price_local, e.local_currency)));
                 return (
                   <tr
                     key={m.id}
@@ -352,7 +357,7 @@ export default function MembersBoard({
                       )}
                     </td>
                     <td className="px-4 py-3 text-right font-medium text-foreground">
-                      {totalPrice ? <Money amountEur={totalPrice} /> : "—"}
+                      {totalPrice ? <Money amountEur={totalPrice} local={totalLocal} /> : "—"}
                     </td>
                   </tr>
                 );

@@ -4,6 +4,7 @@ import { useEffect, useState, useTransition } from "react";
 import { deleteLead, findDuplicateLeads, type DuplicateGroup, type DuplicateLeadRow } from "@/app/leads/actions";
 import { stageLabel } from "@/lib/leads";
 import Money from "@/components/currency/Money";
+import { localOf } from "@/lib/currency";
 import { useLocale, useT } from "@/components/i18n/LocaleProvider";
 
 /**
@@ -132,7 +133,7 @@ function DuplicateLeadRowItem({
           {lead.value ? (
             <>
               {" "}
-              · <Money amountEur={lead.value} />
+              · <Money amountEur={lead.value} local={localOf((lead as { value_local?: unknown }).value_local, (lead as { local_currency?: unknown }).local_currency)} />
             </>
           ) : null}
         </p>

@@ -7,6 +7,7 @@ import { statusLabel } from "@/lib/members";
 import { convertFromEur, convertToEur, currencySymbol, roundMoney } from "@/lib/currency";
 import Money from "@/components/currency/Money";
 import { useCurrency } from "@/components/currency/CurrencyProvider";
+import LocalAmountInputs from "@/components/currency/LocalAmountInputs";
 import { useLocale } from "@/components/i18n/LocaleProvider";
 import type { Tables } from "@/types/database";
 
@@ -270,6 +271,7 @@ export default function NewLeadModal({
               name="value"
               value={String(convertToEur(parseFloat(value) || 0, currency, rates))}
             />
+            <LocalAmountInputs name="value" value={value} />
           </label>
 
           <input type="hidden" name="product_id" value={activeProductId} />

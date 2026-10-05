@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { readLocal } from "@/lib/server/localMoney";
 import { getCurrentProfile } from "@/lib/auth";
 import { SOURCES, duplicateKey, normalizeEmail, normalizePhone, type DuplicateField, type StageId } from "@/lib/leads";
 import { currentMonthYear } from "@/lib/members";
@@ -28,10 +29,24 @@ function normalizeSource(raw: string | undefined | null): string | null {
 
 type SupabaseServerClient = Awaited<ReturnType<typeof createClient>>;
 
+/** Round 56: a lead's «Сумма» in the club's currency, shaped for an enrollment row. */
+function leadLocal(lead: { value_local?: number | string | null; local_currency?: string | null }): {
+  price_local: number | null;
+  local_currency: string | null;
+} {
+  const n = lead.value_local === null || lead.value_local === undefined ? NaN : Number(lead.value_local);
+  return Number.isFinite(n) && lead.local_currency
+    ? { price_local: n, local_currency: lead.local_currency }
+    : { price_local: null, local_currency: null };
+}
+
 type ReserveLeadRow = {
   id: string;
   partner_id: string | null;
   value: number | string | null;
+  /** Round 56: «Сумма» exactly as typed in the club's currency. */
+  value_local?: number | string | null;
+  local_currency?: string | null;
   product_id: string | null;
   cohort_start_date: string | null;
   name: string;
@@ -157,6 +172,7 @@ async function reserveAwaitingEnrollment(supabase: SupabaseServerClient, lead: R
       product_id: lead.product_id,
       start_date: lead.cohort_start_date,
       price: Number(lead.value) || 0,
+      ...leadLocal(lead),
       status: "sAwaiting",
       paid: false,
       attended: [],
@@ -241,11 +257,18 @@ async function promotePaidLead(
   // reserveAwaitingEnrollment — otherwise a fresh signup for a later
   // поток of the same course could get merged into an old, already-paid
   // enrollment instead of getting its own payment.
-  let matchedEnrollment: { id: string; status: string; price: number; memberId: string } | null = null;
+  let matchedEnrollment: {
+    id: string;
+    status: string;
+    price: number;
+    memberId: string;
+    priceLocal: number | null;
+    localCurrency: string | null;
+  } | null = null;
   if (existingMember && lead.product_id) {
     let pendingQuery = supabase
       .from("member_enrollments")
-      .select("id, status, price")
+      .select("id, status, price, price_local, local_currency")
       .eq("member_id", existingMember.id)
       .eq("product_id", lead.product_id);
     pendingQuery = lead.cohort_start_date
@@ -256,6 +279,10 @@ async function promotePaidLead(
     if (pendingEnrollment) {
       let status = pendingEnrollment.status;
       let price = Number(pendingEnrollment.price);
+      let local = {
+        price_local: pendingEnrollment.price_local as number | null,
+        local_currency: pendingEnrollment.local_currency as string | null,
+      };
       const leadValue = Number(lead.value) || 0;
       if (status === "sAwaiting") {
         // "бери за изначальные значения сумму, которую я прописываю в
@@ -265,9 +292,10 @@ async function promotePaidLead(
         // actually marked paid, rather than trusting a stale number or
         // guessing at the course's list price.
         price = leadValue;
+        local = leadLocal(lead);
         await supabase
           .from("member_enrollments")
-          .update({ status: "sPaid", paid: true, price })
+          .update({ status: "sPaid", paid: true, price, ...local })
           .eq("id", pendingEnrollment.id);
         status = "sPaid";
       } else if (leadValue > 0 && leadValue !== price) {
@@ -287,9 +315,17 @@ async function promotePaidLead(
         // Сумма happens to read 0/blank at the moment of an unrelated
         // edit.
         price = leadValue;
-        await supabase.from("member_enrollments").update({ price }).eq("id", pendingEnrollment.id);
+        local = leadLocal(lead);
+        await supabase.from("member_enrollments").update({ price, ...local }).eq("id", pendingEnrollment.id);
       }
-      matchedEnrollment = { id: pendingEnrollment.id, status, price, memberId: existingMember.id };
+      matchedEnrollment = {
+        id: pendingEnrollment.id,
+        status,
+        price,
+        memberId: existingMember.id,
+        priceLocal: local.price_local,
+        localCurrency: local.local_currency,
+      };
     }
   }
 
@@ -316,6 +352,8 @@ async function promotePaidLead(
       productId: lead.product_id,
       price: matchedEnrollment.price,
       status: matchedEnrollment.status,
+      priceLocal: matchedEnrollment.priceLocal,
+      localCurrency: matchedEnrollment.localCurrency,
     });
     // See cleanupOrphanLeadPayment above — this lead may already have an
     // old lead_id-keyed fallback payment from before it had a matched
@@ -348,6 +386,8 @@ async function promotePaidLead(
         // `convertLeadToMember` already works around (see its own comment
         // on `partnerId`, round 22).
         amount: Number(lead.value) || 0,
+        amount_local: leadLocal(lead).price_local,
+        local_currency: leadLocal(lead).local_currency,
         status: "paid",
         paid_date: todayIso(),
       });
@@ -379,7 +419,7 @@ export async function updateLeadStage(
     })
     .eq("id", leadId)
     .select(
-      "id, partner_id, value, product_id, cohort_start_date, name, phone, email, city, birthday, country, contact_id, source, utm_source, utm_medium, utm_campaign, utm_content, utm_term"
+      "id, partner_id, value, value_local, local_currency, product_id, cohort_start_date, name, phone, email, city, birthday, country, contact_id, source, utm_source, utm_medium, utm_campaign, utm_content, utm_term"
     )
     .maybeSingle();
 
@@ -438,6 +478,7 @@ export async function createLead(formData: FormData): Promise<CreateLeadResult> 
   const source = normalizeSource(String(formData.get("source") || "Website")) ?? "Website";
   const valueRaw = String(formData.get("value") || "0").replace(",", ".");
   const value = Number.isFinite(Number(valueRaw)) ? Number(valueRaw) : 0;
+  const valueLocal = readLocal(formData, "value");
 
   const country = String(formData.get("country") || "").trim() || null;
   const city = String(formData.get("city") || "").trim() || null;
@@ -473,6 +514,8 @@ export async function createLead(formData: FormData): Promise<CreateLeadResult> 
       email,
       source,
       value,
+      value_local: valueLocal.local,
+      local_currency: valueLocal.currency,
       country,
       city,
       birthday,
@@ -761,7 +804,7 @@ export async function assignLeadProductAndReserve(
     })
     .eq("id", leadId)
     .select(
-      "id, partner_id, stage, value, product_id, cohort_start_date, name, phone, email, city, birthday, country, contact_id, source, utm_source, utm_medium, utm_campaign, utm_content, utm_term"
+      "id, partner_id, stage, value, value_local, local_currency, product_id, cohort_start_date, name, phone, email, city, birthday, country, contact_id, source, utm_source, utm_medium, utm_campaign, utm_content, utm_term"
     )
     .maybeSingle();
 
@@ -898,6 +941,7 @@ export async function updateLead(leadId: string, formData: FormData): Promise<Ac
   const note = String(formData.get("note") || "").trim() || null;
   const valueRaw = String(formData.get("value") || "0").replace(",", ".");
   const value = Number.isFinite(Number(valueRaw)) ? Number(valueRaw) : 0;
+  const valueLocal = readLocal(formData, "value");
   let productId = String(formData.get("product_id") || "").trim() || null;
   let cohortStartDate = String(formData.get("cohort_start_date") || "").trim() || null;
 
@@ -935,6 +979,8 @@ export async function updateLead(leadId: string, formData: FormData): Promise<Ac
       messenger,
       note,
       value,
+      value_local: valueLocal.local,
+      local_currency: valueLocal.currency,
       product_id: productId,
       cohort_start_date: cohortStartDate,
     })
@@ -972,6 +1018,8 @@ export async function updateLead(leadId: string, formData: FormData): Promise<Ac
       id: leadId,
       partner_id: profile.partner_id,
       value,
+      value_local: valueLocal.local,
+      local_currency: valueLocal.currency,
       product_id: productId,
       cohort_start_date: cohortStartDate,
       name,
@@ -1102,6 +1150,8 @@ export type ConvertCourseChoice = {
   productId: string | null;
   cohortStartDate: string | null;
   price: number | null;
+  /** Round 56: the price as typed in the club's currency (null when typed in EUR). */
+  priceLocal?: { local: number; currency: string } | null;
 };
 
 /**
@@ -1158,6 +1208,11 @@ export async function convertLeadToMember(
   const productId = choice ? choice.productId : lead.product_id;
   const cohortStartDate = choice ? choice.cohortStartDate : lead.cohort_start_date;
   const price = (choice ? choice.price : lead.value) ?? 0;
+  const priceLocal = choice
+    ? choice.priceLocal && /^(GEL|UAH|USD)$/.test(choice.priceLocal.currency) && Number.isFinite(choice.priceLocal.local)
+      ? { price_local: Math.round(choice.priceLocal.local * 100) / 100, local_currency: choice.priceLocal.currency }
+      : { price_local: null, local_currency: null }
+    : leadLocal(lead);
 
   // The chosen product id arrives from client state, so re-verify it
   // actually belongs to this partner before trusting it (same check as
@@ -1261,7 +1316,7 @@ export async function convertLeadToMember(
       ? (
           await supabase
             .from("member_enrollments")
-            .update({ start_date: cohortStartDate, price, status: "sPaid", paid: true })
+            .update({ start_date: cohortStartDate, price, ...priceLocal, status: "sPaid", paid: true })
             .eq("id", existingEnrollment.id)
         ).error
       : await (async () => {
@@ -1273,6 +1328,7 @@ export async function convertLeadToMember(
               product_id: productId,
               start_date: cohortStartDate,
               price,
+              ...priceLocal,
               status: "sPaid",
               paid: true,
               attended: [],
@@ -1300,6 +1356,8 @@ export async function convertLeadToMember(
         productId,
         price: Number(price),
         status: "sPaid",
+        priceLocal: priceLocal.price_local,
+        localCurrency: priceLocal.local_currency,
       });
       // See cleanupOrphanLeadPayment above — same duplicate-payment fix as
       // promotePaidLead, for this button's own path to a real enrollment.

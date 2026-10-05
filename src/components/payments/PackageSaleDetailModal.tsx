@@ -1,6 +1,7 @@
 "use client";
 
 import Money from "@/components/currency/Money";
+import { localOf } from "@/lib/currency";
 import { useLocale } from "@/components/i18n/LocaleProvider";
 import type { PackageSaleRow } from "@/app/packages/actions";
 
@@ -31,7 +32,7 @@ export default function PackageSaleDetailModal({
         <div className="mt-3 flex items-center justify-between rounded-lg bg-surface-2 px-3 py-2 text-sm">
           <span className="text-muted">{t("packageTotalLabel")}</span>
           <span className="font-medium text-foreground">
-            <Money amountEur={pkg.total_price} />
+            <Money amountEur={pkg.total_price} local={localOf(pkg.total_price_local, pkg.local_currency)} />
           </span>
         </div>
 
@@ -44,7 +45,7 @@ export default function PackageSaleDetailModal({
                   <span className="flex items-center gap-2 text-muted">
                     <span>{t("packageItemAssignedOn", { date: item.start_date ?? "" })}</span>
                     <span className="text-ink-2">
-                      <Money amountEur={item.allocated_price ?? 0} />
+                      <Money amountEur={item.allocated_price ?? 0} local={localOf(item.allocated_price_local, item.local_currency)} />
                     </span>
                   </span>
                 ) : (

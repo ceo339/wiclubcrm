@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { readLocal } from "@/lib/server/localMoney";
 import { getCurrentProfile } from "@/lib/auth";
 
 export type ActionResult = { error: string | null };
@@ -33,6 +34,8 @@ export async function createProduct(formData: FormData): Promise<ActionResult> {
     partner_id: profile.partner_id,
     name,
     price,
+    price_local: readLocal(formData, "price").local,
+    local_currency: readLocal(formData, "price").currency,
     sessions,
   });
 
@@ -68,7 +71,13 @@ export async function updateProduct(id: string, formData: FormData): Promise<Act
   const supabase = await createClient();
   const { error } = await supabase
     .from("products")
-    .update({ name, price, sessions })
+    .update({
+      name,
+      price,
+      price_local: readLocal(formData, "price").local,
+      local_currency: readLocal(formData, "price").currency,
+      sessions,
+    })
     .eq("id", id)
     .eq("partner_id", profile.partner_id);
 

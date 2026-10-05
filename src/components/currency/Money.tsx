@@ -1,6 +1,6 @@
 "use client";
 
-import { formatMoney } from "@/lib/currency";
+import { formatMoneyExact, type LocalAmount } from "@/lib/currency";
 import { useCurrency } from "./CurrencyProvider";
 
 /**
@@ -12,11 +12,14 @@ import { useCurrency } from "./CurrencyProvider";
 export default function Money({
   amountEur,
   fallback = "—",
+  local,
 }: {
   amountEur: number | null | undefined;
   fallback?: string;
+  /** Round 56: the exact amount in the club's own currency, if known. */
+  local?: LocalAmount | null;
 }) {
   const { currency, rates } = useCurrency();
   if (amountEur === null || amountEur === undefined) return <>{fallback}</>;
-  return <>{formatMoney(amountEur, currency, rates)}</>;
+  return <>{formatMoneyExact(amountEur, currency, rates, local)}</>;
 }
