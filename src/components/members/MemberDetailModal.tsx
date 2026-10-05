@@ -468,7 +468,13 @@ function EnrollmentCard({
               {paidSum > 0 ? t("btnTopUp") : t("btnFirstPayment")}
             </button>
           )}
-          {enrollment.status !== "sCompleted" && enrollment.status !== "sRefunded" && (
+          {/* "для курса завершенного тоже нужна кнопка не пришла и с
+              переносом" (Anastasiia, 5 окт 2026) — a course can get marked
+              «Завершила курс» (e.g. via bulk attendance) before anyone
+              notices she actually never showed up, and there was no way to
+              fix that after the fact. sRefunded stays excluded — a
+              refunded поток is already closed out, nothing left to mark. */}
+          {enrollment.status !== "sRefunded" && (
             <button
               type="button"
               onClick={() => setPanel("noshow")}
