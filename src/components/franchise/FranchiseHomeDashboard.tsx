@@ -97,6 +97,19 @@ export default function FranchiseHomeDashboard({
   const weeklyCandidates = useMemo(() => weeklyFranchiseCandidates(candidates), [candidates]);
   const weeklyFunnel = useMemo(() => computeFranchiseFunnel(weeklyCandidates), [weeklyCandidates]);
 
+  // "пусть пишется города еще откуда заявки" (Anastasiia, 5 окт 2026) —
+  // distinct target_city values among this week's candidates, shown under
+  // the "Заявок за неделю" tile. Raw free text, same as elsewhere on this
+  // dashboard (see computeRecentActivity) — no geo-normalisation here.
+  const weeklyCities = useMemo(() => {
+    const seen = new Set<string>();
+    for (const c of weeklyCandidates) {
+      const city = c.target_city?.trim();
+      if (city) seen.add(city);
+    }
+    return [...seen];
+  }, [weeklyCandidates]);
+
   // "Добавь договор отправлен за неделю/ за выбранный период" (round 46
   // part 2) — same month/year/range period as submittedCount below, applied
   // to stage-history transitions instead of submission dates (see
@@ -130,6 +143,7 @@ export default function FranchiseHomeDashboard({
       yearOptions={franchiseYearsWithActivity(candidates)}
       submittedCount={inPeriodCandidates.length}
       weeklyCount={weeklyCandidates.length}
+      weeklyCities={weeklyCities}
       qualifiedCount={qualifiedInPeriodCount}
       qualifiedWeeklyCount={qualifiedWeeklyCount}
       contractSentCount={contractSentCount}

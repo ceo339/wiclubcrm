@@ -58,6 +58,7 @@ export default function FranchiseDashboard({
   onSelectPeriod,
   submittedCount,
   weeklyCount,
+  weeklyCities,
   qualifiedCount,
   qualifiedWeeklyCount,
   contractSentCount,
@@ -84,6 +85,11 @@ export default function FranchiseDashboard({
   /** New candidates submitted in the last rolling 7 days — always "this
    * week", independent of the month/year selector above. */
   weeklyCount: number;
+  /** "пусть пишется города еще откуда заявки" (Anastasiia, 5 окт 2026) —
+   * distinct target_city values among this same rolling-7-days set, shown
+   * as this tile's secondary line. Empty when none of them filled in a
+   * city. */
+  weeklyCities: string[];
   /** Round 46 part 5 ("как считается КВАЛИФИЦИРОВАННЫХ 23? за какой период?
    * сделай за выбранный и за неделю") — scoped by submitted_at, same
    * population as submittedCount above (of who applied in this period, how
@@ -193,7 +199,9 @@ export default function FranchiseDashboard({
           value={weeklyCount}
           caption={t("last7Days")}
           borderColor={FUNNEL_TILE_COLOR}
-        />
+        >
+          {weeklyCities.length > 0 && <div className="text-xs text-muted">{weeklyCities.join(", ")}</div>}
+        </StatTile>
         <StatTile
           label={t("statFranchiseQualified")}
           value={qualifiedCount}

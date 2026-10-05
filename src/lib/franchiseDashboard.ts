@@ -51,8 +51,23 @@ export function computeFranchiseFunnel(
   const allForward = VISIBLE_FRANCHISE_STAGES.filter((s) => !s.lost);
   const startIdx = fromStageId ? Math.max(0, allForward.findIndex((s) => s.id === fromStageId)) : 0;
   const forward = allForward.slice(startIdx);
-  const counts = forward.map(
-    (_, i) => candidates.filter((c) => forward.findIndex((f) => f.id === c.stage) >= i).length
+  // "воронка 1 заявка? как если за неделю было 3 заявки" (Anastasiia, 5
+  // окт 2026) — the first bucket used to be filtered by current stage like
+  // every other bucket, so a candidate who applied this week and was
+  // already declined (current stage "declined"/"paused", excluded from
+  // `forward`) vanished from "Заявка" entirely instead of counting as
+  // someone who reached it — contradicting this function's own stated
+  // intent above ("a candidate who reached fin_model_sent before declining
+  // still counts as having reached it"). Every candidate passed in DID
+  // reach this funnel's first stage by construction of the caller's
+  // filtering (either "applied" for the default funnel, or "qualified" —
+  // reached fromStageId at least once — for a scoped one), so the first
+  // bucket is now an unconditional count. Later buckets still can't tell
+  // whether a now-declined candidate passed through them before declining
+  // (that needs franchise_stage_history, which this function doesn't
+  // receive) — a separate, deeper limitation left as-is for now.
+  const counts = forward.map((_, i) =>
+    i === 0 ? candidates.length : candidates.filter((c) => forward.findIndex((f) => f.id === c.stage) >= i).length
   );
   return forward.map((s, i) => ({
     id: s.id,
