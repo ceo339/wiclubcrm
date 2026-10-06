@@ -30,6 +30,8 @@ export default function MembersBoard({
   const [status, setStatus] = useState<string>("all");
   const [productId, setProductId] = useState<string>("all");
   const [startDate, setStartDate] = useState<string>("all");
+  // Round 58 — «Нужно выбрать поток» filter chip (paid via the bank, no поток yet).
+  const [needsCohortOnly, setNeedsCohortOnly] = useState(false);
   const [showNew, setShowNew] = useState(false);
   // "?open=<id>" — same deep-link mechanism as LeadsBoard, for the home
   // page's "Мои задачи" widget.
@@ -80,13 +82,19 @@ export default function MembersBoard({
   }
 
   const hasActiveFilters =
-    search.trim() !== "" || status !== "all" || productId !== "all" || startDate !== "all";
+    search.trim() !== "" || status !== "all" || productId !== "all" || startDate !== "all" || needsCohortOnly;
+
+  const needsCohortCount = useMemo(
+    () => initialMembers.filter((m) => m.enrollments.some((e) => e.needs_cohort)).length,
+    [initialMembers]
+  );
 
   function resetFilters() {
     setSearch("");
     setStatus("all");
     setProductId("all");
     setStartDate("all");
+    setNeedsCohortOnly(false);
   }
 
   // "показаны оплаты за другие курсы, хотя я выбрала 1 поток" (Anastasiia,
@@ -99,12 +107,13 @@ export default function MembersBoard({
   // this is also what the table below now renders instead of the member's
   // full course history, so a filtered view only ever shows the course
   // that was actually filtered for.
-  const hasEnrollmentFilter = status !== "all" || productId !== "all" || startDate !== "all";
+  const hasEnrollmentFilter = status !== "all" || productId !== "all" || startDate !== "all" || needsCohortOnly;
   function matchingEnrollments(m: Member) {
     return m.enrollments.filter((e) => {
       if (status !== "all" && e.status !== status) return false;
       if (productId !== "all" && e.product_id !== productId) return false;
       if (startDate !== "all" && e.start_date !== startDate) return false;
+      if (needsCohortOnly && !e.needs_cohort) return false;
       return true;
     });
   }
@@ -117,7 +126,7 @@ export default function MembersBoard({
       return m.name.toLowerCase().includes(q) || (m.city ?? "").toLowerCase().includes(q);
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [initialMembers, search, status, productId, startDate]);
+  }, [initialMembers, search, status, productId, startDate, needsCohortOnly]);
 
   // "не нужно считать тех, кто не был в виджетах. только те, кто в
   // статусе оплаты, а те, кто не был удалить из статистик" (Anastasiia, 2
@@ -240,6 +249,20 @@ export default function MembersBoard({
           </select>
         )}
 
+        {(needsCohortCount > 0 || needsCohortOnly) && (
+          <button
+            type="button"
+            onClick={() => setNeedsCohortOnly((v) => !v)}
+            className={`rounded-full border px-3 py-1.5 text-xs font-medium ${
+              needsCohortOnly
+                ? "border-warn bg-warn-soft text-warn"
+                : "border-border text-ink-2 hover:bg-surface-2"
+            }`}
+          >
+            {t("filterNeedsCohort", { count: String(needsCohortCount) })}
+          </button>
+        )}
+
         {hasActiveFilters && (
           <button
             type="button"
@@ -351,6 +374,11 @@ export default function MembersBoard({
                               >
                                 {statusLabel(e.status, locale)}
                               </span>
+                              {e.needs_cohort && (
+                                <span className="rounded-full bg-warn-soft px-2 py-0.5 text-xs font-medium text-warn">
+                                  {t("badgeChooseCohort")}
+                                </span>
+                              )}
                             </div>
                           ))}
                         </div>

@@ -4,6 +4,8 @@ export type Enrollment = Tables<"member_enrollments"> & {
   product_name: string | null;
   product_price: number | null;
   product_sessions: number | null;
+  /** Round 58 — paid, the course has потоки, but no поток chosen yet. */
+  needs_cohort?: boolean;
 };
 
 /** A member can be enrolled in zero, one, or several courses at once — see

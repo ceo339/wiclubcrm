@@ -12,6 +12,7 @@ import T from "@/components/i18n/T";
 import MembersBoard from "@/components/members/MembersBoard";
 import AppShell from "@/components/shell/AppShell";
 import type { Tables } from "@/types/database";
+import { enrollmentNeedsCohort } from "@/lib/members";
 import { autoCompleteDueEnrollments } from "./actions";
 
 export default async function MembersPage() {
@@ -49,6 +50,11 @@ export default async function MembersPage() {
 
   const { scope, fallback } = scopeForProfile(profile);
   const localeScope = localeScopeForProfile(profile);
+
+  // Round 58 — which courses have потоки at all (for the «Выберите поток» mark).
+  // Read for every role, HQ included; RLS scopes it exactly like the members above.
+  const { data: cohortProductRows } = await supabase.from("product_cohorts").select("product_id");
+  const productsWithCohorts = new Set((cohortProductRows ?? []).map((c) => c.product_id));
 
   const canEdit = !!profile.partner_id;
   const [{ data: products }, { data: cohorts }] = canEdit
@@ -103,6 +109,7 @@ export default async function MembersPage() {
                 product_name: e.products?.name ?? null,
                 product_price: e.products?.price ?? null,
                 product_sessions: e.products?.sessions ?? null,
+                needs_cohort: enrollmentNeedsCohort(e, productsWithCohorts),
               })),
             };
           })}

@@ -1194,6 +1194,7 @@ export type Database = {
       }
       products: {
         Row: {
+          aliases: string[]
           local_currency: string | null
           price_local: number | null
           created_at: string
@@ -1204,6 +1205,7 @@ export type Database = {
           sessions: number | null
         }
         Insert: {
+          aliases?: string[]
           local_currency?: string | null
           price_local?: number | null
           created_at?: string
@@ -1214,6 +1216,7 @@ export type Database = {
           sessions?: number | null
         }
         Update: {
+          aliases?: string[]
           local_currency?: string | null
           price_local?: number | null
           created_at?: string

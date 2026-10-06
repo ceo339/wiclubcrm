@@ -23,7 +23,7 @@ import {
   getPackageSalesForMember,
   type PackageSaleDetail,
 } from "@/app/packages/actions";
-import { attendedArray, STATUSES, statusLabel, statusPillClasses } from "@/lib/members";
+import { attendedArray, enrollmentNeedsCohort, STATUSES, statusLabel, statusPillClasses } from "@/lib/members";
 import { DECLINE_REASONS, stageLabel } from "@/lib/leads";
 import { convertFromEur, convertToEur, currencySymbol, localOf, roundMoney, sumLocal } from "@/lib/currency";
 import Money from "@/components/currency/Money";
@@ -411,6 +411,10 @@ function EnrollmentCard({
             </span>
             {enrollment.status === "sPaid" && price > 0 && remaining > 0.01 && (
               <span className="rounded-full bg-warn-soft px-2 py-0.5 font-medium text-warn">{t("tagPartial")}</span>
+            )}
+            {/* Round 58 — paid through the bank with no поток picked yet. */}
+            {enrollmentNeedsCohort(enrollment, new Set(cohorts.map((c) => c.product_id))) && (
+              <span className="rounded-full bg-warn-soft px-2 py-0.5 font-medium text-warn">{t("badgeChooseCohort")}</span>
             )}
             {enrollment.start_date && <span>{enrollment.start_date}</span>}
             <span className="text-ink-2">

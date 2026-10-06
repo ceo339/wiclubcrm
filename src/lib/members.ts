@@ -124,3 +124,19 @@ export function enrollmentIsDueForCompletion(
   const arr = attendedArray(enrollment.attended, sessions ?? 0);
   return arr.length > 0 && arr.every((v) => v !== null);
 }
+
+/**
+ * Round 58 — «выбрать поток»: a paid enrolment on a course that HAS потоки but
+ * no поток chosen yet (the bank payment came without one and the course has
+ * several upcoming потоки — or none upcoming). Computed, never stored, so it
+ * disappears by itself the moment a start date is set. A course with no потоки
+ * at all is never flagged — there is nothing to choose.
+ */
+export function enrollmentNeedsCohort(
+  e: { status: string; start_date: string | null; product_id: string | null },
+  productsWithCohorts: ReadonlySet<string>
+): boolean {
+  return (
+    !e.start_date && !!e.product_id && productsWithCohorts.has(e.product_id) && (e.status === "sPaid" || e.status === "sPartial")
+  );
+}

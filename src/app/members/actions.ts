@@ -7,6 +7,7 @@ import { currentMonthYear, enrollmentIsDueForCompletion, STATUSES } from "@/lib/
 import { todayIso } from "@/lib/payments";
 import { findOrCreateContact, loadContactHistory, type ContactHistory } from "@/lib/server/contacts";
 import { recomputeEnrollmentStatus, syncEnrollmentPaymentRows } from "@/lib/server/enrollmentPayments";
+import { closeChooseCohortTasks } from "@/lib/server/autoTasks";
 import { readLocal } from "@/lib/server/localMoney";
 import { DECLINE_REASONS } from "@/lib/leads";
 import type { Tables } from "@/types/database";
@@ -479,6 +480,13 @@ export async function updateEnrollment(enrollmentId: string, formData: FormData)
       priceLocal: local.local,
       localCurrency: local.currency,
     });
+  }
+
+  // Round 58: a поток was chosen for a course paid through the bank — the open
+  // «Выбрать поток: <имя> — <курс>» task on her card is no longer needed.
+  if (existing && startDate && existing.product_id) {
+    const { data: course } = await supabase.from("products").select("name").eq("id", existing.product_id).maybeSingle();
+    await closeChooseCohortTasks(supabase, existing.member_id, course?.name ?? null);
   }
 
   // A поток assigned from a package shows its share on the package card

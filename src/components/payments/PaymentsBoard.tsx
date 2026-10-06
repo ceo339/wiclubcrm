@@ -392,11 +392,18 @@ export default function PaymentsBoard({
                                 row.payment.lead_name ??
                                 (row.payment.dsk_order_id ? t("paymentDskOnline") : "—")}
                             </div>
-                            {!row.payment.member_name && row.payment.lead_name && (
+                            {!row.payment.member_name && row.payment.lead_name && !row.payment.dsk_order_id && (
                               <div className="text-xs text-muted">{t("paymentFromLeadOnly")}</div>
                             )}
-                            {!row.payment.member_name && !row.payment.lead_name && row.payment.dsk_order_id && (
-                              <div className="text-xs text-warn">{t("paymentDskUnlinked")}</div>
+                            {/* Round 58 — a bank payment with no participant: «Не привязана»
+                                (the club also gets a task on the lead). */}
+                            {!row.payment.member_name && row.payment.dsk_order_id && (
+                              <div className="flex flex-wrap items-center gap-1.5 text-xs">
+                                <span className="rounded-full bg-warn-soft px-2 py-0.5 font-medium text-warn">
+                                  {t("badgePaymentUnlinked")}
+                                </span>
+                                <span className="text-warn">{t("paymentDskUnlinked")}</span>
+                              </div>
                             )}
                           </div>
                         </div>
