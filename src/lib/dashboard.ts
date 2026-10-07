@@ -323,13 +323,13 @@ export function pctOf(part: number, whole: number): number | null {
  * (confirmed with Anastasiia rather than assumed):
  *  - it assumes leads only move forward through the Kanban — a lead
  *    dragged backward would undercount the stage it already reached;
- *  - a declined lead drops out of every step from "declined" onward,
- *    even if it had genuinely reached "Выставлен счёт" first, because
- *    that path isn't recorded anywhere. Declined leads are reported
- *    separately (`declinedCount` on CoreMetrics) rather than folded into
- *    a stage they may never have reached, but this does mean the
- *    "% идут дальше" figures run somewhat pessimistic as more leads get
- *    declined — they're a floor on real conversion, not the exact figure.
+ *  - a declined lead drops out of every step AFTER the first, even if it
+ *    had genuinely reached "Выставлен счёт" first, because that path isn't
+ *    recorded anywhere. Since round 59 the FIRST step counts every lead,
+ *    declined included (so the base of every % is the real number of
+ *    requests); declined leads are also reported separately
+ *    (`declinedCount` on CoreMetrics). The middle steps still run somewhat
+ *    pessimistic — a floor on real conversion, not the exact figure.
  */
 export type FunnelStage = {
   id: string;
@@ -348,8 +348,13 @@ export type FunnelStage = {
 
 export function computeFunnel(leads: { stage: string }[]): FunnelStage[] {
   const forward = STAGES.filter((s) => !s.lost); // new → progress → presented → invoiced → paid, in order
-  const counts = forward.map(
-    (_, i) => leads.filter((l) => forward.findIndex((f) => f.id === l.stage) >= i).length
+  // Round 59 (7 Oct 2026, «конечно хочу»): the first step is EVERY lead, declined
+  // ones included — every lead on the board did arrive as a new request, so the
+  // top of the funnel (and the % of it every other step is measured against) no
+  // longer shrinks as leads are declined. The later steps still count by current
+  // stage only: where a declined lead dropped out isn't recorded.
+  const counts = forward.map((_, i) =>
+    i === 0 ? leads.length : leads.filter((l) => forward.findIndex((f) => f.id === l.stage) >= i).length
   );
   return forward.map((s, i) => ({
     id: s.id,
