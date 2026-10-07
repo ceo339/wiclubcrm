@@ -21,6 +21,7 @@ export default function ContactsBoard({
   franchiseCandidates,
   canViewFranchise,
   canEditFranchise,
+  canBillFranchise = false,
 }: {
   initialContacts: Contact[];
   isHq: boolean;
@@ -32,6 +33,8 @@ export default function ContactsBoard({
   franchiseCandidates: FranchiseCandidate[];
   canViewFranchise: boolean;
   canEditFranchise: boolean;
+  /** Finance director: may bill / mark invoices paid in the candidate card. */
+  canBillFranchise?: boolean;
 }) {
   const { locale, t } = useLocale();
   const [tab, setTab] = useState<"clients" | "franchise">("clients");
@@ -226,6 +229,7 @@ export default function ContactsBoard({
               key={selectedFranchise.id}
               candidate={selectedFranchise}
               canEdit={canEditFranchise}
+              canBill={canBillFranchise || canEditFranchise}
               onClose={() => setSelectedFranchiseId(null)}
             />
           )}

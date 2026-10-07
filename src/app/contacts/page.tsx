@@ -143,6 +143,7 @@ export default async function ContactsPage() {
           franchiseCandidates={franchiseCandidates ?? []}
           canViewFranchise={canViewFranchise}
           canEditFranchise={canEditFranchise}
+          canBillFranchise={canEditFranchise || profile.franchise_access === "finance"}
         />
       )}
     </AppShell>

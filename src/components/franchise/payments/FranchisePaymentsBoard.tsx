@@ -154,7 +154,7 @@ export default function FranchisePaymentsBoard({
               <th className="px-4 py-2 font-medium">{t("fpFieldAmount")}</th>
               <th className="px-4 py-2 font-medium">{t("fpFieldDueDate")}</th>
               <th className="px-4 py-2 font-medium">{t("fpColStatus")}</th>
-              {canEdit && <th className="px-4 py-2 font-medium" />}
+              {canEdit && <th className="sticky right-0 bg-background px-4 py-2 font-medium" />}
             </tr>
           </thead>
           <tbody>
@@ -192,7 +192,9 @@ export default function FranchisePaymentsBoard({
                       <PaymentStatusPill payment={p} />
                     </td>
                     {canEdit && (
-                      <td className="px-4 py-2">
+                      // Sticky so «Оплачен» stays visible on a narrow screen
+                      // (the table scrolls sideways at 920px).
+                      <td className="sticky right-0 bg-background px-4 py-2 shadow-[-8px_0_8px_-8px_rgba(0,0,0,0.12)]">
                         <PaymentActions payment={p} onChanged={() => router.refresh()} />
                       </td>
                     )}
