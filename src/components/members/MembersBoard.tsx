@@ -31,11 +31,12 @@ export default function MembersBoard({
   const [productId, setProductId] = useState<string>("all");
   const [startDate, setStartDate] = useState<string>("all");
   // Round 58 — «Нужно выбрать поток» filter chip (paid via the bank, no поток yet).
-  const [needsCohortOnly, setNeedsCohortOnly] = useState(false);
+  // Round 59: also opened pre-filtered from Главная «Требует внимания» (?needsCohort=1).
+  const searchParams = useSearchParams();
+  const [needsCohortOnly, setNeedsCohortOnly] = useState(() => searchParams.get("needsCohort") === "1");
   const [showNew, setShowNew] = useState(false);
   // "?open=<id>" — same deep-link mechanism as LeadsBoard, for the home
   // page's "Мои задачи" widget.
-  const searchParams = useSearchParams();
   const [selectedId, setSelectedId] = useState<string | null>(() => searchParams.get("open"));
   // Same fix as LeadsBoard — see the comment there. Without this, a second
   // "Мои задачи" click on this page (participant tasks) landed on the board

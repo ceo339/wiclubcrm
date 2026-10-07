@@ -717,6 +717,7 @@ export default function DashboardBoard({
   staleLeads,
   decliningClubs,
   tasksPanel,
+  attentionPanel,
   period,
   monthOptions,
   yearOptions,
@@ -754,6 +755,8 @@ export default function DashboardBoard({
    * need to know how a task is fetched or what an OpenTask looks like, only
    * where it sits in the "требует внимания" row. */
   tasksPanel?: ReactNode;
+  /** Round 59 — «Требует внимания» (AttentionWidget); renders nothing when there is nothing to do. */
+  attentionPanel?: ReactNode;
   period: Period;
   monthOptions: string[];
   /** Button list behind the dashboard's "Год" tab — see PeriodFilter. */
@@ -796,8 +799,9 @@ export default function DashboardBoard({
     <div className="flex flex-1 flex-col gap-6">
       <PeriodFilter period={period} monthOptions={monthOptions} yearOptions={yearOptions} basePath={basePath} />
 
-      {(tasksPanel || staleLeads || decliningClubs) && (
+      {(tasksPanel || attentionPanel || staleLeads || decliningClubs) && (
         <AttentionGrid>
+          {attentionPanel}
           {tasksPanel}
           {staleLeads && <StaleLeadsPanel staleLeads={staleLeads} />}
           {decliningClubs && <DecliningClubsPanel decliningClubs={decliningClubs} />}

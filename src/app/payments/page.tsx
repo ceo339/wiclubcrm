@@ -14,7 +14,12 @@ import type { MemberOption } from "@/components/payments/types";
 import AppShell from "@/components/shell/AppShell";
 import { getPackageSalesForPayments } from "@/app/packages/actions";
 
-export default async function PaymentsPage() {
+export default async function PaymentsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ unlinked?: string }>;
+}) {
+  const { unlinked } = await searchParams;
   const profile = await getCurrentProfile();
   if (!profile) redirect("/login");
 
@@ -139,6 +144,7 @@ export default async function PaymentsPage() {
           canEdit={canEdit}
           stripeEnabled={stripeEnabled}
           packageSales={packageSales}
+          initialUnlinkedOnly={unlinked === "1"}
         />
       )}
     </AppShell>

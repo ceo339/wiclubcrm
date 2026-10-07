@@ -90,6 +90,27 @@ export async function recomputeEnrollmentStatus(
 }
 
 /**
+ * Round 59 — a refund came in from the bank (DSK callback): when no paid money is
+ * left on the enrolment, it becomes «Возврат» (the same status the card's own
+ * dropdown sets by hand). Money still on it (another payment, a partial refund)
+ * keeps «Оплачено». Only the three money statuses are touched — «Курс пройден»,
+ * «Не была», «Отменила запись» stay as they are, and a free course is ignored.
+ * Returns true when the status was changed to «Возврат».
+ */
+export async function markEnrollmentRefundedIfUnpaid(db: Db, enrollmentId: string): Promise<boolean> {
+  const { data: e } = await db
+    .from("member_enrollments")
+    .select("id, status, price")
+    .eq("id", enrollmentId)
+    .maybeSingle();
+  if (!e || !MONEY_STATUSES.has(e.status) || Number(e.price) <= 0) return false;
+  const sum = await enrollmentPaidSum(db, enrollmentId);
+  if (sum > 0) return false;
+  await db.from("member_enrollments").update({ status: "sRefunded", paid: false }).eq("id", enrollmentId);
+  return true;
+}
+
+/**
  * Keeps `payments` in step with a status chosen by hand on the card.
  *   «Возврат»            → every linked payment becomes refunded.
  *   «Оплачено»/«Пройден» → if nothing is linked yet, one payment for the

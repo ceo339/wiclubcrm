@@ -101,8 +101,11 @@ export default function PaymentsBoard({
   canEdit,
   stripeEnabled,
   packageSales,
+  initialUnlinkedOnly = false,
 }: {
   initialPayments: Payment[];
+  /** Round 59 — opened from Главная «Требует внимания» (?unlinked=1). */
+  initialUnlinkedOnly?: boolean;
   memberOptions: MemberOption[];
   /** Round 53 — for «новый поток» in the new-payment form. */
   products: { id: string; name: string; price: number }[];
@@ -120,6 +123,8 @@ export default function PaymentsBoard({
   const [status, setStatus] = useState<string>("all");
   const [kind, setKind] = useState<"all" | "prepay" | "partial" | "package">("all");
   const [period, setPeriod] = useState<Period>({ mode: "month", month: currentMonthKey() });
+  // Round 59 — only bank payments not tied to a participant yet («Не привязана»); ignores the period.
+  const [unlinkedOnly, setUnlinkedOnly] = useState(initialUnlinkedOnly);
   const [showNew, setShowNew] = useState(false);
   const [showLink, setShowLink] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -149,14 +154,18 @@ export default function PaymentsBoard({
   // partial payment (рассрочка); «Пакеты» = package sales only.
   const isPrepay = (p: Payment) => !!p.enrollment?.start_date && p.paid_date < p.enrollment.start_date;
 
+  const isUnlinked = (p: Payment) => p.status === "paid" && !p.member_id && !!p.dsk_order_id;
+  const unlinkedCount = useMemo(() => cashPayments.filter(isUnlinked).length, [cashPayments]);
+
   const filtered = useMemo(() => {
+    if (unlinkedOnly) return cashPayments.filter(isUnlinked);
     if (kind === "package") return [];
     const byStatus = status === "all" ? cashPayments : cashPayments.filter((p) => p.status === status);
     return byStatus
       .filter((p) => inPeriod(period, p.paid_date))
       .filter((p) => (kind === "prepay" ? isPrepay(p) : kind === "partial" ? !!p.is_partial : true));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cashPayments, status, period, kind]);
+  }, [cashPayments, status, period, kind, unlinkedOnly]);
 
   // A package sale is always "already paid" money (it's a lump sum received
   // up front — see app/packages/actions.ts), so it only shows up under the
@@ -164,10 +173,11 @@ export default function PaymentsBoard({
   // by its own paid_date (not per-course — the whole point is that the
   // per-course потоки aren't all known at the time it's paid).
   const filteredPackages = useMemo(() => {
+    if (unlinkedOnly) return [];
     if (status !== "all" && status !== "paid") return [];
     if (kind === "partial") return [];
     return packageSales.filter((pkg) => inPeriod(period, pkg.paid_date));
-  }, [packageSales, status, period, kind]);
+  }, [packageSales, status, period, kind, unlinkedOnly]);
 
   const selectedPackage = packageSales.find((p) => p.id === selectedPackageId) ?? null;
 
@@ -297,6 +307,18 @@ export default function PaymentsBoard({
           <option value="partial">{t("payKindPartial")}</option>
           <option value="package">{t("payKindPackage")}</option>
         </select>
+
+        {(unlinkedCount > 0 || unlinkedOnly) && (
+          <button
+            type="button"
+            onClick={() => setUnlinkedOnly((v) => !v)}
+            className={`rounded-full border px-3 py-1.5 text-xs font-medium ${
+              unlinkedOnly ? "border-warn bg-warn-soft text-warn" : "border-border text-ink-2 hover:bg-surface-2"
+            }`}
+          >
+            {t("filterUnlinkedPayments", { count: String(unlinkedCount) })}
+          </button>
+        )}
 
         {canEdit && stripeEnabled && (
           <button

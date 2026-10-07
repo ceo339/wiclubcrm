@@ -238,6 +238,16 @@ export async function enrollDskPayment(input: DskEnrollInput): Promise<DskEnroll
     })
     .eq("id", paymentId);
   if (linkError) throw new Error(`payment link failed: ${linkError.message}`);
+  // She paid again for a поток she had been refunded on: the old enrolment is reused,
+  // so lift it out of «Возврат» — recompute only follows the money for the live statuses.
+  const { data: reusedEnrollment } = await db
+    .from("member_enrollments")
+    .select("status")
+    .eq("id", reserved.enrollmentId)
+    .maybeSingle();
+  if (reusedEnrollment?.status === "sRefunded") {
+    await db.from("member_enrollments").update({ status: "sAwaiting", paid: false }).eq("id", reserved.enrollmentId);
+  }
   await recomputeEnrollmentStatus(db, reserved.enrollmentId, { fullPayment: true });
 
   // --- tasks for the club ----------------------------------------------------

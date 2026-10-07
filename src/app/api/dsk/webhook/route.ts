@@ -4,6 +4,7 @@ import { dskAmountEur, dskOutcome, verifyDskChecksum } from "@/lib/dsk";
 import { clubTimeZone, dateInTimeZone, isTestPayment, paidDateForClub } from "@/lib/dskMatch";
 import { logIntegrationEvent } from "@/lib/integrations/franchise";
 import { enrollDskPayment } from "@/lib/server/dskEnroll";
+import { markEnrollmentRefundedIfUnpaid } from "@/lib/server/enrollmentPayments";
 
 // Node runtime, not Edge, so the crypto HMAC check behaves consistently.
 export const runtime = "nodejs";
@@ -27,6 +28,9 @@ export const runtime = "nodejs";
  *   • Refunded / reversed → a matched payment becomes «Возврат».
  * Always answers 200 for a verified callback so the bank doesn't retry
  * forever; 400 only for a bad checksum.
+ *
+ * Round 59: a refund also moves the payment's enrolment to «Возврат» when no paid
+ * money is left on it; a partial refund (refundedAmount < amount) is only logged.
  *
  * Round 58 (6 Oct 2026) — «оплата → курс → участница»
  * (claude/wiclub-crm-dsk-autoenroll-spec.md). After the payment row is saved,
@@ -78,20 +82,26 @@ export async function GET(request: Request) {
   // Find the CRM payment this callback is about.
   let paymentId: string | null = null;
   let existingStatus: string | null = null;
+  let existingAmount: number | null = null;
+  let existingEnrollmentId: string | null = null;
   if (orderNumber && UUID_RE.test(orderNumber)) {
-    const { data } = await admin.from("payments").select("id, status").eq("id", orderNumber).maybeSingle();
+    const { data } = await admin.from("payments").select("id, status, amount, enrollment_id").eq("id", orderNumber).maybeSingle();
     paymentId = data?.id ?? null;
     existingStatus = data?.status ?? null;
+    existingAmount = data ? Number(data.amount) : null;
+    existingEnrollmentId = data?.enrollment_id ?? null;
   }
   if (!paymentId && mdOrder) {
     const { data } = await admin
       .from("payments")
-      .select("id, status")
+      .select("id, status, amount, enrollment_id")
       .eq("dsk_order_id", mdOrder)
       .limit(1)
       .maybeSingle();
     paymentId = data?.id ?? null;
     existingStatus = data?.status ?? null;
+    existingAmount = data ? Number(data.amount) : null;
+    existingEnrollmentId = data?.enrollment_id ?? null;
   }
 
   let status: string = outcome;
@@ -168,8 +178,28 @@ export async function GET(request: Request) {
       }
     }
   } else if (outcome === "refunded" && paymentId) {
-    await admin.from("payments").update({ status: "refunded" }).eq("id", paymentId);
-    status = "refunded_matched";
+    // A PARTIAL refund (the bank reports refundedAmount below the payment) must not
+    // wipe the whole payment out of the revenue — the club records that by hand.
+    const refundedRaw = searchParams.get("refundedAmount");
+    const refunded = refundedRaw && /^\d+$/.test(refundedRaw) ? Number(refundedRaw) / 100 : null;
+    if (refunded && existingAmount != null && refunded < existingAmount - 0.01) {
+      status = "refunded_partial_not_applied";
+      detail += ` refunded=${refunded} of ${existingAmount}`;
+    } else {
+      await admin.from("payments").update({ status: "refunded" }).eq("id", paymentId);
+      status = "refunded_matched";
+      // Round 59: the participant's enrolment follows the money — «Возврат».
+      if (existingEnrollmentId) {
+        try {
+          if (await markEnrollmentRefundedIfUnpaid(admin, existingEnrollmentId)) {
+            status = "refunded_enrollment_refunded";
+            detail += ` enrollment=${existingEnrollmentId}`;
+          }
+        } catch (error) {
+          detail += ` enrollment_refund_failed=${error instanceof Error ? error.message : String(error)}`;
+        }
+      }
+    }
   } else if (outcome === "declined") {
     const reason = searchParams.get("actionCodeDescription") || searchParams.get("errorMessage") || searchParams.get("actionCode");
     if (reason) detail += ` reason=${reason}`;

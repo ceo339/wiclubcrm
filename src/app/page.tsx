@@ -30,6 +30,8 @@ import CurrencyScope from "@/components/currency/CurrencyScope";
 import LocaleSwitcher from "@/components/i18n/LocaleSwitcher";
 import LocaleScope from "@/components/i18n/LocaleScope";
 import TasksWidget from "@/components/home/TasksWidget";
+import AttentionWidget from "@/components/home/AttentionWidget";
+import { loadAttentionCounts } from "@/lib/attention";
 import DashboardBoard from "@/components/dashboard/DashboardBoard";
 import type { ClubRow } from "@/components/dashboard/DashboardBoard";
 import { canViewFranchise } from "@/lib/franchiseAccess";
@@ -229,6 +231,11 @@ export default async function Home({
     />
   );
 
+  // Round 59 — «Требует внимания»: one club (or the whole network for hq/viewer
+  // with no club picked). Only for the club-scoped views, never the franchise one.
+  const attention = await loadAttentionCounts(supabase, networkView && !scopePartnerId ? null : effectivePartnerId ?? null);
+  const attentionPanel = <AttentionWidget {...attention} />;
+
   // ---------------------------------------------------------------------
   // HQ/viewer with no single city picked: network-wide dashboard (same
   // fetch/computation the old standalone /dashboard page did — nothing
@@ -377,6 +384,7 @@ export default async function Home({
           staleLeads={staleLeads}
           decliningClubs={decliningClubs}
           tasksPanel={tasksPanel}
+          attentionPanel={attentionPanel}
           period={period}
           monthOptions={monthOptions}
           yearOptions={yearOptions}
@@ -545,6 +553,7 @@ export default async function Home({
         declinedCount={metrics.declinedCount}
         sourceConversion={metrics.sourceConversion}
         tasksPanel={tasksPanel}
+        attentionPanel={attentionPanel}
         period={period}
         monthOptions={monthOptions}
         yearOptions={yearOptions}
