@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { Fragment, useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import type {
   DecliningClub,
@@ -516,7 +516,9 @@ function ClubsTable({ clubs, qs }: { clubs: ClubRow[]; qs: string }) {
  * plain-language framing StaleLeadsPanel's colDaysStuck uses for the
  * opposite direction (days since, not days until). */
 function daysUntilLabel(daysUntil: number, t: (key: string, vars?: Record<string, string | number>) => string): string {
-  if (daysUntil <= 0) return t("eventStartsToday");
+  if (daysUntil === 0) return t("eventStartsToday");
+  if (daysUntil === -1) return t("eventStartedYesterday");
+  if (daysUntil < 0) return t("eventStartedDaysAgo", { n: -daysUntil });
   if (daysUntil === 1) return t("eventStartsTomorrow");
   return t("eventStartsInDays", { n: daysUntil });
 }
@@ -558,11 +560,24 @@ function UpcomingEventsPanel({ events, showClub }: { events: UpcomingCohort[]; s
               </tr>
             </thead>
             <tbody>
-              {events.map((e) => {
-                const soon = e.daysUntil <= 3;
+              {events.map((e, i) => {
+                const isPast = e.daysUntil < 0;
+                const soon = !isPast && e.daysUntil <= 3;
+                const firstPast = isPast && (i === 0 || events[i - 1].daysUntil >= 0);
                 return (
-                  <tr key={e.key} className="border-b border-border last:border-0">
-                    <td className="px-5 py-3 font-medium text-foreground">{e.courseName ?? t("productDeleted")}</td>
+                  <Fragment key={e.key}>
+                    {firstPast && (
+                      <tr className="border-b border-border bg-surface-2">
+                        <td
+                          colSpan={showClub ? 6 : 5}
+                          className="px-5 py-2 text-xs font-medium uppercase tracking-wide text-muted"
+                        >
+                          {t("headingPastEvents", { days: 30 })}
+                        </td>
+                      </tr>
+                    )}
+                  <tr className={`border-b border-border last:border-0 ${isPast ? "text-muted" : ""}`}>
+                    <td className={`px-5 py-3 font-medium ${isPast ? "text-ink-2" : "text-foreground"}`}>{e.courseName ?? t("productDeleted")}</td>
                     {showClub && <td className="px-5 py-3 text-muted">{e.partnerName ?? "—"}</td>}
                     <td className="px-5 py-3">
                       <div className="flex flex-wrap items-center gap-2">
@@ -588,6 +603,7 @@ function UpcomingEventsPanel({ events, showClub }: { events: UpcomingCohort[]; s
                       <Money amountEur={e.revenue} local={e.revenueLocal} />
                     </td>
                   </tr>
+                  </Fragment>
                 );
               })}
             </tbody>

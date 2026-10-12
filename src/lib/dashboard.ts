@@ -580,8 +580,8 @@ export type UpcomingCohort = {
    * bucket above; the UI falls back to a translated placeholder label. */
   courseName: string | null;
   startDate: string;
-  /** 0 = starts today; never negative — cohorts already in the past are
-   * filtered out before this is computed. */
+  /** 0 = starts today; negative = already started (round 59b: the last
+   * `pastDays` days are shown too, «прошедшие события»). */
   daysUntil: number;
   enrolledCount: number;
   paidCount: number;
@@ -610,6 +610,7 @@ export function upcomingCohorts({
   productNamesById,
   partnerNamesById,
   windowDays = 30,
+  pastDays = 30,
   now = new Date(),
 }: {
   cohorts: { product_id: string; start_date: string; partner_id?: string }[];
@@ -629,15 +630,20 @@ export function upcomingCohorts({
    * cross-count each other's enrollments. */
   partnerNamesById?: Map<string, string>;
   windowDays?: number;
+  /** Round 59b («добавь ещё прошедшие события в течение прошедших 30 дней»):
+   * cohorts that started within the last `pastDays` days come after the
+   * upcoming ones, most recent first. 0 = upcoming only. */
+  pastDays?: number;
   now?: Date;
 }): UpcomingCohort[] {
   const msPerDay = 24 * 60 * 60 * 1000;
   const today = now.toISOString().slice(0, 10);
   const endDate = new Date(now.getTime() + windowDays * msPerDay).toISOString().slice(0, 10);
   const todayMs = new Date(today).getTime();
+  const startDate = new Date(now.getTime() - pastDays * msPerDay).toISOString().slice(0, 10);
 
-  return cohorts
-    .filter((c) => c.start_date >= today && c.start_date <= endDate)
+  const rows = cohorts
+    .filter((c) => c.start_date >= startDate && c.start_date <= endDate)
     .map((c) => {
       const matching = enrollments.filter(
         (e) =>
@@ -660,6 +666,10 @@ export function upcomingCohorts({
       };
     })
     .sort((a, b) => a.startDate.localeCompare(b.startDate) || (a.courseName ?? "").localeCompare(b.courseName ?? "", "ru"));
+  // Upcoming first (soonest first), then the ones that already started (newest first).
+  const upcoming = rows.filter((r) => r.daysUntil >= 0);
+  const past = rows.filter((r) => r.daysUntil < 0).reverse();
+  return [...upcoming, ...past];
 }
 
 // ---------------------------------------------------------------------------
