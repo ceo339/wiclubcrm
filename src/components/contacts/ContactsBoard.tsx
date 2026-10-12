@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { normalizeText } from "@/lib/dskMatch";
 import { stageLabel } from "@/lib/leads";
 import { statusLabel } from "@/lib/members";
 import { franchiseStageLabel } from "@/lib/franchise";
@@ -56,15 +57,23 @@ export default function ContactsBoard({
   // 2026) — a contact's course can come either from an actual course
   // enrollment (she's a participant) or from a заявка that already named a
   // course/stream (she hasn't converted yet), so both are combined here.
+  // Round 61: one course = one line. Each club has its own catalogue row for the
+  // same course («Тренинг…» in Батуми and in София, «SF0» / «СФ0»), so the filter is
+  // keyed by the course NAME (case, quotes, spaces and Latin/Cyrillic look-alikes
+  // ignored), same as on «Участницы».
+  const courseKey = (name: string | null | undefined) => (name ? normalizeText(name) : "");
+
   const courseOptions: MultiSelectOption[] = useMemo(() => {
     const seen = new Map<string, string>();
+    const add = (name: string | null | undefined) => {
+      const key = courseKey(name);
+      if (!key || !name) return;
+      const known = seen.get(key);
+      if (!known || (!/[а-яё]/i.test(known) && /[а-яё]/i.test(name))) seen.set(key, name);
+    };
     initialContacts.forEach((c) => {
-      c.leads.forEach((l) => {
-        if (l.product_id && l.product_name) seen.set(l.product_id, l.product_name);
-      });
-      c.enrollments.forEach((e) => {
-        if (e.product_id && e.product_name) seen.set(e.product_id, e.product_name);
-      });
+      c.leads.forEach((l) => add(l.product_name));
+      c.enrollments.forEach((e) => add(e.product_name));
     });
     return Array.from(seen.entries())
       .map(([id, name]) => ({ value: id, label: name }))
@@ -76,12 +85,12 @@ export default function ContactsBoard({
     initialContacts.forEach((c) => {
       c.leads.forEach((l) => {
         if (!l.cohort_start_date) return;
-        if (courseIds.size > 0 && (!l.product_id || !courseIds.has(l.product_id))) return;
+        if (courseIds.size > 0 && !courseIds.has(courseKey(l.product_name))) return;
         seen.add(l.cohort_start_date);
       });
       c.enrollments.forEach((e) => {
         if (!e.start_date) return;
-        if (courseIds.size > 0 && (!e.product_id || !courseIds.has(e.product_id))) return;
+        if (courseIds.size > 0 && !courseIds.has(courseKey(e.product_name))) return;
         seen.add(e.start_date);
       });
     });
@@ -111,8 +120,8 @@ export default function ContactsBoard({
     return initialContacts.filter((c) => {
       if (courseIds.size > 0) {
         const matches =
-          c.leads.some((l) => l.product_id && courseIds.has(l.product_id)) ||
-          c.enrollments.some((e) => e.product_id && courseIds.has(e.product_id));
+          c.leads.some((l) => courseIds.has(courseKey(l.product_name))) ||
+          c.enrollments.some((e) => courseIds.has(courseKey(e.product_name)));
         if (!matches) return false;
       }
       if (streamDates.size > 0) {

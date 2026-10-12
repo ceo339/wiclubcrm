@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { normalizeText } from "@/lib/dskMatch";
 import { useSearchParams } from "next/navigation";
 import { STATUSES, statusLabel, statusPillClasses } from "@/lib/members";
 import Money from "@/components/currency/Money";
@@ -46,11 +47,26 @@ export default function MembersBoard({
     if (openId) setSelectedId(openId);
   }, [searchParams]);
 
+  // Round 61 («почему тут тренинг как 2 разных события? это одно и то же»):
+  // every club has its OWN row in the course catalogue (Батуми и София each have
+  // «Тренинг "Искусство наслеждения"», «Workshop…»; the same course is «SF0» in one
+  // club and «СФ0» in another), so on the HQ view a course used to show up once per
+  // club. The Курс filter now works on the course NAME — case, quotes, spaces and
+  // Latin/Cyrillic look-alikes ignored — so one course = one line, and picking it
+  // shows its участницы from every club.
+  const courseKey = (name: string | null | undefined) => (name ? normalizeText(name) : "");
+
   const productOptions = useMemo(() => {
     const seen = new Map<string, string>();
     initialMembers.forEach((m) => {
       m.enrollments.forEach((e) => {
-        if (e.product_id && e.product_name) seen.set(e.product_id, e.product_name);
+        const key = courseKey(e.product_name);
+        if (!e.product_id || !key) return;
+        const known = seen.get(key);
+        // Two spellings of one course («SF0» / «СФ0»): show the Cyrillic one.
+        if (!known || (!/[а-яё]/i.test(known) && /[а-яё]/i.test(e.product_name ?? ""))) {
+          seen.set(key, e.product_name as string);
+        }
       });
     });
     return Array.from(seen.entries())
@@ -68,7 +84,7 @@ export default function MembersBoard({
     initialMembers.forEach((m) => {
       m.enrollments.forEach((e) => {
         if (!e.start_date) return;
-        if (productId !== "all" && e.product_id !== productId) return;
+        if (productId !== "all" && courseKey(e.product_name) !== productId) return;
         seen.add(e.start_date);
       });
     });
@@ -112,7 +128,7 @@ export default function MembersBoard({
   function matchingEnrollments(m: Member) {
     return m.enrollments.filter((e) => {
       if (status !== "all" && e.status !== status) return false;
-      if (productId !== "all" && e.product_id !== productId) return false;
+      if (productId !== "all" && courseKey(e.product_name) !== productId) return false;
       if (startDate !== "all" && e.start_date !== startDate) return false;
       if (needsCohortOnly && !e.needs_cohort) return false;
       return true;
