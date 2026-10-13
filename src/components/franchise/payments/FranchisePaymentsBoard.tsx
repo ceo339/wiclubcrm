@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { phoneMatches, telegramMatches } from "@/lib/search";
 import { useRouter } from "next/navigation";
 import { useLocale } from "@/components/i18n/LocaleProvider";
 import type { FranchisePayment } from "@/app/franchise/payments/actions";
@@ -65,7 +66,7 @@ export default function FranchisePaymentsBoard({
     if (q) {
       const c = byId.get(p.candidate_id);
       const hay = `${c?.name ?? ""} ${c?.billing_name ?? ""} ${c?.target_city ?? ""} ${p.note ?? ""} ${p.invoice_number ?? ""}`.toLowerCase();
-      if (!hay.includes(q)) return false;
+      if (!hay.includes(q) && !phoneMatches(c?.phone, q) && !telegramMatches(c?.telegram, q)) return false;
     }
     return true;
   });

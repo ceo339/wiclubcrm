@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { normalizeText } from "@/lib/dskMatch";
+import { phoneMatches, telegramMatches } from "@/lib/search";
 import { useSearchParams } from "next/navigation";
 import { STATUSES, statusLabel, statusPillClasses } from "@/lib/members";
 import Money from "@/components/currency/Money";
@@ -140,7 +141,12 @@ export default function MembersBoard({
     return initialMembers.filter((m) => {
       if (hasEnrollmentFilter && matchingEnrollments(m).length === 0) return false;
       if (!q) return true;
-      return m.name.toLowerCase().includes(q) || (m.city ?? "").toLowerCase().includes(q);
+      return (
+        m.name.toLowerCase().includes(q) ||
+        (m.city ?? "").toLowerCase().includes(q) ||
+        (m.email ?? "").toLowerCase().includes(q) ||
+        phoneMatches(m.phone, q)
+      );
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialMembers, search, status, productId, startDate, needsCohortOnly]);

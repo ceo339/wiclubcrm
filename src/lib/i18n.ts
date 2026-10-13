@@ -755,7 +755,7 @@ export const DICT: Record<string, Entry> = {
   },
 
   // ---- members board ----
-  searchMembersPlaceholder: { ru: "Поиск по имени, городу…", bg: "Търсене по име, град…" },
+  searchMembersPlaceholder: { ru: "Поиск по имени, телефону, email, городу…", bg: "Търсене по име, телефон, имейл, град…" },
   allStatuses: { ru: "Все статусы", bg: "Всички статуси" },
   allCourses: { ru: "Все курсы", bg: "Всички курсове" },
   allStartDates: { ru: "Все даты старта", bg: "Всички начални дати" },

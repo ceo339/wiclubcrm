@@ -6,6 +6,7 @@ import { useSearchParams } from "next/navigation";
 import { HIGH_VALUE_THRESHOLD, SOURCES, sourceColor, sourceLabel } from "@/lib/leads";
 import { STALE_LEAD_DAYS, currentMonthKey, monthKeyOf } from "@/lib/dashboard";
 import { useLocale } from "@/components/i18n/LocaleProvider";
+import { phoneMatches, telegramMatches } from "@/lib/search";
 import Money from "@/components/currency/Money";
 import { localOf, sumLocal } from "@/lib/currency";
 import type { Tables } from "@/types/database";
@@ -218,7 +219,7 @@ export default function LeadsBoard({
       if (!q) return true;
       return (
         lead.name.toLowerCase().includes(q) ||
-        (lead.phone ?? "").toLowerCase().includes(q) ||
+        phoneMatches(lead.phone, q) ||
         (lead.email ?? "").toLowerCase().includes(q)
       );
     });

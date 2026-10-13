@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { normalizeText } from "@/lib/dskMatch";
+import { phoneMatches, telegramMatches } from "@/lib/search";
 import { stageLabel } from "@/lib/leads";
 import { statusLabel } from "@/lib/members";
 import { franchiseStageLabel } from "@/lib/franchise";
@@ -134,7 +135,7 @@ export default function ContactsBoard({
       return (
         c.name.toLowerCase().includes(q) ||
         (c.city ?? "").toLowerCase().includes(q) ||
-        (c.phone ?? "").toLowerCase().includes(q) ||
+        phoneMatches(c.phone, q) ||
         (c.email ?? "").toLowerCase().includes(q)
       );
     });
@@ -149,7 +150,8 @@ export default function ContactsBoard({
       (c) =>
         c.name.toLowerCase().includes(q) ||
         (c.email ?? "").toLowerCase().includes(q) ||
-        (c.phone ?? "").toLowerCase().includes(q) ||
+        phoneMatches(c.phone, q) ||
+        telegramMatches(c.telegram, q) ||
         (c.target_city ?? "").toLowerCase().includes(q) ||
         (c.country ?? "").toLowerCase().includes(q)
     );
