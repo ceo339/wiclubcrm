@@ -32,6 +32,7 @@ import LocaleScope from "@/components/i18n/LocaleScope";
 import TasksWidget from "@/components/home/TasksWidget";
 import AttentionWidget from "@/components/home/AttentionWidget";
 import { loadAttentionCounts } from "@/lib/attention";
+import { computeProductsByCity } from "@/lib/productsByCity";
 import DashboardBoard from "@/components/dashboard/DashboardBoard";
 import type { ClubRow } from "@/components/dashboard/DashboardBoard";
 import { canViewFranchise } from "@/lib/franchiseAccess";
@@ -226,7 +227,9 @@ export default async function Home({
     })
   );
 
-  const tasksPanel = (profile.partner_id || networkView) && (
+  // Round 64: HQ/viewer no longer see tasks on Главная («пусть партнеры сами
+  // следят за ними») — a partner/staff account keeps its own.
+  const tasksPanel = !networkView && profile.partner_id && (
     <TasksWidget
       tasks={openTasks}
       headingKey={networkView && !scopePartnerId ? "headingNetworkTasks" : "headingMyTasks"}
@@ -258,7 +261,7 @@ export default async function Home({
           .select(
             "partner_id, member_id, product_id, amount, amount_local, local_currency, status, paid_date, member_enrollments(start_date, created_at), leads(cohort_start_date, added_date)"
           ),
-        supabase.from("products").select("id, name"),
+        supabase.from("products").select("id, name, partner_id"),
         supabase.from("product_cohorts").select("partner_id, product_id, start_date"),
       ]);
 
@@ -287,6 +290,14 @@ export default async function Home({
       enrollments: allEnrollments,
       productNamesById,
       partnerNamesById,
+    });
+
+    const productsByCity = computeProductsByCity({
+      partners: partners ?? [],
+      products: products ?? [],
+      leads: allLeads,
+      enrollments: allEnrollments,
+      cohorts: cohorts ?? [],
     });
 
     const staleLeads = findStaleLeads(allLeads, partnerNamesById);
@@ -403,6 +414,7 @@ export default async function Home({
           productsAllTime={countByProduct(allEnrollments, productNamesById)}
           upcomingCohorts={upcomingEvents}
           masterclassConversion={masterclassConversion}
+          productsByCity={productsByCity}
         />
       </AppShell>
     );
@@ -462,7 +474,7 @@ export default async function Home({
           "member_id, product_id, amount, amount_local, local_currency, status, paid_date, member_enrollments(start_date, created_at), leads(cohort_start_date, added_date)"
         )
         .eq("partner_id", partnerId),
-      supabase.from("products").select("id, name").eq("partner_id", partnerId),
+      supabase.from("products").select("id, name, partner_id").eq("partner_id", partnerId),
       supabase.from("product_cohorts").select("product_id, start_date").eq("partner_id", partnerId),
     ]);
 
@@ -483,6 +495,14 @@ export default async function Home({
     cohorts: cohorts ?? [],
     enrollments: clubEnrollments,
     productNamesById,
+  });
+
+  const productsByCity = computeProductsByCity({
+    partners: partner ? [{ id: partner.id, name: partner.name }] : [],
+    products: products ?? [],
+    leads: clubLeads,
+    enrollments: clubEnrollments,
+    cohorts: cohorts ?? [],
   });
 
   const period = parsePeriodParams(params);
@@ -572,6 +592,7 @@ export default async function Home({
         productsAllTime={countByProduct(clubEnrollments, productNamesById)}
         upcomingCohorts={upcomingEvents}
         masterclassConversion={masterclassConversion}
+        productsByCity={productsByCity}
       />
     </AppShell>
   );

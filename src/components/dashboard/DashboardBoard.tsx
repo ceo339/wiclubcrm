@@ -16,6 +16,7 @@ import type {
 import { formatDateRu, formatPctDelta, formatPointsDelta, monthLabel, periodLabel } from "@/lib/dashboard";
 import type { MonthlyCount } from "@/lib/dashboard";
 import type { MasterclassConversionResult } from "@/lib/masterclassConversion";
+import type { ProductsByCityClub } from "@/lib/productsByCity";
 import Money from "@/components/currency/Money";
 import type { LocalAmount } from "@/lib/currency";
 import { interpolateHex, sourceColor, sourceLabel, stageLabel } from "@/lib/leads";
@@ -515,6 +516,74 @@ function ClubsTable({ clubs, qs }: { clubs: ClubRow[]; qs: string }) {
 /** "сегодня" / "завтра" / "через N дн." next to a cohort's date — the same
  * plain-language framing StaleLeadsPanel's colDaysStuck uses for the
  * opposite direction (days since, not days until). */
+/**
+ * Round 64 («виджет отдельно по 2 продуктам: Воркшоп в каждом из городов и
+ * тренинг аналогично — заявки, записалось, оплатило, на сумму; колонки по
+ * городам, с датами») — one card per club, a row per product (and stream
+ * date), all-time numbers. See src/lib/productsByCity.ts.
+ */
+function ProductsByCityPanel({ clubs }: { clubs: ProductsByCityClub[] }) {
+  const { t } = useLocale();
+  if (clubs.length === 0) return null;
+  const kindLabel = (k: "workshop" | "training") => t(k === "workshop" ? "productKindWorkshop" : "productKindTraining");
+  const num = { fontVariantNumeric: "tabular-nums" } as const;
+  return (
+    <div>
+      <div className="mb-3">
+        <h2 className="text-sm font-semibold text-foreground">{t("headingProductsByCity")}</h2>
+        <p className="mt-0.5 text-xs text-muted">{t("subheadingProductsByCity")}</p>
+      </div>
+      <div className={`grid gap-4 ${clubs.length > 1 ? "lg:grid-cols-2" : ""}`}>
+        {clubs.map((club) => (
+          <div key={club.partnerId} className="rounded-xl border border-border bg-background shadow-card">
+            <div className="border-b border-border px-5 py-4">
+              <h3 className="text-sm font-semibold text-foreground">{club.name}</h3>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[420px] text-left text-sm">
+                <thead className="border-b border-border text-xs uppercase tracking-wide text-muted">
+                  <tr>
+                    <th className="px-5 py-3 font-medium">{t("colProductKind")}</th>
+                    <th className="px-3 py-3 text-right font-medium">{t("colLeadsShort")}</th>
+                    <th className="px-3 py-3 text-right font-medium">{t("colEnrolled")}</th>
+                    <th className="px-3 py-3 text-right font-medium">{t("colPaidShort")}</th>
+                    <th className="px-5 py-3 text-right font-medium">{t("colAmount")}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {club.rows.map((r) => (
+                    <tr key={r.key} className="border-b border-border">
+                      <td className="px-5 py-3">
+                        <div className="font-medium text-foreground">{kindLabel(r.kind)}</div>
+                        <div className="mt-0.5 text-xs font-medium text-accent-strong" style={num}>
+                          {r.startDate ? formatDateRu(r.startDate) : <span className="text-muted">{t("streamNoDate")}</span>}
+                        </div>
+                      </td>
+                      <td className="px-3 py-3 text-right text-foreground" style={num}>{r.leads}</td>
+                      <td className="px-3 py-3 text-right text-foreground" style={num}>{r.enrolled}</td>
+                      <td className={`px-3 py-3 text-right ${r.paid ? "font-medium text-foreground" : "text-muted"}`} style={num}>{r.paid}</td>
+                      <td className={`px-5 py-3 text-right font-semibold ${r.revenue ? "text-foreground" : "text-muted"}`}>
+                        <Money amountEur={r.revenue} local={r.revenueLocal} />
+                      </td>
+                    </tr>
+                  ))}
+                  <tr className="bg-surface-2 font-semibold text-foreground">
+                    <td className="px-5 py-3">{t("rowTotalShort")}</td>
+                    <td className="px-3 py-3 text-right" style={num}>{club.total.leads}</td>
+                    <td className="px-3 py-3 text-right" style={num}>{club.total.enrolled}</td>
+                    <td className="px-3 py-3 text-right" style={num}>{club.total.paid}</td>
+                    <td className="px-5 py-3 text-right"><Money amountEur={club.total.revenue} local={club.total.revenueLocal} /></td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function daysUntilLabel(daysUntil: number, t: (key: string, vars?: Record<string, string | number>) => string): string {
   if (daysUntil === 0) return t("eventStartsToday");
   if (daysUntil === -1) return t("eventStartedYesterday");
@@ -749,6 +818,7 @@ export default function DashboardBoard({
   productsAllTime,
   upcomingCohorts,
   masterclassConversion,
+  productsByCity,
 }: {
   totals: Totals;
   /** The 4th all-time tile — "Клубов в сети" on the network view, "Курсов"
@@ -802,6 +872,8 @@ export default function DashboardBoard({
    * src/lib/masterclassConversion.ts. Same fixed-30-days idea as
    * `upcomingCohorts`, independent of the period filter above. */
   masterclassConversion: MasterclassConversionResult;
+  /** Round 64 — Воркшоп/Тренинг per city; omitted = no widget. */
+  productsByCity?: ProductsByCityClub[];
 }) {
   const { locale, t } = useLocale();
   const maxFunnel = Math.max(1, ...funnel.map((s) => s.count));
@@ -823,6 +895,8 @@ export default function DashboardBoard({
           {decliningClubs && <DecliningClubsPanel decliningClubs={decliningClubs} />}
         </AttentionGrid>
       )}
+
+      {productsByCity && <ProductsByCityPanel clubs={productsByCity} />}
 
       <UpcomingEventsPanel events={upcomingCohorts} showClub={!!clubs} />
 

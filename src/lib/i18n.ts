@@ -225,6 +225,17 @@ export const DICT: Record<string, Entry> = {
   headingPastEvents: { ru: "Прошедшие за {days} дней", bg: "Минали за {days} дни" },
   eventStartedYesterday: { ru: "вчера", bg: "вчера" },
   eventStartedDaysAgo: { ru: "{n} дн. назад", bg: "преди {n} дни" },
+  // ---- Round 64: «Продукты по городам» (Воркшоп / Тренинг) ----
+  headingProductsByCity: { ru: "Продукты по городам", bg: "Продукти по градове" },
+  subheadingProductsByCity: {
+    ru: "Воркшоп и Тренинг: заявки, записи и оплаты за всё время",
+    bg: "Уъркшоп и Тренинг: запитвания, записвания и плащания за цялото време",
+  },
+  productKindWorkshop: { ru: "Воркшоп", bg: "Уъркшоп" },
+  productKindTraining: { ru: "Тренинг", bg: "Тренинг" },
+  colProductKind: { ru: "Продукт", bg: "Продукт" },
+  rowTotalShort: { ru: "Итого", bg: "Общо" },
+  streamNoDate: { ru: "дата потока не задана", bg: "без дата на потока" },
   colStream: { ru: "Поток", bg: "Поток" },
   colEnrolled: { ru: "Записалось", bg: "Записани" },
   colPaidShort: { ru: "Оплатили", bg: "Платили" },
