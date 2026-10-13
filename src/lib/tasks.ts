@@ -18,6 +18,10 @@ export type OpenTask = {
    * their own club, so naming it on every row would be noise. Always null
    * for a franchise-candidate task (no club owns it). */
   partnerName: string | null;
+  /** Franchise-candidate tasks only: her current stage and city, shown on
+   * the franchise Главная task card. */
+  stage?: string | null;
+  city?: string | null;
 };
 
 export type TaskUrgency = "overdue" | "today" | "upcoming" | "noDate";

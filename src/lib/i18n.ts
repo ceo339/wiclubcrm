@@ -1201,6 +1201,8 @@ export const DICT: Record<string, Entry> = {
   },
   headingQualifiedFunnel: { ru: "Воронка квалифицированных", bg: "Фуния на квалифицираните" },
   headingFranchiseTasks: { ru: "Задачи по кандидаткам", bg: "Задачи по кандидатите" },
+  subheadingFranchiseTasks: { ru: "Открытых задач: {n}", bg: "Отворени задачи: {n}" },
+  taskMarkDone: { ru: "Отметить выполненной", bg: "Отбележи като изпълнена" },
 
   // «Дашборд партнёров» (round 46) — новый блок вверху франчайзи-Главной.
   // (Названо не headingNetworkSummary — этот ключ уже занят клубной

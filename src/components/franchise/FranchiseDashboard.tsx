@@ -16,7 +16,7 @@ import {
 import { interpolateHex } from "@/lib/leads";
 import { useLocale } from "@/components/i18n/LocaleProvider";
 import Sparkline from "@/components/dashboard/Sparkline";
-import TasksWidget from "@/components/home/TasksWidget";
+import FranchiseTasksCard from "./FranchiseTasksCard";
 import NetworkSummaryPanel, { RecentActivityCard, StatTile } from "./NetworkSummaryPanel";
 import type { NetworkSummary, NetworkStructure, ApproxGeography, RecentActivityItem } from "@/lib/franchiseDashboard";
 
@@ -180,8 +180,9 @@ export default function FranchiseDashboard({
       </div>
 
       {/* Tasks and «Недавняя активность» side by side (1 Oct 2026). */}
-      <div className="grid grid-cols-1 items-stretch gap-4 lg:grid-cols-[minmax(0,24rem)_minmax(0,1fr)]">
-        <TasksWidget tasks={tasks} headingKey="headingFranchiseTasks" canEdit={canEditTasks} />
+      {/* 13 Oct 2026: two equal columns, same card style. */}
+      <div className="grid grid-cols-1 items-stretch gap-4 lg:grid-cols-2">
+        <FranchiseTasksCard tasks={tasks} canEdit={canEditTasks} />
         <RecentActivityCard recentActivity={recentActivity} />
       </div>
 

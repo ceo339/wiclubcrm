@@ -136,6 +136,7 @@ export default async function Home({
     // franchise-candidate tasks (no partner_id/partnerName — a candidate
     // isn't any one club's, see the tasks migration for this entity_type).
     const candidateNameById = new Map(allCandidates.map((c) => [c.id, c.name]));
+    const candidateById = new Map(allCandidates.map((c) => [c.id, c]));
     const canEditFranchiseTasks = profile.role === "hq" || profile.franchise_access === "edit";
     const franchiseOpenTasks: OpenTask[] = sortOpenTasks(
       (rawFranchiseTasks ?? []).map((row) => ({
@@ -146,6 +147,8 @@ export default async function Home({
         entityId: row.entity_id,
         entityName: candidateNameById.get(row.entity_id) ?? "—",
         partnerName: null,
+        stage: candidateById.get(row.entity_id)?.stage ?? null,
+        city: candidateById.get(row.entity_id)?.target_city ?? null,
       }))
     );
 

@@ -143,7 +143,7 @@ export function RecentActivityCard({ recentActivity }: { recentActivity: RecentA
         {recentActivity.length === 0 ? (
           <p className="p-5 text-sm text-muted">{t("emptyNoRecentActivity")}</p>
         ) : (
-          <div className="divide-y divide-border">
+          <div className="max-h-[30rem] divide-y divide-border overflow-y-auto">
             {recentActivity.map((item) => {
               const rt = relativeTimeParts(item.lastActivityAt);
               const isTerminal = item.stage === "declined" || item.stage === "paused";
