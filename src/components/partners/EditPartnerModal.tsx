@@ -1,7 +1,7 @@
 "use client";
 
 import { useActionState, useState, useTransition } from "react";
-import { updatePartner, resetPartnerPassword } from "@/app/partners/actions";
+import { updatePartner, resetPartnerPassword, sendTelegramTest } from "@/app/partners/actions";
 import { COUNTRIES } from "@/lib/leads";
 import { useT } from "@/components/i18n/LocaleProvider";
 import type { Tables } from "@/types/database";
@@ -31,6 +31,18 @@ export default function EditPartnerModal({
   // form/formAction above: this isn't a field on the club being saved,
   // it's an immediate action with its own confirmation, same shape as the
   // one-time credentials shown when a club is first created.
+  // Round 63 — Telegram chat for «новый лид» notifications + a test message.
+  const [chatId, setChatId] = useState(partner.telegram_chat_id ?? "");
+  const [testPending, startTest] = useTransition();
+  const [testResult, setTestResult] = useState<{ ok: boolean; message: string } | null>(null);
+  function handleTelegramTest() {
+    setTestResult(null);
+    startTest(async () => {
+      const res = await sendTelegramTest(chatId, partner.name);
+      setTestResult(res.error ? { ok: false, message: res.error.startsWith("err") ? t(res.error) : res.error } : { ok: true, message: t("telegramTestSent") });
+    });
+  }
+
   const [resetPending, startReset] = useTransition();
   const [resetResult, setResetResult] = useState<{ email: string; password: string } | null>(null);
   const [resetError, setResetError] = useState<string | null>(null);
@@ -128,6 +140,31 @@ export default function EditPartnerModal({
               />
               <span className="text-xs text-muted">{t("fieldReplyToEmailHint")}</span>
             </label>
+
+            <div className="flex flex-col gap-1.5 text-sm">
+              <span className="font-medium text-ink-2">{t("fieldTelegramChat")}</span>
+              <div className="flex gap-2">
+                <input
+                  name="telegram_chat_id"
+                  value={chatId}
+                  onChange={(e) => setChatId(e.target.value)}
+                  placeholder="-1001234567890"
+                  className="min-w-0 flex-1 rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-accent focus:ring-1 focus:ring-accent"
+                />
+                <button
+                  type="button"
+                  disabled={testPending || chatId.trim() === ""}
+                  onClick={handleTelegramTest}
+                  className="rounded-lg border border-border px-3 py-2 text-xs font-medium text-ink-2 hover:bg-surface-2 disabled:opacity-50"
+                >
+                  {t("btnTelegramTest")}
+                </button>
+              </div>
+              {testResult && (
+                <span className={`text-xs ${testResult.ok ? "text-ink-2" : "text-accent-strong"}`}>{testResult.message}</span>
+              )}
+              <span className="text-xs text-muted">{t("fieldTelegramChatHint")}</span>
+            </div>
 
             <div className="flex flex-col gap-1.5 text-sm">
               <span className="font-medium text-ink-2">{t("fieldLeadIntakeUrl")}</span>

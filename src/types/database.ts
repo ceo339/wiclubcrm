@@ -1042,6 +1042,7 @@ export type Database = {
           intake_key: string
           name: string
           reply_to_email: string | null
+          telegram_chat_id: string | null
         }
         Insert: {
           city?: string | null
@@ -1051,6 +1052,7 @@ export type Database = {
           intake_key?: string
           name: string
           reply_to_email?: string | null
+          telegram_chat_id?: string | null
         }
         Update: {
           city?: string | null
@@ -1060,6 +1062,7 @@ export type Database = {
           intake_key?: string
           name?: string
           reply_to_email?: string | null
+          telegram_chat_id?: string | null
         }
         Relationships: []
       }

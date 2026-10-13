@@ -1,3 +1,4 @@
+import { notifyNewLead } from "@/lib/server/telegram";
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { duplicateKey, normalizeEmail, normalizePhone } from "@/lib/leads";
@@ -371,7 +372,9 @@ export async function POST(request: Request, { params }: { params: Promise<{ key
     contactId = createdContact?.id ?? null;
   }
 
-  const { error } = await admin.from("leads").insert({
+  const { data: createdLead, error } = await admin
+    .from("leads")
+    .insert({
     partner_id: partner.id,
     contact_id: contactId,
     name,
@@ -391,9 +394,15 @@ export async function POST(request: Request, { params }: { params: Promise<{ key
     value,
     value_local: valueLocal,
     local_currency: localCurrency,
-  });
+  })
+    .select("id")
+    .single();
 
   if (error) return json({ ok: false, error: error.message }, 500);
+
+  // Round 63: «новый лид» → the club's Telegram chat. The lead is already saved;
+  // notifyNewLead never throws and a failure only lands in integration_events.
+  if (createdLead) await notifyNewLead(admin, createdLead.id);
 
   return json({ ok: true });
 }

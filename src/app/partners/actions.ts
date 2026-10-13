@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getCurrentProfile } from "@/lib/auth";
+import { sendTelegramMessage, validChatId } from "@/lib/server/telegram";
 
 export type ActionResult = {
   error: string | null;
@@ -144,10 +145,12 @@ export async function updatePartner(
   const city = String(formData.get("city") || "").trim();
   const country = String(formData.get("country") || "").trim();
   const replyToEmail = String(formData.get("reply_to_email") || "").trim().toLowerCase();
+  const telegramChatId = String(formData.get("telegram_chat_id") || "").trim();
 
   if (!name) return { error: "errEnterClubName" };
   if (!city) return { error: "errEnterCity" };
   if (!country) return { error: "errEnterCountry" };
+  if (telegramChatId && !validChatId(telegramChatId)) return { error: "errTelegramChatId" };
 
   let admin;
   try {
@@ -158,11 +161,28 @@ export async function updatePartner(
 
   const { error } = await admin
     .from("partners")
-    .update({ name, city, country, reply_to_email: replyToEmail || null })
+    .update({ name, city, country, reply_to_email: replyToEmail || null, telegram_chat_id: telegramChatId || null })
     .eq("id", partnerId);
 
   if (error) return { error: error.message };
 
   revalidatePath("/partners");
   return { error: null };
+}
+
+/**
+ * HQ-only: sends a test message to the chat id typed in the club's card (not yet
+ * saved is fine), so the setup is checked before the first real lead arrives.
+ */
+export async function sendTelegramTest(chatIdRaw: string, clubName: string): Promise<{ error: string | null }> {
+  const profile = await getCurrentProfile();
+  if (!profile) return { error: "errNotAuthorized" };
+  if (profile.role !== "hq") return { error: "errHqOnlyEditClubs" };
+  const chatId = chatIdRaw.trim();
+  if (!chatId || !validChatId(chatId)) return { error: "errTelegramChatId" };
+  const result = await sendTelegramMessage(
+    chatId,
+    `<b>Тест уведомлений · ${clubName.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")}</b>\n\nСюда будут приходить новые лиды клуба.`
+  );
+  return result.ok ? { error: null } : { error: result.error };
 }
