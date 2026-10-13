@@ -679,13 +679,17 @@ export function upcomingCohorts({
 // own name is user data (not app copy) and is never translated; only the
 // two special buckets ("deleted"/"unassigned") are.
 
+/** `count` = everyone enrolled; `attended` (Round 65, «пришло 5 из 18») =
+ * enrollments with status sPaid/sCompleted, i.e. those who actually paid or
+ * came — free attendees who finished the course included, no-shows and
+ * still-unpaid sign-ups not. */
 export type ProductCount =
-  | { kind: "product"; name: string; count: number }
-  | { kind: "deleted"; count: number }
-  | { kind: "unassigned"; count: number };
+  | { kind: "product"; name: string; count: number; attended: number }
+  | { kind: "deleted"; count: number; attended: number }
+  | { kind: "unassigned"; count: number; attended: number };
 
 export function countByProduct(
-  members: { product_id: string | null }[],
+  members: { product_id: string | null; status?: string }[],
   productNamesById: Map<string, string>
 ): ProductCount[] {
   const counts = new Map<string, ProductCount>();
@@ -694,19 +698,24 @@ export function countByProduct(
     let base: ProductCount;
     if (!m.product_id) {
       bucketKey = "__unassigned__";
-      base = { kind: "unassigned", count: 0 };
+      base = { kind: "unassigned", count: 0, attended: 0 };
     } else {
       const name = productNamesById.get(m.product_id);
       if (name) {
         bucketKey = `product:${name}`;
-        base = { kind: "product", name, count: 0 };
+        base = { kind: "product", name, count: 0, attended: 0 };
       } else {
         bucketKey = "__deleted__";
-        base = { kind: "deleted", count: 0 };
+        base = { kind: "deleted", count: 0, attended: 0 };
       }
     }
     const existing = counts.get(bucketKey);
-    counts.set(bucketKey, { ...base, count: (existing?.count ?? 0) + 1 } as ProductCount);
+    const came = m.status === "sPaid" || m.status === "sCompleted" ? 1 : 0;
+    counts.set(bucketKey, {
+      ...base,
+      count: (existing?.count ?? 0) + 1,
+      attended: (existing?.attended ?? 0) + came,
+    } as ProductCount);
   }
   const sortKey = (p: ProductCount) => (p.kind === "product" ? p.name : "");
   return [...counts.values()].sort((a, b) => b.count - a.count || sortKey(a).localeCompare(sortKey(b), "ru"));

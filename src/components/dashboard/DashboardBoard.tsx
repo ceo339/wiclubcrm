@@ -185,10 +185,12 @@ function productCountLabel(p: ProductCount, t: (key: string) => string): string 
 function ProductsTable({ titleKey, rows }: { titleKey: string; rows: ProductCount[] }) {
   const { t } = useLocale();
   const total = rows.reduce((sum, r) => sum + r.count, 0);
+  const totalAttended = rows.reduce((sum, r) => sum + r.attended, 0);
   return (
     <div className="flex-1 rounded-xl border border-border bg-background shadow-card">
       <div className="border-b border-border px-5 py-4">
         <h3 className="text-sm font-semibold text-foreground">{t(titleKey)}</h3>
+        <p className="mt-0.5 text-xs text-muted">{t("subheadingProductsAttended")}</p>
       </div>
       {rows.length === 0 ? (
         <p className="p-5 text-sm text-muted">{t("emptyNoMembersPeriod")}</p>
@@ -198,12 +200,16 @@ function ProductsTable({ titleKey, rows }: { titleKey: string; rows: ProductCoun
             {rows.map((r, i) => (
               <tr key={i} className="border-b border-border last:border-0">
                 <td className="px-5 py-2.5 text-foreground">{productCountLabel(r, t)}</td>
-                <td className="px-5 py-2.5 text-right font-medium text-foreground">{r.count}</td>
+                <td className="px-5 py-2.5 text-right font-medium text-foreground" style={{ fontVariantNumeric: "tabular-nums" }}>
+                  {t("attendedOf", { a: r.attended, n: r.count })}
+                </td>
               </tr>
             ))}
             <tr>
               <td className="px-5 py-2.5 font-medium text-ink-2">{t("total")}</td>
-              <td className="px-5 py-2.5 text-right font-semibold text-foreground">{total}</td>
+              <td className="px-5 py-2.5 text-right font-semibold text-foreground" style={{ fontVariantNumeric: "tabular-nums" }}>
+                {t("attendedOf", { a: totalAttended, n: total })}
+              </td>
             </tr>
           </tbody>
         </table>

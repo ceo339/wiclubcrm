@@ -284,6 +284,11 @@ export const DICT: Record<string, Entry> = {
   sourceUnknown: { ru: "Источник не указан", bg: "Източникът не е посочен" },
   emptyNoLeadsPeriod: { ru: "Нет лидов за этот период.", bg: "Няма запитвания за този период." },
   headingProductsPeriod: { ru: "Участницы по продуктам — за период", bg: "Участнички по продукти — за периода" },
+  subheadingProductsAttended: {
+    ru: "пришло (или оплатило) из записавшихся",
+    bg: "дошли (или платили) от записалите се",
+  },
+  attendedOf: { ru: "{a} из {n}", bg: "{a} от {n}" },
   headingProductsAllTime: { ru: "Участницы по продуктам — за всё время", bg: "Участнички по продукти — за цялото време" },
   headingClubsPeriod: { ru: "По клубам за период", bg: "По клубове за периода" },
   emptyNoMembersPeriod: { ru: "Нет участниц за этот период.", bg: "Няма участнички за този период." },
