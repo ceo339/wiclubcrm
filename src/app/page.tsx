@@ -14,6 +14,7 @@ import {
   countByProduct,
   enrollmentAttributionDate,
   findDecliningClubs,
+  isPaymentAttributed,
   paymentAttributionDate,
   findStaleLeads,
   inPeriod,
@@ -278,7 +279,8 @@ export default async function Home({
       enrollment: (p as { member_enrollments?: { start_date: string | null; created_at: string } | null })
         .member_enrollments ?? null,
       lead: (p as { leads?: { cohort_start_date: string | null; added_date: string } | null }).leads ?? null,
-    }));
+    }))
+    .filter(isPaymentAttributed);
     const productNamesById = new Map((products ?? []).map((p) => [p.id, p.name]));
     const partnerNamesById = new Map((partners ?? []).map((p) => [p.id, p.name]));
 
@@ -487,7 +489,8 @@ export default async function Home({
     enrollment: (p as { member_enrollments?: { start_date: string | null; created_at: string } | null })
       .member_enrollments ?? null,
     lead: (p as { leads?: { cohort_start_date: string | null; added_date: string } | null }).leads ?? null,
-  }));
+  }))
+    .filter(isPaymentAttributed);
   const productNamesById = new Map((products ?? []).map((p) => [p.id, p.name]));
   // "Ближайшие события" — one club, so no partnerNamesById/showClub column
   // needed (see the network branch above for the multi-club version).

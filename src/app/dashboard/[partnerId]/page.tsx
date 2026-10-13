@@ -11,6 +11,7 @@ import {
   monthlyRevenue,
   monthsWithActivity,
   parsePeriodParams,
+  isPaymentAttributed,
   paymentAttributionDate,
   upcomingCohorts,
   yearsWithActivity,
@@ -85,7 +86,8 @@ export default async function ClubDashboardPage({
     enrollment: (p as { member_enrollments?: { start_date: string | null; created_at: string } | null })
       .member_enrollments ?? null,
     lead: (p as { leads?: { cohort_start_date: string | null; added_date: string } | null }).leads ?? null,
-  }));
+  }))
+    .filter(isPaymentAttributed);
   const productNamesById = new Map((products ?? []).map((p) => [p.id, p.name]));
   // "Ближайшие события" — this one club's own upcoming streams (see
   // src/app/page.tsx's network branch for the multi-club version with a

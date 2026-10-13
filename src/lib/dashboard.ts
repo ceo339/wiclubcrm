@@ -196,6 +196,17 @@ export function paymentAttributionDate(p: PaymentContext): string {
   return p.paid_date;
 }
 
+/**
+ * Round 66 («мы считаем выручку только по предоставленной услуге всегда»): a
+ * payment tied to neither an enrollment nor a lead has no course/поток, so it
+ * is NOT revenue of any month — it waits in «Требует внимания» (see
+ * lib/attention.ts) until someone links it. Revenue/period figures filter
+ * their payments through this; the «Оплаты» list itself still shows all.
+ */
+export function isPaymentAttributed(p: Pick<PaymentContext, "enrollment" | "lead">): boolean {
+  return p.enrollment !== null || p.lead !== null;
+}
+
 /** Every month with real activity in the given rows, plus the current month
  * even if it's still empty. Never a fabricated "last N months" — only
  * months that actually have (or could have) something to show. */

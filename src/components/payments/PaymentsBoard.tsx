@@ -154,7 +154,10 @@ export default function PaymentsBoard({
   // partial payment (рассрочка); «Пакеты» = package sales only.
   const isPrepay = (p: Payment) => !!p.enrollment?.start_date && p.paid_date < p.enrollment.start_date;
 
-  const isUnlinked = (p: Payment) => p.status === "paid" && !p.member_id && !!p.dsk_order_id;
+  // Round 66: unlinked = a bank payment with no participant, or any paid payment with no
+  // course/поток (no enrollment, no lead) — the latter is not counted as revenue yet.
+  const isUnlinked = (p: Payment) =>
+    p.status === "paid" && ((!p.member_id && !!p.dsk_order_id) || (!p.enrollment && !p.lead));
   const unlinkedCount = useMemo(() => cashPayments.filter(isUnlinked).length, [cashPayments]);
 
   const filtered = useMemo(() => {
@@ -419,6 +422,14 @@ export default function PaymentsBoard({
                             )}
                             {/* Round 58 — a bank payment with no participant: «Не привязана»
                                 (the club also gets a task on the lead). */}
+                            {row.payment.member_name && isUnlinked(row.payment) && (
+                              <div className="flex flex-wrap items-center gap-1.5 text-xs">
+                                <span className="rounded-full bg-warn-soft px-2 py-0.5 font-medium text-warn">
+                                  {t("badgePaymentUnlinked")}
+                                </span>
+                                <span className="text-warn">{t("paymentNoCourseUnlinked")}</span>
+                              </div>
+                            )}
                             {!row.payment.member_name && row.payment.dsk_order_id && (
                               <div className="flex flex-wrap items-center gap-1.5 text-xs">
                                 <span className="rounded-full bg-warn-soft px-2 py-0.5 font-medium text-warn">
