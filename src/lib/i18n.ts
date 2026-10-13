@@ -1113,7 +1113,7 @@ export const DICT: Record<string, Entry> = {
   cLetters: { ru: "Письма", bg: "Писма" },
 
   // ---- franchise (round 38) ----
-  fSearchPlaceholder: { ru: "Поиск по имени, телефону, городу…", bg: "Търсене по име, телефон, град…" },
+  fSearchPlaceholder: { ru: "Поиск по имени, телефону, Telegram, городу…", bg: "Търсене по име, телефон, Telegram, град…" },
   fCandidatesCount: { ru: "{count} кандидаток", bg: "{count} кандидатки" },
 
   // "тут нужен филтр как на главной по периодам. и фильтр по странам и по

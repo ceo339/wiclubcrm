@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { useLocale } from "@/components/i18n/LocaleProvider";
 import { QUALIFIED_TAB_STAGES } from "@/lib/franchise";
+import { phoneMatches, telegramMatches } from "@/lib/search";
 import {
   computeFranchiseFunnel,
   franchiseMonthsWithActivity,
@@ -167,7 +168,8 @@ export default function FranchiseBoard({
         return (
           c.name.toLowerCase().includes(q) ||
           (c.email ?? "").toLowerCase().includes(q) ||
-          (c.phone ?? "").toLowerCase().includes(q) ||
+          phoneMatches(c.phone, q) ||
+          telegramMatches(c.telegram, q) ||
           (c.target_city ?? "").toLowerCase().includes(q) ||
           (c.country ?? "").toLowerCase().includes(q)
         );
