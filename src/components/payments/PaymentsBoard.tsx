@@ -154,10 +154,9 @@ export default function PaymentsBoard({
   // partial payment (рассрочка); «Пакеты» = package sales only.
   const isPrepay = (p: Payment) => !!p.enrollment?.start_date && p.paid_date < p.enrollment.start_date;
 
-  // Round 66/67: unlinked = a bank payment with no participant, or any paid payment with no
-  // course (no enrollment, and no lead-with-course) — the latter is not counted as revenue yet.
-  const isUnlinked = (p: Payment) =>
-    p.status === "paid" && ((!p.member_id && !!p.dsk_order_id) || (!p.enrollment && !(p.lead && p.product_id)));
+  // Round 66/67: unlinked = a paid payment with no enrollment (no service provided yet) —
+  // not counted as revenue until it is linked to a course enrollment.
+  const isUnlinked = (p: Payment) => p.status === "paid" && !p.enrollment;
   const unlinkedCount = useMemo(() => cashPayments.filter(isUnlinked).length, [cashPayments]);
 
   const filtered = useMemo(() => {
