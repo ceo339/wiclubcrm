@@ -33,6 +33,13 @@ export async function loadAttentionCounts(
     .eq("status", "paid")
     .is("enrollment_id", null)
     .is("lead_id", null);
+  // Round 67: a lead-only payment with no course (the lead → «Оплата» fallback) — also not revenue.
+  let noProductQuery = db
+    .from("payments")
+    .select("id")
+    .eq("status", "paid")
+    .is("enrollment_id", null)
+    .is("product_id", null);
   let enrollmentsQuery = db
     .from("member_enrollments")
     .select("product_id, status, start_date")
@@ -43,18 +50,20 @@ export async function loadAttentionCounts(
   if (partnerId) {
     bankUnlinkedQuery = bankUnlinkedQuery.eq("partner_id", partnerId);
     noCourseQuery = noCourseQuery.eq("partner_id", partnerId);
+    noProductQuery = noProductQuery.eq("partner_id", partnerId);
     enrollmentsQuery = enrollmentsQuery.eq("partner_id", partnerId);
     cohortsQuery = cohortsQuery.eq("partner_id", partnerId);
   }
-  const [{ data: bankUnlinked }, { data: noCourse }, { data: enrollments }, { data: cohorts }] = await Promise.all([
+  const [{ data: bankUnlinked }, { data: noCourse }, { data: noProduct }, { data: enrollments }, { data: cohorts }] = await Promise.all([
     bankUnlinkedQuery,
     noCourseQuery,
+    noProductQuery,
     enrollmentsQuery,
     cohortsQuery,
   ]);
   const withCohorts = new Set((cohorts ?? []).map((c) => c.product_id));
   return {
-    unlinkedPayments: new Set([...(bankUnlinked ?? []), ...(noCourse ?? [])].map((p) => p.id)).size,
+    unlinkedPayments: new Set([...(bankUnlinked ?? []), ...(noCourse ?? []), ...(noProduct ?? [])].map((p) => p.id)).size,
     needsCohort: (enrollments ?? []).filter((e) => enrollmentNeedsCohort(e, withCohorts)).length,
   };
 }

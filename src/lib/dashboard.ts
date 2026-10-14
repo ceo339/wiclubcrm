@@ -197,14 +197,17 @@ export function paymentAttributionDate(p: PaymentContext): string {
 }
 
 /**
- * Round 66 («мы считаем выручку только по предоставленной услуге всегда»): a
- * payment tied to neither an enrollment nor a lead has no course/поток, so it
- * is NOT revenue of any month — it waits in «Требует внимания» (see
- * lib/attention.ts) until someone links it. Revenue/period figures filter
- * their payments through this; the «Оплаты» list itself still shows all.
+ * Round 66/67 («мы считаем выручку только по предоставленной услуге всегда»): a
+ * payment counts as revenue only when it is tied to a course — through its
+ * enrollment, or through a lead that has a course (`product_id`) chosen. A payment
+ * with neither (no enrollment and no lead; or a lead-only payment with no course —
+ * what the lead → «Оплата» fallback writes when the lead has a «Сумма» but no
+ * course) is NOT revenue of any month: it waits in «Требует внимания» (see
+ * lib/attention.ts) until someone links it. Revenue/period figures filter their
+ * payments through this; the «Оплаты» list itself still shows all.
  */
-export function isPaymentAttributed(p: Pick<PaymentContext, "enrollment" | "lead">): boolean {
-  return p.enrollment !== null || p.lead !== null;
+export function isPaymentAttributed(p: Pick<PaymentContext, "enrollment" | "lead"> & { product_id?: string | null }): boolean {
+  return p.enrollment !== null || (p.lead !== null && !!p.product_id);
 }
 
 /** Every month with real activity in the given rows, plus the current month
