@@ -10,8 +10,11 @@ import { localOf, sumLocal, type LocalAmount } from "@/lib/currency";
  * page is untouched.
  *
  *  - «Заявки»     = every lead of that product (declined ones included).
- *  - «Записалось» = every enrollment of that product (any status, same
- *                   convention as the «События» widget).
+ *  - «Записалось» = enrollments of that product that have NOT paid yet — an
+ *                   enrollment moves from «Записалось» to «Оплатили» once it
+ *                   is sPaid / sCompleted (Anastasiia, 16 окт 2026: «если лид
+ *                   оплатил, то он не считается в записалась» — so the two
+ *                   columns are disjoint and show the real funnel picture).
  *  - «Оплатили»   = enrollments sPaid / sCompleted.
  *  - «Сумма»      = sum of those enrollments' price (EUR) + local sum.
  *
@@ -117,7 +120,7 @@ export function computeProductsByCity({
           kind,
           startDate: d,
           leads: rl.length,
-          enrolled: re.length,
+          enrolled: re.length - paid.length,
           paid: paid.length,
           revenue: paid.reduce((s, e) => s + Number(e.price), 0),
           revenueLocal: paid.length ? sumLocal(paid.map((e) => localOf(e.price_local, e.local_currency))) : null,
