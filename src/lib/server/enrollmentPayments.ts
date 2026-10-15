@@ -24,6 +24,45 @@ type Db = Awaited<ReturnType<typeof createClient>>;
 
 const MONEY_STATUSES = new Set(["sAwaiting", "sPartial", "sPaid"]);
 
+/**
+ * Round 71 — «почему она на стадии Записалась, хотя по факту оплаченная?»
+ * Лид и запись на курс — два отдельных объекта: оплата, внесённая на карточке
+ * участницы или в «Оплатах», меняла статус записи, но лид (созданный при
+ * добавлении курса на стадии «Записалась») так и оставался в канбане на
+ * прежней стадии. Теперь, как только запись становится «Оплачено», открытые
+ * лиды этого же контакта на тот же курс (и тот же поток, если он задан)
+ * переходят в «Оплата». Прямой update без promotePaidLead — платёж уже есть,
+ * второй создавать не нужно. Отказ и уже оплаченные лиды не трогаем.
+ */
+async function advanceLeadToPaid(db: Db, enrollmentId: string): Promise<void> {
+  const { data: e } = await db
+    .from("member_enrollments")
+    .select("partner_id, product_id, start_date, members(contact_id, lead_id)")
+    .eq("id", enrollmentId)
+    .maybeSingle();
+  if (!e || !e.product_id) return;
+  const member = (e as { members?: { contact_id: string | null; lead_id: string | null } | null }).members;
+  if (!member || (!member.contact_id && !member.lead_id)) return;
+
+  let q = db
+    .from("leads")
+    .select("id, cohort_start_date")
+    .eq("partner_id", e.partner_id)
+    .eq("product_id", e.product_id)
+    .not("stage", "in", "(paid,declined)");
+  q = member.contact_id && member.lead_id
+    ? q.or(`contact_id.eq.${member.contact_id},id.eq.${member.lead_id}`)
+    : member.contact_id
+      ? q.eq("contact_id", member.contact_id)
+      : q.eq("id", member.lead_id as string);
+  const { data: leads } = await q;
+  const ids = (leads ?? [])
+    .filter((l) => !l.cohort_start_date || !e.start_date || l.cohort_start_date === e.start_date)
+    .map((l) => l.id);
+  if (ids.length === 0) return;
+  await db.from("leads").update({ stage: "paid", updated_at: new Date().toISOString() }).in("id", ids);
+}
+
 /** Sum of non-refunded payments linked to one enrollment. */
 export async function enrollmentPaidSum(db: Db, enrollmentId: string): Promise<number> {
   const { data } = await db.from("payments").select("amount, status").eq("enrollment_id", enrollmentId);
@@ -77,6 +116,7 @@ export async function recomputeEnrollmentStatus(
     }
   }
   if (Object.keys(patch).length) await db.from("member_enrollments").update(patch).eq("id", enrollmentId);
+  if ((patch.status ?? e.status) === "sPaid") await advanceLeadToPaid(db, enrollmentId);
   if (patch.price !== undefined) {
     await db
       .from("package_sale_items")
