@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentProfile } from "@/lib/auth";
-import { currentMonthYear, enrollmentIsDueForCompletion, STATUSES } from "@/lib/members";
+import { courseIsSingleSession, currentMonthYear, enrollmentIsDueForCompletion, STATUSES } from "@/lib/members";
 import { todayIso } from "@/lib/payments";
 import { findOrCreateContact, loadContactHistory, type ContactHistory } from "@/lib/server/contacts";
 import { recomputeEnrollmentStatus, syncEnrollmentPaymentRows } from "@/lib/server/enrollmentPayments";
@@ -593,9 +593,8 @@ export async function setAttendance(
  *    страницу после каждого клика (долго, и список участниц «прыгал»);
  *    клиент уже показал отметку сразу (оптимистично);
  *  - снятая отметка хранится как null (как «ещё не отмечено»).
- * Автозавершение курса проверяется только для этой одной записи и только
- * если отмечены ВСЕ занятия (то же правило, что и в
- * enrollmentIsDueForCompletion).
+ * Автозавершение курса — только при отметке «была» и только по этому
+ * потоку (см. комментарий ниже), а не по всем записям клуба.
  */
 export async function setPresence(
   enrollmentId: string,
@@ -609,7 +608,7 @@ export async function setPresence(
   const supabase = await createClient();
   const { data: enrollment, error: fetchError } = await supabase
     .from("member_enrollments")
-    .select("attended, status, start_date, products(sessions)")
+    .select("attended, status, start_date, partner_id, product_id, products(sessions)")
     .eq("id", enrollmentId)
     .maybeSingle();
   if (fetchError) return { error: fetchError.message };
@@ -622,10 +621,35 @@ export async function setPresence(
   const { error } = await supabase.from("member_enrollments").update({ attended }).eq("id", enrollmentId);
   if (error) return { error: error.message };
 
-  if (present && enrollment.status === "sPaid") {
+  // Автозавершение «как раньше»: курс заканчивается, когда по списку
+  // отмечены ВСЕ занятия. В двухпозиционной таблице «не отмечено = не была»,
+  // поэтому занятие считается отмеченным, если на нём отметили хоть одну
+  // участницу потока; как только проведены все занятия — все «Оплатила»
+  // этого потока становятся «Завершила» (пропустившие тоже, как раньше,
+  // когда пропуск отмечался явно). Одноразовый МК завершается по дате —
+  // это делает enrollmentIsDueForCompletion.
+  if (present && enrollment.status !== "sCompleted") {
     const sessions = (enrollment as { products?: { sessions: number | null } | null }).products?.sessions ?? null;
-    if (enrollmentIsDueForCompletion({ status: enrollment.status, start_date: enrollment.start_date, attended }, sessions)) {
-      await supabase.from("member_enrollments").update({ status: "sCompleted" }).eq("id", enrollmentId);
+    if (courseIsSingleSession(sessions)) {
+      if (enrollmentIsDueForCompletion({ status: enrollment.status, start_date: enrollment.start_date, attended }, sessions)) {
+        await supabase.from("member_enrollments").update({ status: "sCompleted" }).eq("id", enrollmentId);
+      }
+    } else if (enrollment.product_id && enrollment.start_date) {
+      const { data: roster } = await supabase
+        .from("member_enrollments")
+        .select("id, status, attended")
+        .eq("partner_id", enrollment.partner_id)
+        .eq("product_id", enrollment.product_id)
+        .eq("start_date", enrollment.start_date)
+        .neq("status", "sNoShow");
+      const rows = roster ?? [];
+      const allHeld = Array.from({ length: sessions ?? 0 }, (_, i) => i).every((i) =>
+        rows.some((r) => Array.isArray(r.attended) && r.attended[i] === true)
+      );
+      if (allHeld) {
+        const due = rows.filter((r) => r.status === "sPaid").map((r) => r.id);
+        if (due.length > 0) await supabase.from("member_enrollments").update({ status: "sCompleted" }).in("id", due);
+      }
     }
   }
 
