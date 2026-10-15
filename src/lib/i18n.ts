@@ -653,6 +653,8 @@ export const DICT: Record<string, Entry> = {
     bg: "Не може да се изтрие: част от курсовете в пакета вече са разпределени по потоци",
   },
   packageBadgeLabel: { ru: "Пакет", bg: "Пакет" },
+  btnChangeShort: { ru: "Изменить", bg: "Промени" },
+  packageItemLockedHint: { ru: "поток назначен", bg: "потокът е назначен" },
   headingPackageSaleDetail: { ru: "Детали пакета", bg: "Детайли на пакета" },
   packageTotalLabel: { ru: "Сумма пакета", bg: "Сума на пакета" },
 

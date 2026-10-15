@@ -215,6 +215,205 @@ export async function deletePackageSale(id: string): Promise<ActionResult> {
   return { error: null };
 }
 
+/**
+ * Round 68 — «Сделай возможность редактирования» (Anastasiia, 15 Oct 2026):
+ * edit a package after it was sold — name, total, payment date and the set
+ * of courses in it. Courses whose поток is already assigned are real
+ * enrollments now, so they always stay in the package (the form shows them
+ * locked); only still-pending courses can be removed, and new ones are added
+ * as pending. A changed paid_date is carried over to the per-course payment
+ * shares, which keep the package's own paid_date (see assignPackageItem).
+ */
+export async function updatePackageSale(id: string, formData: FormData): Promise<ActionResult> {
+  const profile = await getCurrentProfile();
+  if (!profile) return { error: "errNotAuthorized" };
+  if (!profile.partner_id) return { error: "errHqNoClubGeneric" };
+
+  const label = String(formData.get("label") || "").trim();
+  if (!label) return { error: "errEnterPackageLabel" };
+  const totalPrice = parseAmount(formData.get("total_price"));
+  const totalLocal = readLocal(formData, "total_price");
+  const paidDate = String(formData.get("paid_date") || "").trim() || todayIso();
+  const wantedIds = Array.from(new Set(formData.getAll("product_id").map(String).filter(Boolean)));
+
+  const supabase = await createClient();
+
+  const { data: sale } = await supabase
+    .from("package_sales")
+    .select("id")
+    .eq("id", id)
+    .eq("partner_id", profile.partner_id)
+    .maybeSingle();
+  if (!sale) return { error: "errGeneric" };
+
+  const { data: items } = await supabase
+    .from("package_sale_items")
+    .select("id, product_id, enrollment_id")
+    .eq("package_sale_id", id)
+    .eq("partner_id", profile.partner_id);
+  const current = items ?? [];
+
+  let verifiedIds: string[] = [];
+  if (wantedIds.length > 0) {
+    const { data: verifiedProducts } = await supabase
+      .from("products")
+      .select("id")
+      .eq("partner_id", profile.partner_id)
+      .in("id", wantedIds);
+    verifiedIds = (verifiedProducts ?? []).map((p) => p.id);
+  }
+
+  const toRemove = current.filter((i) => !i.enrollment_id && !(i.product_id && verifiedIds.includes(i.product_id)));
+  const keptCount = current.length - toRemove.length;
+  const existingProductIds = new Set(current.map((i) => i.product_id).filter(Boolean) as string[]);
+  const toAdd = verifiedIds.filter((pid) => !existingProductIds.has(pid));
+  if (keptCount + toAdd.length === 0) return { error: "errSelectPackageCourses" };
+
+  const { error } = await supabase
+    .from("package_sales")
+    .update({
+      label,
+      total_price: totalPrice,
+      total_price_local: totalLocal.local,
+      local_currency: totalLocal.currency,
+      paid_date: paidDate,
+    })
+    .eq("id", id)
+    .eq("partner_id", profile.partner_id);
+  if (error) return { error: error.message };
+
+  if (toRemove.length > 0) {
+    const { error: delError } = await supabase
+      .from("package_sale_items")
+      .delete()
+      .in("id", toRemove.map((i) => i.id))
+      .eq("partner_id", profile.partner_id);
+    if (delError) return { error: delError.message };
+  }
+
+  if (toAdd.length > 0) {
+    const { error: addError } = await supabase.from("package_sale_items").insert(
+      toAdd.map((productId) => ({
+        package_sale_id: id,
+        partner_id: profile.partner_id!,
+        product_id: productId,
+      }))
+    );
+    if (addError) return { error: addError.message };
+  }
+
+  await supabase
+    .from("payments")
+    .update({ paid_date: paidDate })
+    .eq("package_sale_id", id)
+    .eq("partner_id", profile.partner_id);
+
+  revalidatePath("/members");
+  revalidatePath("/payments");
+  revalidatePath("/");
+  return { error: null };
+}
+
+/**
+ * Round 68 — edit an already-assigned course of a package: its поток date
+ * and its share of the package price. Keeps the three records it created in
+ * sync — the package item, the member_enrollments row (Посещаемость) and the
+ * payment share (revenue of that поток): the share is updated, created if it
+ * was 0 before, or removed if it is set to 0 now.
+ */
+export async function updatePackageItem(itemId: string, formData: FormData): Promise<ActionResult> {
+  const profile = await getCurrentProfile();
+  if (!profile) return { error: "errNotAuthorized" };
+  if (!profile.partner_id) return { error: "errHqNoClubGeneric" };
+
+  const startDate = String(formData.get("start_date") || "").trim();
+  if (!startDate) return { error: "errEnterCohortStartDate" };
+  const allocatedPrice = parseAmount(formData.get("allocated_price"));
+  const allocLocal = readLocal(formData, "allocated_price");
+
+  const supabase = await createClient();
+
+  const { data: item } = await supabase
+    .from("package_sale_items")
+    .select("id, product_id, enrollment_id, package_sale_id, package_sales(member_id, paid_date)")
+    .eq("id", itemId)
+    .eq("partner_id", profile.partner_id)
+    .maybeSingle();
+  if (!item) return { error: "errGeneric" };
+  if (!item.enrollment_id) return assignPackageItem(itemId, formData);
+
+  const sale = (item as { package_sales?: { member_id: string; paid_date: string } | null }).package_sales;
+  if (!sale) return { error: "errGeneric" };
+
+  const { error: enrollError } = await supabase
+    .from("member_enrollments")
+    .update({
+      start_date: startDate,
+      price: allocatedPrice,
+      price_local: allocLocal.local,
+      local_currency: allocLocal.currency,
+    })
+    .eq("id", item.enrollment_id)
+    .eq("partner_id", profile.partner_id);
+  if (enrollError) return { error: enrollError.message };
+
+  const { data: shares } = await supabase
+    .from("payments")
+    .select("id")
+    .eq("enrollment_id", item.enrollment_id)
+    .eq("package_sale_id", item.package_sale_id)
+    .eq("partner_id", profile.partner_id);
+  const shareIds = (shares ?? []).map((p) => p.id);
+
+  if (allocatedPrice > 0) {
+    if (shareIds.length > 0) {
+      const { error: payError } = await supabase
+        .from("payments")
+        .update({
+          amount: allocatedPrice,
+          amount_local: allocLocal.local,
+          local_currency: allocLocal.currency,
+        })
+        .in("id", shareIds);
+      if (payError) return { error: payError.message };
+    } else {
+      const { error: payError } = await supabase.from("payments").insert({
+        partner_id: profile.partner_id,
+        member_id: sale.member_id,
+        enrollment_id: item.enrollment_id,
+        product_id: item.product_id,
+        amount: allocatedPrice,
+        amount_local: allocLocal.local,
+        local_currency: allocLocal.currency,
+        status: "paid",
+        paid_date: sale.paid_date,
+        package_sale_id: item.package_sale_id,
+      });
+      if (payError) return { error: payError.message };
+    }
+  } else if (shareIds.length > 0) {
+    const { error: payError } = await supabase.from("payments").delete().in("id", shareIds);
+    if (payError) return { error: payError.message };
+  }
+
+  const { error: updateError } = await supabase
+    .from("package_sale_items")
+    .update({
+      start_date: startDate,
+      allocated_price: allocatedPrice,
+      allocated_price_local: allocLocal.local,
+      local_currency: allocLocal.currency,
+    })
+    .eq("id", itemId);
+  if (updateError) return { error: updateError.message };
+
+  revalidatePath("/members");
+  revalidatePath("/attendance", "layout");
+  revalidatePath("/payments");
+  revalidatePath("/");
+  return { error: null };
+}
+
 export type PackageSaleItemDetail = {
   id: string;
   product_id: string | null;

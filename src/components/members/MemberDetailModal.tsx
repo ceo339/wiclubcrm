@@ -20,6 +20,8 @@ import {
   assignPackageItem,
   createPackageSale,
   deletePackageSale,
+  updatePackageItem,
+  updatePackageSale,
   getPackageSalesForMember,
   type PackageSaleDetail,
 } from "@/app/packages/actions";
@@ -1100,7 +1102,15 @@ function PackageSalesSection({
       {list.length > 0 && (
         <div className="mt-2 flex flex-col gap-3">
           {list.map((pkg) => (
-            <PackageSaleCard key={pkg.id} pkg={pkg} cohorts={cohorts} canEdit={canEdit} onChanged={onChanged} />
+            <PackageSaleCard
+              key={pkg.id}
+              memberId={memberId}
+              pkg={pkg}
+              products={products}
+              cohorts={cohorts}
+              canEdit={canEdit}
+              onChanged={onChanged}
+            />
           ))}
         </div>
       )}
@@ -1121,12 +1131,16 @@ function PackageSalesSection({
 }
 
 function PackageSaleCard({
+  memberId,
   pkg,
+  products,
   cohorts,
   canEdit,
   onChanged,
 }: {
+  memberId: string;
   pkg: PackageSaleDetail;
+  products: Tables<"products">[];
   cohorts: Tables<"product_cohorts">[];
   canEdit: boolean;
   onChanged: () => void;
@@ -1135,7 +1149,23 @@ function PackageSaleCard({
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [assigningItemId, setAssigningItemId] = useState<string | null>(null);
+  const [editing, setEditing] = useState(false);
   const allAssigned = pkg.items.every((i) => i.enrollment_id);
+
+  if (editing) {
+    return (
+      <NewPackageSaleForm
+        memberId={memberId}
+        products={products}
+        pkg={pkg}
+        onCancel={() => setEditing(false)}
+        onSaved={() => {
+          setEditing(false);
+          onChanged();
+        }}
+      />
+    );
+  }
 
   function handleDelete() {
     setError(null);
@@ -1161,15 +1191,26 @@ function PackageSaleCard({
             </span>
           </div>
         </div>
-        {canEdit && !allAssigned && (
-          <button
-            type="button"
-            disabled={pending}
-            onClick={handleDelete}
-            className="shrink-0 text-xs text-accent-strong hover:underline disabled:opacity-50"
-          >
-            {pending ? "..." : t("delete")}
-          </button>
+        {canEdit && (
+          <div className="flex shrink-0 items-center gap-3">
+            <button
+              type="button"
+              onClick={() => setEditing(true)}
+              className="text-xs text-ink-2 hover:underline"
+            >
+              {t("edit")}
+            </button>
+            {!allAssigned && (
+              <button
+                type="button"
+                disabled={pending}
+                onClick={handleDelete}
+                className="text-xs text-accent-strong hover:underline disabled:opacity-50"
+              >
+                {pending ? "..." : t("delete")}
+              </button>
+            )}
+          </div>
         )}
       </div>
       {error && <p className="mt-1 text-xs text-accent-strong">{t(error)}</p>}
@@ -1185,6 +1226,15 @@ function PackageSaleCard({
                   <span className="text-ink-2">
                     <Money amountEur={item.allocated_price ?? 0} local={localOf(item.allocated_price_local, item.local_currency)} />
                   </span>
+                  {canEdit && assigningItemId !== item.id && (
+                    <button
+                      type="button"
+                      onClick={() => setAssigningItemId(item.id)}
+                      className="text-ink-2 hover:underline"
+                    >
+                      {t("btnChangeShort")}
+                    </button>
+                  )}
                 </span>
               ) : canEdit ? (
                 assigningItemId === item.id ? null : (
@@ -1231,23 +1281,35 @@ function AssignPackageItemForm({
 }) {
   const t = useT();
   const { currency, rates } = useCurrency();
-  const [startDate, setStartDate] = useState("");
-  const [price, setPrice] = useState("");
+  // Round 68: an already-assigned course opens prefilled and saves through
+  // updatePackageItem (date + share), instead of creating a second enrollment.
+  const isEdit = Boolean(item.enrollment_id);
+  const [startDate, setStartDate] = useState(isEdit ? item.start_date ?? "" : "");
+  const [price, setPrice] = useState(() => {
+    if (!isEdit) return "";
+    if (item.allocated_price_local !== null && item.allocated_price_local !== undefined && item.local_currency === currency)
+      return String(Number(item.allocated_price_local));
+    return String(roundMoney(convertFromEur(item.allocated_price ?? 0, currency, rates), currency));
+  });
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
-  const productCohorts = useMemo(
-    () =>
-      cohorts
-        .filter((c) => c.product_id === item.product_id)
-        .sort((a, b) => a.start_date.localeCompare(b.start_date)),
-    [cohorts, item.product_id]
-  );
+  const productCohorts = useMemo(() => {
+    const list = cohorts
+      .filter((c) => c.product_id === item.product_id)
+      .map((c) => ({ id: c.id, start_date: c.start_date }));
+    // Keep the currently assigned date selectable even if that поток was
+    // later removed from the course's list.
+    if (isEdit && item.start_date && !list.some((c) => c.start_date === item.start_date)) {
+      list.push({ id: `current-${item.id}`, start_date: item.start_date });
+    }
+    return list.sort((a, b) => a.start_date.localeCompare(b.start_date));
+  }, [cohorts, item.product_id, item.start_date, item.id, isEdit]);
 
   function handleSubmit(formData: FormData) {
     setError(null);
     startTransition(async () => {
-      const res = await assignPackageItem(item.id, formData);
+      const res = isEdit ? await updatePackageItem(item.id, formData) : await assignPackageItem(item.id, formData);
       if (res.error) setError(res.error);
       else onSaved();
     });
@@ -1321,7 +1383,7 @@ function AssignPackageItemForm({
           disabled={pending}
           className="rounded-lg bg-foreground px-3 py-1 text-xs font-medium text-background disabled:opacity-50"
         >
-          {pending ? "..." : t("btnAssignShort")}
+          {pending ? "..." : isEdit ? t("save") : t("btnAssignShort")}
         </button>
       </div>
     </form>
@@ -1331,31 +1393,60 @@ function AssignPackageItemForm({
 function NewPackageSaleForm({
   memberId,
   products,
+  pkg,
   onCancel,
   onSaved,
 }: {
   memberId: string;
   products: Tables<"products">[];
+  /** Round 68: when given, the form edits this package instead of selling a new one. */
+  pkg?: PackageSaleDetail;
   onCancel: () => void;
   onSaved: () => void;
 }) {
   const t = useT();
   const { currency, rates } = useCurrency();
-  const [label, setLabel] = useState("");
-  const [selected, setSelected] = useState<string[]>([]);
-  const [totalPrice, setTotalPrice] = useState("");
-  const [paidDate, setPaidDate] = useState(() => new Date().toISOString().slice(0, 10));
+  // Courses whose поток is already assigned are real enrollments — they stay
+  // in the package (shown checked and locked).
+  const lockedIds = useMemo(
+    () => (pkg?.items ?? []).filter((i) => i.enrollment_id && i.product_id).map((i) => i.product_id as string),
+    [pkg]
+  );
+  const [label, setLabel] = useState(pkg?.label ?? "");
+  const [selected, setSelected] = useState<string[]>(
+    () => (pkg?.items ?? []).map((i) => i.product_id).filter(Boolean) as string[]
+  );
+  const [totalPrice, setTotalPrice] = useState(() => {
+    if (!pkg) return "";
+    if (pkg.total_price_local !== null && pkg.total_price_local !== undefined && pkg.local_currency === currency)
+      return String(Number(pkg.total_price_local));
+    return String(roundMoney(convertFromEur(pkg.total_price, currency, rates), currency));
+  });
+  const [paidDate, setPaidDate] = useState(() => pkg?.paid_date ?? new Date().toISOString().slice(0, 10));
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
+  // A package can hold a course that is no longer in the active list — keep
+  // it visible so editing doesn't silently drop it.
+  const courseOptions = useMemo(() => {
+    const opts = products.map((p) => ({ id: p.id, name: p.name }));
+    for (const i of pkg?.items ?? []) {
+      if (i.product_id && !opts.some((o) => o.id === i.product_id)) {
+        opts.push({ id: i.product_id, name: i.product_name ?? t("optionCourseNotChosen") });
+      }
+    }
+    return opts;
+  }, [products, pkg, t]);
+
   function toggle(productId: string) {
+    if (lockedIds.includes(productId)) return;
     setSelected((prev) => (prev.includes(productId) ? prev.filter((id) => id !== productId) : [...prev, productId]));
   }
 
   function handleSubmit(formData: FormData) {
     setError(null);
     startTransition(async () => {
-      const res = await createPackageSale(memberId, formData);
+      const res = pkg ? await updatePackageSale(pkg.id, formData) : await createPackageSale(memberId, formData);
       if (res.error) setError(res.error);
       else onSaved();
     });
@@ -1379,19 +1470,24 @@ function NewPackageSaleForm({
         <div className="flex flex-col gap-1.5 text-sm">
           <span className="font-medium text-ink-2">{t("fieldPackageCourses")}</span>
           <div className="flex flex-col gap-1 rounded-lg border border-border p-2">
-            {products.map((p) => (
-              <label key={p.id} className="flex items-center gap-2 text-xs text-ink-2">
-                <input
-                  type="checkbox"
-                  name="product_id"
-                  value={p.id}
-                  checked={selected.includes(p.id)}
-                  onChange={() => toggle(p.id)}
-                  className="h-3.5 w-3.5"
-                />
-                {p.name}
-              </label>
-            ))}
+            {courseOptions.map((p) => {
+              const locked = lockedIds.includes(p.id);
+              return (
+                <label key={p.id} className={`flex items-center gap-2 text-xs text-ink-2 ${locked ? "opacity-60" : ""}`}>
+                  <input
+                    type="checkbox"
+                    name="product_id"
+                    value={p.id}
+                    checked={selected.includes(p.id) || locked}
+                    onChange={() => toggle(p.id)}
+                    disabled={locked}
+                    className="h-3.5 w-3.5"
+                  />
+                  {p.name}
+                  {locked && <span className="text-muted">· {t("packageItemLockedHint")}</span>}
+                </label>
+              );
+            })}
           </div>
         </div>
 
@@ -1441,10 +1537,10 @@ function NewPackageSaleForm({
         </button>
         <button
           type="submit"
-          disabled={pending || selected.length === 0}
+          disabled={pending || selected.length + lockedIds.filter((id) => !selected.includes(id)).length === 0}
           className="rounded-lg bg-foreground px-3 py-1.5 text-xs font-medium text-background disabled:opacity-50"
         >
-          {pending ? "..." : t("btnCreatePackageShort")}
+          {pending ? "..." : pkg ? t("save") : t("btnCreatePackageShort")}
         </button>
       </div>
     </form>
