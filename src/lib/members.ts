@@ -90,6 +90,31 @@ export function attendedArray(raw: unknown, length: number): (boolean | null)[] 
   return out;
 }
 
+/**
+ * Round 69 — «Посещаемость»: «не отмечено = не была». Занятие считается
+ * проведённым, если на нём отмечена хотя бы одна участница; процент
+ * участницы = её отметки / проведённые занятия (занятия, которые ещё не
+ * проходили, не снижают процент). `rows` — по одной строке на участницу,
+ * true = была.
+ */
+export function attendanceStats(rows: boolean[][]): {
+  held: number;
+  pcts: (number | null)[];
+  avg: number | null;
+} {
+  const sessions = rows.reduce((m, r) => Math.max(m, r.length), 0);
+  let held = 0;
+  for (let c = 0; c < sessions; c++) if (rows.some((r) => r[c] === true)) held++;
+  const pcts = rows.map((r) => {
+    if (held === 0) return null;
+    const present = r.filter((v) => v === true).length;
+    return Math.round((present / held) * 100);
+  });
+  const real = pcts.filter((v): v is number => v !== null);
+  const avg = real.length > 0 ? Math.round(real.reduce((a, b) => a + b, 0) / real.length) : null;
+  return { held, pcts, avg };
+}
+
 /** A course with at most one session is a single-day event (a "МК" —
  * мастер-класс — by Anastasiia's own naming convention), where the start
  * date IS the end date; more than one session is a real multi-week "Курс".

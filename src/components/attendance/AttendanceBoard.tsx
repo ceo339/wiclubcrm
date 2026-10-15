@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { attendedArray } from "@/lib/members";
+import { attendedArray, attendanceStats } from "@/lib/members";
 import { useLocale } from "@/components/i18n/LocaleProvider";
 import GroupAttendanceBoard from "./GroupAttendanceBoard";
 
@@ -87,6 +87,7 @@ export default function AttendanceBoard({
   );
 
   const [cohortId, setCohortId] = useState<string>(() => cohortOptions[0]?.id ?? "");
+  const [liveAvg, setLiveAvg] = useState<{ cohortId: string; avg: number | null } | null>(null);
   const selectedCohort = cohorts.find((c) => c.id === cohortId) ?? cohortOptions[0] ?? null;
 
   function handleProductChange(id: string) {
@@ -106,15 +107,12 @@ export default function AttendanceBoard({
       m.start_date === selectedCohort.startDate
   );
 
-  const pctList = roster
-    .map((m) => {
-      const arr = attendedArray(m.attended, selectedCohort.sessions);
-      const marked = arr.filter((v) => v !== null).length;
-      const present = arr.filter((v) => v === true).length;
-      return marked > 0 ? Math.round((present / marked) * 100) : null;
-    })
-    .filter((v): v is number => v !== null);
-  const avgAttendance = pctList.length > 0 ? Math.round(pctList.reduce((a, b) => a + b, 0) / pctList.length) : null;
+  const propAvg = attendanceStats(
+    roster.map((m) => attendedArray(m.attended, selectedCohort.sessions).map((v) => v === true))
+  ).avg;
+  // Round 69: отметки больше не перезагружают страницу с сервера, поэтому
+  // «Средняя посещаемость» обновляется от самой таблицы, пока открыт поток.
+  const avgAttendance = liveAvg && liveAvg.cohortId === selectedCohort.id ? liveAvg.avg : propAvg;
 
   const canEdit = !isHq && !!ownPartnerId && ownPartnerId === selectedCohort.partnerId;
 
@@ -166,7 +164,13 @@ export default function AttendanceBoard({
             its grid (built once via useState's lazy initializer) never
             resynced with the new roster and crashed or showed stale ticks
             once the two rosters had a different number of people. */}
-        <GroupAttendanceBoard key={selectedCohort.id} members={roster} sessions={selectedCohort.sessions} canEdit={canEdit} />
+        <GroupAttendanceBoard
+          key={selectedCohort.id}
+          members={roster}
+          sessions={selectedCohort.sessions}
+          canEdit={canEdit}
+          onAvgChange={(avg) => setLiveAvg({ cohortId: selectedCohort.id, avg })}
+        />
       </div>
     </div>
   );

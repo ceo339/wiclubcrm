@@ -584,6 +584,55 @@ export async function setAttendance(
   return { error: null };
 }
 
+/**
+ * Round 69 — «Посещаемость»: быстрая двухпозиционная отметка «была / не была»
+ * (не отмечено = не была). Отдельный, лёгкий путь вместо setAttendance:
+ *  - один запрос на чтение + один на запись (без полного сканирования всех
+ *    оплаченных записей клуба при каждом клике);
+ *  - БЕЗ revalidatePath текущей страницы — иначе сервер перерисовывал всю
+ *    страницу после каждого клика (долго, и список участниц «прыгал»);
+ *    клиент уже показал отметку сразу (оптимистично);
+ *  - снятая отметка хранится как null (как «ещё не отмечено»).
+ * Автозавершение курса проверяется только для этой одной записи и только
+ * если отмечены ВСЕ занятия (то же правило, что и в
+ * enrollmentIsDueForCompletion).
+ */
+export async function setPresence(
+  enrollmentId: string,
+  index: number,
+  present: boolean
+): Promise<ActionResult> {
+  const profile = await getCurrentProfile();
+  if (!profile) return { error: "errNotAuthorized" };
+  if (!profile.partner_id) return { error: "errHqNoClubGeneric" };
+
+  const supabase = await createClient();
+  const { data: enrollment, error: fetchError } = await supabase
+    .from("member_enrollments")
+    .select("attended, status, start_date, products(sessions)")
+    .eq("id", enrollmentId)
+    .maybeSingle();
+  if (fetchError) return { error: fetchError.message };
+  if (!enrollment) return { error: "errMemberNotFound" };
+
+  const attended = Array.isArray(enrollment.attended) ? [...enrollment.attended] : [];
+  while (attended.length <= index) attended.push(null);
+  attended[index] = present ? true : null;
+
+  const { error } = await supabase.from("member_enrollments").update({ attended }).eq("id", enrollmentId);
+  if (error) return { error: error.message };
+
+  if (present && enrollment.status === "sPaid") {
+    const sessions = (enrollment as { products?: { sessions: number | null } | null }).products?.sessions ?? null;
+    if (enrollmentIsDueForCompletion({ status: enrollment.status, start_date: enrollment.start_date, attended }, sessions)) {
+      await supabase.from("member_enrollments").update({ status: "sCompleted" }).eq("id", enrollmentId);
+    }
+  }
+
+  revalidatePath("/members");
+  return { error: null };
+}
+
 export type EnrollmentDetail = Tables<"member_enrollments"> & {
   product_name: string | null;
   product_price: number | null;

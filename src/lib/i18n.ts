@@ -331,6 +331,7 @@ export const DICT: Record<string, Entry> = {
   },
   colMember: { ru: "Участница", bg: "Участничка" },
   sessionTitle: { ru: "Занятие {n} — {name}", bg: "Занятие {n} — {name}" },
+  errAttendanceSaveFailed: { ru: "Не удалось сохранить отметку — она отменена, попробуйте ещё раз", bg: "Отметката не можа да се запази — отменена е, опитайте отново" },
   rowPresentCount: { ru: "Была на занятии", bg: "Присъствала на занятие" },
 
   // ---- home page ----

@@ -1,45 +1,81 @@
 "use client";
 
-import { useState, useTransition } from "react";
-import { setAttendance } from "@/app/members/actions";
-import { attendedArray } from "@/lib/members";
+import { useMemo, useRef, useState } from "react";
+import { setPresence } from "@/app/members/actions";
+import { attendedArray, attendanceStats } from "@/lib/members";
 import { useT } from "@/components/i18n/LocaleProvider";
 
 type MemberRow = { id: string; name: string; attended: unknown };
 
 /**
- * The same three-state toggle (null → present → absent → null) as the
- * per-member card tracker, laid out as a grid so a partner can mark a whole
- * class in one sitting instead of opening each participant one by one.
+ * Round 69 — быстрая отметка: клик = «была», ещё клик = снять («не отмечено
+ * = не была»). Раньше было три состояния, а на время запроса блокировались
+ * ВСЕ кнопки (поэтому второго человека быстро не отметить), и состояние
+ * хранилось по номеру строки — когда сервер после сохранения присылал
+ * список в другом порядке, фамилии «прыгали», а галочки оставались на месте.
+ *
+ * Теперь:
+ *  - состояние хранится по id записи, а не по номеру строки;
+ *  - список участниц всегда отсортирован по имени и не зависит от порядка,
+ *    в котором его вернул сервер;
+ *  - отметка показывается мгновенно (оптимистично), кнопки не блокируются;
+ *  - запросы одной и той же участницы идут по очереди (чтобы не затирать друг
+ *    друга), разных участниц — параллельно;
+ *  - при ошибке отметка откатывается и показывается сообщение.
  */
 export default function GroupAttendanceBoard({
   members,
   sessions,
   canEdit,
+  onAvgChange,
 }: {
   members: MemberRow[];
   sessions: number;
   canEdit: boolean;
+  onAvgChange?: (avg: number | null) => void;
 }) {
-  const [grid, setGrid] = useState<(boolean | null)[][]>(() =>
-    members.map((m) => attendedArray(m.attended, sessions))
-  );
-  const [pending, startTransition] = useTransition();
   const t = useT();
+  const sorted = useMemo(
+    () => [...members].sort((a, b) => a.name.localeCompare(b.name, "ru") || a.id.localeCompare(b.id)),
+    [members]
+  );
 
-  function cycle(row: number, col: number) {
+  const [grid, setGrid] = useState<Record<string, boolean[]>>(() =>
+    Object.fromEntries(members.map((m) => [m.id, attendedArray(m.attended, sessions).map((v) => v === true)]))
+  );
+  const gridRef = useRef(grid);
+  const queues = useRef(new Map<string, Promise<unknown>>());
+  const [failed, setFailed] = useState<string | null>(null);
+
+  function commit(next: Record<string, boolean[]>) {
+    gridRef.current = next;
+    setGrid(next);
+    onAvgChange?.(attendanceStats(sorted.map((m) => next[m.id] ?? [])).avg);
+  }
+
+  function setCell(id: string, col: number, value: boolean) {
+    const row = [...(gridRef.current[id] ?? [])];
+    row[col] = value;
+    commit({ ...gridRef.current, [id]: row });
+  }
+
+  function toggle(id: string, col: number) {
     if (!canEdit) return;
-    const current = grid[row][col];
-    const next = current === null ? true : current === true ? false : null;
-    setGrid((prev) => {
-      const copy = prev.map((r) => [...r]);
-      copy[row] = [...copy[row]];
-      copy[row][col] = next;
-      return copy;
-    });
-    startTransition(async () => {
-      await setAttendance(members[row].id, col, next);
-    });
+    const next = !(gridRef.current[id]?.[col] === true);
+    setFailed(null);
+    setCell(id, col, next);
+    const prev = queues.current.get(id) ?? Promise.resolve();
+    const job = prev
+      .catch(() => undefined)
+      .then(() => setPresence(id, col, next))
+      .then((res) => {
+        if (res?.error) throw new Error(res.error);
+      })
+      .catch((e: unknown) => {
+        setCell(id, col, !next);
+        setFailed(e instanceof Error && e.message ? e.message : "error");
+      });
+    queues.current.set(id, job);
   }
 
   const sessionIndexes = Array.from({ length: sessions }, (_, i) => i);
@@ -52,8 +88,15 @@ export default function GroupAttendanceBoard({
     return <p className="p-5 text-sm text-muted">{t("emptyNoSessions")}</p>;
   }
 
+  const stats = attendanceStats(sorted.map((m) => grid[m.id] ?? []));
+
   return (
     <div className="overflow-x-auto">
+      {failed && (
+        <p className="border-b border-border bg-accent/10 px-5 py-2 text-sm text-accent-strong">
+          {t("errAttendanceSaveFailed")} ({failed})
+        </p>
+      )}
       <table className="w-full text-left text-sm">
         <thead className="border-b border-border text-xs uppercase tracking-wide text-muted">
           <tr>
@@ -67,34 +110,31 @@ export default function GroupAttendanceBoard({
           </tr>
         </thead>
         <tbody>
-          {members.map((m, row) => {
-            const rowValues = grid[row];
-            const present = rowValues.filter((v) => v === true).length;
-            const marked = rowValues.filter((v) => v !== null).length;
-            const pct = marked > 0 ? Math.round((present / marked) * 100) : null;
+          {sorted.map((m, row) => {
+            const rowValues = grid[m.id] ?? [];
+            const pct = stats.pcts[row];
             return (
               <tr key={m.id} className="border-b border-border last:border-0">
                 <td className="sticky left-0 z-10 bg-background px-5 py-2 font-medium text-foreground">
                   {m.name}
                 </td>
                 {sessionIndexes.map((col) => {
-                  const v = rowValues[col];
+                  const on = rowValues[col] === true;
                   return (
                     <td key={col} className="px-1 py-1.5 text-center">
                       <button
                         type="button"
-                        disabled={!canEdit || pending}
-                        onClick={() => cycle(row, col)}
+                        disabled={!canEdit}
+                        aria-pressed={on}
+                        onClick={() => toggle(m.id, col)}
                         title={t("sessionTitle", { n: col + 1, name: m.name })}
-                        className={`mx-auto flex h-7 w-7 items-center justify-center rounded-md border text-xs font-medium ${
-                          v === true
-                            ? "border-accent bg-accent/10 text-accent-strong"
-                            : v === false
-                              ? "border-border bg-surface-2 text-muted line-through"
-                              : "border-dashed border-border text-muted"
+                        className={`mx-auto flex h-8 w-8 touch-manipulation items-center justify-center rounded-md border text-sm font-medium transition-colors ${
+                          on
+                            ? "border-accent bg-accent text-white"
+                            : "border-dashed border-border text-muted hover:border-accent hover:text-accent-strong"
                         }`}
                       >
-                        {col + 1}
+                        {on ? "✓" : col + 1}
                       </button>
                     </td>
                   );
@@ -111,7 +151,7 @@ export default function GroupAttendanceBoard({
             </td>
             {sessionIndexes.map((col) => (
               <td key={col} className="px-1 py-2 text-center font-medium text-ink-2">
-                {grid.filter((r) => r[col] === true).length}
+                {sorted.filter((m) => grid[m.id]?.[col] === true).length}
               </td>
             ))}
             <td className="px-5 py-2" />
