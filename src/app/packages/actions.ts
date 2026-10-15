@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { readLocal } from "@/lib/server/localMoney";
+import { advanceMemberLeadsToPaid } from "@/lib/server/enrollmentPayments";
 import { getCurrentProfile } from "@/lib/auth";
 import { todayIso } from "@/lib/payments";
 
@@ -84,8 +85,12 @@ export async function createPackageSale(memberId: string, formData: FormData): P
   );
   if (itemsError) return { error: itemsError.message };
 
+  // Round 72: оплата пакета двигает открытый лид участницы в «Оплата».
+  await advanceMemberLeadsToPaid(supabase, profile.partner_id, memberId, verifiedIds);
+
   revalidatePath("/members");
   revalidatePath("/payments");
+  revalidatePath("/leads");
   return { error: null };
 }
 

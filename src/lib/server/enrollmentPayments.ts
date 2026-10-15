@@ -63,6 +63,40 @@ async function advanceLeadToPaid(db: Db, enrollmentId: string): Promise<void> {
   await db.from("leads").update({ stage: "paid", updated_at: new Date().toISOString() }).in("id", ids);
 }
 
+/**
+ * Round 72 — оплата ПАКЕТА (в т.ч. в рассрочку, первой частью) тоже должна
+ * двигать лид: у лида «пакет» часто нет курса вовсе (Мария Узунова, сделка на
+ * Сф1–Сф3, €1080), поэтому advanceLeadToPaid по курсу его не находит. Здесь
+ * ищем открытые лиды контакта участницы без курса или с курсом из пакета и
+ * переводим их в «Оплата» (правило «любая оплата = оплачено»). Прямой update —
+ * платёж за пакет уже записан, второй (на сумму лида) не создаётся.
+ */
+export async function advanceMemberLeadsToPaid(
+  db: Db,
+  partnerId: string,
+  memberId: string,
+  productIds: string[]
+): Promise<void> {
+  const { data: member } = await db
+    .from("members")
+    .select("contact_id, lead_id")
+    .eq("id", memberId)
+    .eq("partner_id", partnerId)
+    .maybeSingle();
+  if (!member || (!member.contact_id && !member.lead_id)) return;
+
+  let q = db.from("leads").select("id, product_id").eq("partner_id", partnerId).not("stage", "in", "(paid,declined)");
+  q = member.contact_id && member.lead_id
+    ? q.or(`contact_id.eq.${member.contact_id},id.eq.${member.lead_id}`)
+    : member.contact_id
+      ? q.eq("contact_id", member.contact_id)
+      : q.eq("id", member.lead_id as string);
+  const { data: leads } = await q;
+  const ids = (leads ?? []).filter((l) => !l.product_id || productIds.includes(l.product_id)).map((l) => l.id);
+  if (ids.length === 0) return;
+  await db.from("leads").update({ stage: "paid" }).in("id", ids);
+}
+
 /** Sum of non-refunded payments linked to one enrollment. */
 export async function enrollmentPaidSum(db: Db, enrollmentId: string): Promise<number> {
   const { data } = await db.from("payments").select("amount, status").eq("enrollment_id", enrollmentId);
