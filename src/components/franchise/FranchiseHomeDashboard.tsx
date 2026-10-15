@@ -152,7 +152,7 @@ export default function FranchiseHomeDashboard({
       weeklyFunnel={weeklyFunnel}
       interviewStats={interviewStats}
       sourceBreakdown={computeFranchiseSourceBreakdown(inPeriodCandidates)}
-      staleCandidates={findStaleFranchiseCandidates(candidates)}
+      staleCandidates={findStaleFranchiseCandidates(candidates, new Date(), lastActivityById)}
       tasks={tasks}
       canEditTasks={canEditTasks}
       networkSummary={networkSummary}

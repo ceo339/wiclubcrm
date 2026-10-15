@@ -53,6 +53,7 @@ export async function updateCandidateStage(
     .update({
       stage,
       reject_reason: stage === "declined" || stage === "paused" ? reason?.trim() || null : null,
+      updated_at: new Date().toISOString(),
     })
     .eq("id", candidateId);
   if (error) return { error: error.message };
@@ -95,7 +96,7 @@ export async function setCandidateZoomUrl(
   // overwritten this function with an older copy.)
   let movedTo: FranchiseStageId | undefined;
   if (clean && current && !isTerminalStage(current.stage) && stageIndex(current.stage) < stageIndex("fin_model_sent")) {
-    await supabase.from("franchise_candidates").update({ stage: "fin_model_sent" }).eq("id", candidateId);
+    await supabase.from("franchise_candidates").update({ stage: "fin_model_sent", updated_at: new Date().toISOString() }).eq("id", candidateId);
     await supabase.from("franchise_stage_history").insert({
       candidate_id: candidateId,
       stage: "fin_model_sent",

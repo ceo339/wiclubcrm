@@ -151,7 +151,12 @@ export type StaleFranchiseCandidate = {
  * lead's. */
 export function findStaleFranchiseCandidates(
   candidates: { id: string; name: string; stage: string; updated_at: string }[],
-  now: Date = new Date()
+  now: Date = new Date(),
+  /** Round 68: candidate_id -> latest franchise_stage_history.occurred_at.
+   * updateCandidateStage never bumped franchise_candidates.updated_at (and
+   * there is no DB trigger), so a card moved yesterday still looked "19 days
+   * idle". The real "last movement" is the later of the two. */
+  lastActivityById?: Map<string, string>
 ): StaleFranchiseCandidate[] {
   const msPerDay = 24 * 60 * 60 * 1000;
   return candidates
@@ -160,7 +165,14 @@ export function findStaleFranchiseCandidates(
       id: c.id,
       name: c.name,
       stage: c.stage,
-      daysSinceUpdate: Math.floor((now.getTime() - new Date(c.updated_at).getTime()) / msPerDay),
+      daysSinceUpdate: Math.floor(
+        (now.getTime() -
+          Math.max(
+            new Date(c.updated_at).getTime(),
+            lastActivityById?.get(c.id) ? new Date(lastActivityById.get(c.id)!).getTime() : 0
+          )) /
+          msPerDay
+      ),
     }))
     .filter((c) => c.daysSinceUpdate > STALE_CANDIDATE_DAYS)
     .sort((a, b) => b.daysSinceUpdate - a.daysSinceUpdate);
