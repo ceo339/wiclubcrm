@@ -1,5 +1,6 @@
 "use client";
 
+import CopyLinkButton from "@/components/ui/CopyLinkButton";
 import { useEffect, useMemo, useState, useTransition } from "react";
 import {
   addComment,
@@ -170,7 +171,10 @@ export default function LeadDetailModal({
       >
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0 flex-1">
-            <h3 className="text-base font-semibold text-foreground">{lead.name}</h3>
+            <div className="flex items-baseline gap-2">
+              <h3 className="text-base font-semibold text-foreground">{lead.name}</h3>
+              <CopyLinkButton path="/leads" id={lead.id} />
+            </div>
             <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted">
               <span>{lead.source ? sourceLabel(lead.source, locale) : "—"}</span>
               <span>·</span>

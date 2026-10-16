@@ -17,6 +17,7 @@ import {
 import { VISIBLE_FRANCHISE_STAGES, FRANCHISE_TERMINAL_STAGES, franchiseStageLabel, type FranchiseStageId } from "@/lib/franchise";
 import { useLocale, useT } from "@/components/i18n/LocaleProvider";
 import type { FranchiseCandidate } from "./types";
+import CopyLinkButton from "@/components/ui/CopyLinkButton";
 import ReasonModal from "./ReasonModal";
 import CandidatePaymentsSection from "./payments/CandidatePaymentsSection";
 
@@ -190,6 +191,7 @@ export default function CandidateDetailModal({
                     {t("edit")}
                   </button>
                 )}
+                <CopyLinkButton path="/franchise" id={candidate.id} />
               </div>
             ) : (
               <form
