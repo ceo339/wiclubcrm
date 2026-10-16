@@ -1307,6 +1307,7 @@ export const DICT: Record<string, Entry> = {
   fDeclineReasonTrainer: { ru: "Тренер", bg: "Треньор" },
   fDeclineReasonOther: { ru: "Другое", bg: "Друго" },
 
+  fHeadingOtherApplications: { ru: "Другие заявки этого человека", bg: "Други заявки на този човек" },
   fHeadingJourney: { ru: "Путь кандидатки", bg: "Път на кандидатката" },
   fEmptyNoHistory: { ru: "Пока нет истории", bg: "Все още няма история" },
   fSubmittedAt: { ru: "Заявка подана", bg: "Заявлението е подадено" },

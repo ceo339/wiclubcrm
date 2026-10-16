@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentProfile } from "@/lib/auth";
-import { isFranchiseStage, type FranchiseStageId } from "@/lib/franchise";
+import { findRelatedCandidates, isFranchiseStage, type FranchiseStageId, type RelatedCandidate } from "@/lib/franchise";
 import type { Tables, TablesUpdate } from "@/types/database";
 import { isTerminalStage, stageIndex } from "@/lib/integrations/franchise";
 
@@ -219,6 +219,8 @@ export type FranchiseCandidateDetail = {
    * partner_id (a candidate isn't any one club's — see the migration that
    * made tasks.partner_id nullable for this entity_type). */
   tasks: Tables<"tasks">[];
+  /** Round 74 — другие заявки того же человека (по email/телефону/telegram). */
+  related: RelatedCandidate[];
 };
 
 /**
@@ -228,12 +230,12 @@ export type FranchiseCandidateDetail = {
  */
 export async function getCandidateDetail(candidateId: string): Promise<FranchiseCandidateDetail> {
   const profile = await getCurrentProfile();
-  if (!profile) return { history: [], comments: [], tasks: [] };
+  if (!profile) return { history: [], comments: [], tasks: [], related: [] };
   const { canView } = franchiseAccess(profile);
-  if (!canView) return { history: [], comments: [], tasks: [] };
+  if (!canView) return { history: [], comments: [], tasks: [], related: [] };
 
   const supabase = await createClient();
-  const [{ data: history }, { data: comments }, { data: tasks }] = await Promise.all([
+  const [{ data: history }, { data: comments }, { data: tasks }, { data: everyone }] = await Promise.all([
     supabase
       .from("franchise_stage_history")
       .select("*")
@@ -250,9 +252,20 @@ export async function getCandidateDetail(candidateId: string): Promise<Franchise
       .eq("entity_type", "franchise_candidate")
       .eq("entity_id", candidateId)
       .order("due_date", { ascending: true }),
+    // ~250 строк и только нужные поля — сопоставление в коде, т.к. телефоны и
+    // telegram записаны по-разному («+373…», «@name», «t.me/name»).
+    supabase.from("franchise_candidates").select("id, name, stage, reject_reason, submitted_at, email, phone, telegram"),
   ]);
 
-  return { history: history ?? [], comments: comments ?? [], tasks: tasks ?? [] };
+  const all = everyone ?? [];
+  const self = all.find((c) => c.id === candidateId);
+
+  return {
+    history: history ?? [],
+    comments: comments ?? [],
+    tasks: tasks ?? [],
+    related: self ? findRelatedCandidates(self, all) : [],
+  };
 }
 
 /**

@@ -178,3 +178,63 @@ export function computeQualifiedIds(
 // на всех стадиях", "структура сети — учитывая все стадии"), so that block
 // now runs on every candidate, same population as the rest of the
 // franchise dashboard — removed rather than left unused.
+
+// ---------------------------------------------------------------------
+// Round 74 — «Другие заявки этого человека» в карточке кандидатки.
+// У кандидаток нет общего «контакта» (как у лидов), поэтому одну и ту же
+// женщину, подавшую заявку повторно, узнаём по совпадению email, телефона
+// или telegram — а не по имени, чтобы не путать однофамильцев (в апреле
+// другая «Яна» с другой почтой — не она).
+
+export type RelatedCandidate = {
+  id: string;
+  name: string;
+  stage: string;
+  reject_reason: string | null;
+  submitted_at: string;
+};
+
+type MatchFields = { email?: string | null; phone?: string | null; telegram?: string | null };
+
+function normEmail(v: string | null | undefined): string | null {
+  const e = (v ?? "").trim().toLowerCase();
+  return e.includes("@") ? e : null;
+}
+
+/** Digits only; the last 8 are compared so "+373 76 045 180", "076045180"
+ * (national format with a leading 0) and "+37376045180 WhatsApp" all match.
+ * Fewer than 8 digits = not a phone. */
+function normPhone(v: string | null | undefined): string | null {
+  const d = (v ?? "").replace(/\D/g, "");
+  return d.length >= 8 ? d.slice(-8) : null;
+}
+
+function normTelegram(v: string | null | undefined): string | null {
+  const t = (v ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/^https?:\/\/(www\.)?t\.me\//, "")
+    .replace(/^@/, "")
+    .replace(/[/?].*$/, "");
+  return t.length >= 3 ? t : null;
+}
+
+export function findRelatedCandidates(
+  self: { id: string } & MatchFields,
+  others: ({ id: string; name: string; stage: string; reject_reason: string | null; submitted_at: string } & MatchFields)[]
+): RelatedCandidate[] {
+  const email = normEmail(self.email);
+  const phone = normPhone(self.phone);
+  const tg = normTelegram(self.telegram);
+  if (!email && !phone && !tg) return [];
+  return others
+    .filter((o) => o.id !== self.id)
+    .filter(
+      (o) =>
+        (email !== null && normEmail(o.email) === email) ||
+        (phone !== null && normPhone(o.phone) === phone) ||
+        (tg !== null && normTelegram(o.telegram) === tg)
+    )
+    .map((o) => ({ id: o.id, name: o.name, stage: o.stage, reject_reason: o.reject_reason, submitted_at: o.submitted_at }))
+    .sort((a, b) => a.submitted_at.localeCompare(b.submitted_at));
+}

@@ -17,6 +17,7 @@ import {
 import { VISIBLE_FRANCHISE_STAGES, FRANCHISE_TERMINAL_STAGES, franchiseStageLabel, type FranchiseStageId } from "@/lib/franchise";
 import { useLocale, useT } from "@/components/i18n/LocaleProvider";
 import type { FranchiseCandidate } from "./types";
+import Link from "next/link";
 import CopyLinkButton from "@/components/ui/CopyLinkButton";
 import ReasonModal from "./ReasonModal";
 import CandidatePaymentsSection from "./payments/CandidatePaymentsSection";
@@ -171,6 +172,29 @@ export default function CandidateDetailModal({
               ))
             )}
           </div>
+
+          {detail && detail.related.length > 0 && (
+            <div className="mt-4 border-t border-border-strong pt-4">
+              <h3 className="text-xs font-semibold uppercase tracking-wide text-muted">{t("fHeadingOtherApplications")}</h3>
+              <div className="mt-2 flex flex-col gap-2">
+                {detail.related.map((r) => (
+                  <Link
+                    key={r.id}
+                    href={`/franchise?open=${r.id}`}
+                    className="rounded-lg border border-border bg-background px-3 py-2 text-sm hover:border-accent"
+                  >
+                    <div className="font-medium text-foreground">
+                      {r.name} · {new Date(r.submitted_at).toLocaleDateString(locale === "bg" ? "bg-BG" : "ru-RU")}
+                    </div>
+                    <div className="text-xs text-muted">
+                      {franchiseStageLabel(r.stage, locale)}
+                      {r.reject_reason ? ` — ${r.reject_reason}` : ""}
+                    </div>
+                  </Link>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Right panel — анкета + действия */}
