@@ -1289,6 +1289,8 @@ export const DICT: Record<string, Entry> = {
   fStageLyudmilaDone: { ru: "Встреча с Людмилой пройдена", bg: "Проведена среща с Людмила" },
   fStageContractSent: { ru: "Договор отправлен", bg: "Изпратен договор" },
   fStageContractSigned: { ru: "Договор подписан", bg: "Подписан договор" },
+  fActionInvoice: { ru: "+ Счёт", bg: "+ Фактура" },
+  fActionMarkPaid: { ru: "Отметить оплату", bg: "Отбележи плащане" },
   fStageInvoiced: { ru: "Счёт выставлен", bg: "Издадена фактура" },
   fStageInvoicePaid: { ru: "Счёт оплачен", bg: "Платена фактура" },
   fStageTraining: { ru: "Обучение", bg: "Обучение" },

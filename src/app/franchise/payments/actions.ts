@@ -36,7 +36,7 @@ function today(): string {
 
 /**
  * «Автоматически» (Anastasiia's choice): the паушальный взнос drives the two
- * payment stages of the pipeline. Any non-cancelled lump-sum invoice →
+ * payment stages of the pipeline. Any non-cancelled lump-sum / training (first) invoice →
  * «Выставлен счёт»; every non-cancelled lump-sum invoice paid → «Счёт
  * оплачен». Forward-only — a card already further along (e.g. «Активен») or
  * declined/paused is never moved back. Royalty/training invoices don't touch
@@ -57,7 +57,10 @@ async function syncStageFromPayments(
       .from("franchise_payments")
       .select("status")
       .eq("candidate_id", candidateId)
-      .eq("kind", "lump_sum")
+      // Round 75: паушального взноса больше нет (1 окт), первый счёт —
+      // «обучение» (7500 $); он и двигает карточку по этапам «Счёт
+      // выставлен» / «Счёт оплачен». lump_sum оставлен для старых строк.
+      .in("kind", ["lump_sum", "training"])
       .neq("status", "cancelled"),
   ]);
   if (!cand || !lump || lump.length === 0 || isTerminalStage(cand.stage)) return undefined;

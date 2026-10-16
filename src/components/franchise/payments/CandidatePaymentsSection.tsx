@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useLocale } from "@/components/i18n/LocaleProvider";
 import { getCandidatePayments, type FranchisePayment } from "@/app/franchise/payments/actions";
 import type { FranchiseStageId } from "@/lib/franchise";
@@ -14,19 +14,53 @@ export default function CandidatePaymentsSection({
   candidateId,
   canEdit,
   onStageChanged,
+  intent = null,
 }: {
   candidateId: string;
   canEdit: boolean;
   onStageChanged: (stage: FranchiseStageId) => void;
+  /** Round 75 — the card was opened from the «Счёт выставлен» («invoice») or
+   * «Счёт оплачен» («pay») column of the kanban. */
+  intent?: "invoice" | "pay" | null;
 }) {
   const { locale, t } = useLocale();
   const [payments, setPayments] = useState<FranchisePayment[] | null>(null);
   const [adding, setAdding] = useState(false);
+  const [autoPayId, setAutoPayId] = useState<string | null>(null);
+  const [formPreset, setFormPreset] = useState<{ paid: boolean } | null>(null);
+  const rootRef = useRef<HTMLDivElement>(null);
+  const handledIntent = useRef(false);
 
   function reload() {
     getCandidatePayments(candidateId).then(setPayments);
   }
   useEffect(reload, [candidateId]);
+
+  // Round 75: «выставлять счета на этапе „Счёт выставлен“ и отмечать оплату на
+  // этапе „Счёт оплачен“». The first invoice is «обучение» (all four existing
+  // ones: $7500). From the «Счёт выставлен» column: the new-invoice form opens
+  // by itself when there is no first invoice yet. From «Счёт оплачен»: the
+  // first unpaid invoice goes straight into «mark paid» (date + OK); with no
+  // invoice at all, the form opens with «уже оплачен» ticked.
+  useEffect(() => {
+    if (!intent || !canEdit || payments === null || handledIntent.current) return;
+    handledIntent.current = true;
+    rootRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+    const first = payments.filter((p) => p.status !== "cancelled" && (p.kind === "training" || p.kind === "lump_sum"));
+    if (intent === "invoice") {
+      if (first.length === 0) {
+        setFormPreset({ paid: false });
+        setAdding(true);
+      }
+    } else {
+      const unpaid = first.find((p) => p.status === "invoiced");
+      if (unpaid) setAutoPayId(unpaid.id);
+      else if (first.length === 0) {
+        setFormPreset({ paid: true });
+        setAdding(true);
+      }
+    }
+  }, [intent, canEdit, payments]);
 
   function changed(stage?: FranchiseStageId) {
     setAdding(false);
@@ -39,7 +73,7 @@ export default function CandidatePaymentsSection({
   const due = live.filter((p) => p.status === "invoiced").reduce((s, p) => s + Number(p.amount), 0);
 
   return (
-    <div className="mt-4 rounded-xl border border-border bg-surface-2 p-3.5">
+    <div ref={rootRef} className="mt-4 rounded-xl border border-border bg-surface-2 p-3.5">
       <div className="flex items-center justify-between gap-2">
         <span className="text-xs font-semibold uppercase tracking-wide text-muted">{t("fpHeading")}</span>
         {canEdit && !adding && (
@@ -68,7 +102,12 @@ export default function CandidatePaymentsSection({
 
       {adding && (
         <div className="mt-2">
-          <FranchisePaymentForm candidateId={candidateId} onDone={changed} onCancel={() => setAdding(false)} />
+          <FranchisePaymentForm
+            candidateId={candidateId}
+            onDone={changed}
+            onCancel={() => setAdding(false)}
+            {...(formPreset ? { initialKind: "training", initialAmount: "7500", initialPaid: formPreset.paid } : {})}
+          />
         </div>
       )}
 
@@ -91,7 +130,7 @@ export default function CandidatePaymentsSection({
               </span>
               <PaymentStatusPill payment={p} />
               <InvoiceLinks payment={p} />
-              {canEdit && <PaymentActions payment={p} onChanged={changed} />}
+              {canEdit && <PaymentActions payment={p} onChanged={changed} autoOpenPaying={p.id === autoPayId} />}
             </div>
           ))}
         </div>

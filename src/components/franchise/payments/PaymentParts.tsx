@@ -41,22 +41,30 @@ export function FranchisePaymentForm({
   candidateOptions,
   onDone,
   onCancel,
+  initialKind,
+  initialAmount,
+  initialPaid,
 }: {
   candidateId?: string;
   candidateOptions?: { id: string; label: string }[];
   onDone: (stage?: FranchiseStageId) => void;
   onCancel?: () => void;
+  /** Round 75: the card opened from the «Счёт выставлен» / «Счёт оплачен»
+   * columns pre-fills the first invoice (обучение) instead of royalty. */
+  initialKind?: string;
+  initialAmount?: string;
+  initialPaid?: boolean;
 }) {
   const { t } = useLocale();
   const [pickedCandidate, setPickedCandidate] = useState(candidateId ?? "");
-  const [kind, setKind] = useState("royalty");
-  const [amount, setAmount] = useState("");
+  const [kind, setKind] = useState(initialKind ?? "royalty");
+  const [amount, setAmount] = useState(initialAmount ?? "");
   const [invoiceDate, setInvoiceDate] = useState(todayIso());
   const [dueDate, setDueDate] = useState("");
   // Royalties are billed after the month ends — default to the previous month.
   const [periodMonth, setPeriodMonth] = useState(prevMonthKey());
   const [note, setNote] = useState("");
-  const [paid, setPaid] = useState(false);
+  const [paid, setPaid] = useState(initialPaid ?? false);
   const [paidDate, setPaidDate] = useState(todayIso());
   // Round 49: the English line printed on the invoice — prefilled per kind
   // (and royalty month) until the user types her own wording.
@@ -301,13 +309,19 @@ export function RefundNote({ payment }: { payment: FranchisePayment }) {
 export function PaymentActions({
   payment,
   onChanged,
+  autoOpenPaying = false,
 }: {
   payment: FranchisePayment;
   onChanged: (stage?: FranchiseStageId) => void;
+  /** Round 75: opened from the «Счёт оплачен» column — start in «mark paid» mode. */
+  autoOpenPaying?: boolean;
 }) {
   const { locale, t } = useLocale();
   const [pending, start] = useTransition();
-  const [paying, setPaying] = useState(false);
+  const [paying, setPaying] = useState(autoOpenPaying && payment.status === "invoiced");
+  useEffect(() => {
+    if (autoOpenPaying && payment.status === "invoiced") setPaying(true);
+  }, [autoOpenPaying, payment.status]);
   const [paidDate, setPaidDate] = useState(todayIso());
   const [refunding, setRefunding] = useState(false);
   const [refundAmount, setRefundAmount] = useState("");

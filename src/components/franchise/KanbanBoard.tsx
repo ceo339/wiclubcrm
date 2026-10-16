@@ -27,12 +27,15 @@ type StageUpdate = { id: string; stage: FranchiseStageId; reason: string | null 
 export default function KanbanBoard({
   candidates,
   canEdit,
+  canBill = false,
   onSelect,
   stages = VISIBLE_FRANCHISE_STAGES,
 }: {
   candidates: FranchiseCandidate[];
   canEdit: boolean;
-  onSelect: (id: string) => void;
+  /** Round 75: may issue invoices / mark payments (HQ, МПП, финдиректор). */
+  canBill?: boolean;
+  onSelect: (id: string, intent?: "invoice" | "pay") => void;
   stages?: typeof VISIBLE_FRANCHISE_STAGES;
 }) {
   const { t } = useLocale();
@@ -65,6 +68,11 @@ export default function KanbanBoard({
       return;
     }
     applyStage(candidate.id, stage);
+    // Round 75: a card dropped into «Счёт выставлен» / «Счёт оплачен» opens at
+    // its «Оплаты» block — the invoice form, or «mark paid» — instead of
+    // leaving the stage and the actual invoice to be matched up by hand.
+    if (canBill && stage === "invoiced") onSelect(candidate.id, "invoice");
+    if (canBill && stage === "invoice_paid") onSelect(candidate.id, "pay");
   }
 
   return (
@@ -108,6 +116,18 @@ export default function KanbanBoard({
                     )}
                     {(stage.id === "declined" || stage.id === "paused") && candidate.reject_reason && (
                       <div className="mt-1 truncate text-xs text-accent-strong">{candidate.reject_reason}</div>
+                    )}
+                    {canBill && (stage.id === "invoiced" || stage.id === "invoice_paid") && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onSelect(candidate.id, stage.id === "invoiced" ? "invoice" : "pay");
+                        }}
+                        className="mt-2 rounded-lg border border-border bg-surface-2 px-2.5 py-1 text-xs font-medium text-ink-2 hover:bg-surface-3"
+                      >
+                        {stage.id === "invoiced" ? t("fActionInvoice") : t("fActionMarkPaid")}
+                      </button>
                     )}
                   </div>
                 ))}

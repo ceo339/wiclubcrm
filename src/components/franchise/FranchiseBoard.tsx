@@ -58,6 +58,9 @@ export default function FranchiseBoard({
   // widget, round 44) opens a specific candidate's card directly.
   const searchParams = useSearchParams();
   const [selectedId, setSelectedId] = useState<string | null>(() => searchParams.get("open"));
+  // Round 75: which «Оплаты» action the card was opened for (from the
+  // «Счёт выставлен» / «Счёт оплачен» columns); null for a plain open.
+  const [paymentIntent, setPaymentIntent] = useState<"invoice" | "pay" | null>(null);
   useEffect(() => {
     const openId = searchParams.get("open");
     if (openId) setSelectedId(openId);
@@ -282,7 +285,11 @@ export default function FranchiseBoard({
       <KanbanBoard
         candidates={filtered}
         canEdit={canEdit}
-        onSelect={setSelectedId}
+        canBill={canBill ?? canEdit}
+        onSelect={(id, intent) => {
+          setPaymentIntent(intent ?? null);
+          setSelectedId(id);
+        }}
         stages={view === "qualified" ? QUALIFIED_TAB_STAGES : undefined}
       />
 
@@ -292,7 +299,11 @@ export default function FranchiseBoard({
           candidate={selected}
           canEdit={canEdit}
           canBill={canBill ?? canEdit}
-          onClose={() => setSelectedId(null)}
+          paymentIntent={paymentIntent}
+          onClose={() => {
+            setSelectedId(null);
+            setPaymentIntent(null);
+          }}
         />
       )}
     </div>

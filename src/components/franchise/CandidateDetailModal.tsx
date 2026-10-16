@@ -38,6 +38,7 @@ export default function CandidateDetailModal({
   candidate,
   canEdit,
   canBill = canEdit,
+  paymentIntent = null,
   onClose,
 }: {
   candidate: FranchiseCandidate;
@@ -45,6 +46,8 @@ export default function CandidateDetailModal({
   /** Round 49: may create/send invoices — the finance director can while
    * the rest of the card stays read-only for her. */
   canBill?: boolean;
+  /** Round 75: opened from the «Счёт выставлен» / «Счёт оплачен» column. */
+  paymentIntent?: "invoice" | "pay" | null;
   onClose: () => void;
 }) {
   const { locale, t } = useLocale();
@@ -378,6 +381,7 @@ export default function CandidateDetailModal({
           <CandidatePaymentsSection
             candidateId={candidate.id}
             canEdit={canBill}
+            intent={paymentIntent}
             onStageChanged={(next) => {
               setStage(next);
               reload();
