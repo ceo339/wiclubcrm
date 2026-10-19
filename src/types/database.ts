@@ -106,6 +106,225 @@ export type Database = {
           },
         ]
       }
+      fin_categories: {
+        Row: {
+          archived: boolean
+          auto_kind: string | null
+          auto_percent: number | null
+          cash_group: string
+          created_at: string
+          id: string
+          in_pl: boolean
+          kind: string
+          name: string
+          parent_id: string | null
+          partner_id: string | null
+          per_product: boolean
+          sort: number
+        }
+        Insert: {
+          archived?: boolean
+          auto_kind?: string | null
+          auto_percent?: number | null
+          cash_group?: string
+          created_at?: string
+          id?: string
+          in_pl?: boolean
+          kind?: string
+          name: string
+          parent_id?: string | null
+          partner_id?: string | null
+          per_product?: boolean
+          sort?: number
+        }
+        Update: {
+          archived?: boolean
+          auto_kind?: string | null
+          auto_percent?: number | null
+          cash_group?: string
+          created_at?: string
+          id?: string
+          in_pl?: boolean
+          kind?: string
+          name?: string
+          parent_id?: string | null
+          partner_id?: string | null
+          per_product?: boolean
+          sort?: number
+        }
+        Relationships: []
+      }
+      fin_expenses: {
+        Row: {
+          amount: number
+          amount_local: number | null
+          category_id: string
+          comment: string | null
+          created_at: string
+          created_by: string | null
+          date: string
+          id: string
+          local_currency: string | null
+          partner_id: string
+          product_id: string | null
+        }
+        Insert: {
+          amount: number
+          amount_local?: number | null
+          category_id: string
+          comment?: string | null
+          created_at?: string
+          created_by?: string | null
+          date: string
+          id?: string
+          local_currency?: string | null
+          partner_id: string
+          product_id?: string | null
+        }
+        Update: {
+          amount?: number
+          amount_local?: number | null
+          category_id?: string
+          comment?: string | null
+          created_at?: string
+          created_by?: string | null
+          date?: string
+          id?: string
+          local_currency?: string | null
+          partner_id?: string
+          product_id?: string | null
+        }
+        Relationships: []
+      }
+      fin_months: {
+        Row: {
+          filled: boolean
+          filled_at: string | null
+          month: string
+          partner_id: string
+        }
+        Insert: {
+          filled?: boolean
+          filled_at?: string | null
+          month: string
+          partner_id: string
+        }
+        Update: {
+          filled?: boolean
+          filled_at?: string | null
+          month?: string
+          partner_id?: string
+        }
+        Relationships: []
+      }
+      fin_plan: {
+        Row: {
+          amount: number
+          amount_local: number | null
+          category_id: string | null
+          id: string
+          kind: string
+          local_currency: string | null
+          month: string
+          partner_id: string
+          product_id: string | null
+          qty: number | null
+          updated_at: string
+        }
+        Insert: {
+          amount?: number
+          amount_local?: number | null
+          category_id?: string | null
+          id?: string
+          kind: string
+          local_currency?: string | null
+          month: string
+          partner_id: string
+          product_id?: string | null
+          qty?: number | null
+          updated_at?: string
+        }
+        Update: {
+          amount?: number
+          amount_local?: number | null
+          category_id?: string | null
+          id?: string
+          kind?: string
+          local_currency?: string | null
+          month?: string
+          partner_id?: string
+          product_id?: string | null
+          qty?: number | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      fin_plan_log: {
+        Row: {
+          amount: number
+          category_id: string | null
+          changed_at: string
+          changed_by: string | null
+          id: string
+          kind: string
+          month: string
+          partner_id: string
+          product_id: string | null
+          qty: number | null
+        }
+        Insert: {
+          amount: number
+          category_id?: string | null
+          changed_at?: string
+          changed_by?: string | null
+          id?: string
+          kind: string
+          month: string
+          partner_id: string
+          product_id?: string | null
+          qty?: number | null
+        }
+        Update: {
+          amount?: number
+          category_id?: string | null
+          changed_at?: string
+          changed_by?: string | null
+          id?: string
+          kind?: string
+          month?: string
+          partner_id?: string
+          product_id?: string | null
+          qty?: number | null
+        }
+        Relationships: []
+      }
+      fin_settings: {
+        Row: {
+          local_currency: string | null
+          opening_balance: number
+          opening_balance_local: number | null
+          opening_month: string
+          partner_id: string
+          updated_at: string
+        }
+        Insert: {
+          local_currency?: string | null
+          opening_balance?: number
+          opening_balance_local?: number | null
+          opening_month?: string
+          partner_id: string
+          updated_at?: string
+        }
+        Update: {
+          local_currency?: string | null
+          opening_balance?: number
+          opening_balance_local?: number | null
+          opening_month?: string
+          partner_id?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       meta_ad_connections: {
         Row: {
           access_token: string

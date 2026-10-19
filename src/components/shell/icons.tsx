@@ -147,3 +147,13 @@ export function IconMegaphone() {
     </svg>
   );
 }
+
+export function IconCoins() {
+  return (
+    <svg {...iconProps()}>
+      <ellipse cx="12" cy="6.5" rx="6.5" ry="2.8" />
+      <path d="M5.5 6.5v5c0 1.5 2.9 2.8 6.5 2.8s6.5-1.3 6.5-2.8v-5" />
+      <path d="M5.5 11.5v5c0 1.5 2.9 2.8 6.5 2.8s6.5-1.3 6.5-2.8v-5" />
+    </svg>
+  );
+}

@@ -23,6 +23,7 @@ import {
   IconChart,
   IconFranchise,
   IconMegaphone,
+  IconCoins,
 } from "./icons";
 
 const ROLE_LABEL_KEYS: Record<string, string> = {
@@ -76,6 +77,10 @@ function navItemsForProfile(profile: Profile, viewMode: ViewMode): NavItem[] {
         { href: "/email", labelKey: "navEmail", icon: <IconMail /> },
         { href: "/ads", labelKey: "navAds", icon: <IconMegaphone /> }
       );
+      // Round 77: «Финансы» клуба — партнёр правит, hq/viewer (финдиректор) смотрят.
+      if (profile.role === "partner" || profile.role === "hq" || profile.role === "viewer") {
+        items.push({ href: "/finance", labelKey: "navFinance", icon: <IconCoins /> });
+      }
     }
   }
 
