@@ -30,6 +30,9 @@ export default function FinanceNav({
   const { locale, t } = useLocale();
   const href = (tb: FinTab, p: string) => `/finance?tab=${tb}&month=${p}`;
   const pill = "rounded-lg px-3 py-1.5 text-sm";
+  // месяцы показываем только выбранного года: фильтр «год → месяц»
+  const yr = period.slice(0, 4);
+  const monthsOfYear = months.filter((m) => m.startsWith(yr));
   return (
     <div className="mb-4 space-y-3">
       {!hideTabs && <div className="flex flex-wrap gap-1.5">
@@ -44,8 +47,25 @@ export default function FinanceNav({
         ))}
       </div>}
       <div className="flex flex-wrap items-center gap-1.5">
-        {months.map((m) => {
-          const [y] = m.split("-");
+        {years.map((y) => {
+          const isSel = y === period;
+          const inYear = !isSel && period.startsWith(y);
+          // на вкладке «План» месяц правится по одному, поэтому год ведёт на первый месяц этого года
+          const target = tab === "plan" ? (months.find((m) => m.startsWith(y)) ?? `${y}-01`) : y;
+          return (
+            <Link
+              key={y}
+              href={href(tab, target)}
+              title={t("finWholeYear", { y })}
+              className={`${pill} font-semibold ${isSel ? "bg-accent text-white" : inYear ? "bg-surface-3 text-foreground ring-1 ring-accent" : "bg-surface-2 text-ink-2 hover:bg-surface-3"}`}
+            >
+              {y}
+            </Link>
+          );
+        })}
+      </div>
+      <div className="flex flex-wrap items-center gap-1.5">
+        {monthsOfYear.map((m) => {
           const short = monthLabel(m, locale).split(" ")[0].slice(0, 3);
           return (
             <Link
@@ -54,20 +74,11 @@ export default function FinanceNav({
               title={monthLabel(m, locale)}
               className={`${pill} ${m === period ? "bg-accent font-semibold text-white" : "bg-surface-2 text-ink-2 hover:bg-surface-3"}`}
             >
-              {short} {y}
+              {short} {m.slice(2, 4)}
               {filledMonths.includes(m) ? " ✓" : ""}
             </Link>
           );
         })}
-        {years.map((y) => (
-          <Link
-            key={y}
-            href={href(tab === "plan" ? "pf" : tab, y)}
-            className={`${pill} ${y === period ? "bg-accent font-semibold text-white" : "bg-surface-2 text-ink-2 hover:bg-surface-3"}`}
-          >
-            {t("finWholeYear", { y })}
-          </Link>
-        ))}
       </div>
     </div>
   );

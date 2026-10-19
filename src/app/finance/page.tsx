@@ -80,14 +80,21 @@ export default async function FinancePage({
   if (!clubId) {
     const period = requested;
     const rows: NetworkClub[] = [];
+    const netData: Awaited<ReturnType<typeof loadClubFinance>>[] = [];
     for (const c of clubs ?? []) {
       const data = await loadClubFinance(supabase, c.id);
+      netData.push(data);
       rows.push({ id: c.id, name: c.name, row: computeNetworkRow(data, period) });
     }
-    const months = Array.from({ length: 12 }, (_, i) => shiftMonth(curMonth, i - 11));
+    // месяцы и годы — от самого раннего месяца с планом/данными по любому клубу
+    const netSet = new Set<string>([curMonth]);
+    if (/^\d{4}-\d{2}$/.test(period)) netSet.add(period);
+    for (const c of netData) c.plan.forEach((p) => netSet.add(p.month.slice(0, 7)));
+    const months = [...netSet].sort();
+    const netYears = [...new Set(months.map((m) => m.slice(0, 4)))];
     return shell(
       <div>
-        <FinanceNav tab="pf" period={period} months={months} years={[String(now.getUTCFullYear())]} filledMonths={[]} hideTabs />
+        <FinanceNav tab="pf" period={period} months={months} years={netYears} filledMonths={[]} hideTabs />
         <NetworkTab clubs={rows} period={period} />
         <p className="mt-4 text-sm text-muted"><T k="finPickClubHint" /></p>
       </div>
