@@ -1,4 +1,5 @@
 import { notifyNewLead } from "@/lib/server/telegram";
+import { findCampaignRule } from "@/lib/server/campaignRules";
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { duplicateKey, normalizeEmail, normalizePhone } from "@/lib/leads";
@@ -280,6 +281,24 @@ export async function POST(request: Request, { params }: { params: Promise<{ key
         .eq("start_date", normalized)
         .maybeSingle();
       cohortStartDate = cohort?.start_date ?? null;
+    }
+  }
+
+  // Round 76 — правило «кампания → продукт + поток». Лид-форма Meta шлёт
+  // только название кампании (utm_campaign), без продукта; если для этой
+  // кампании клуба задано правило (страница «Реклама»), заявка сразу
+  // ложится на нужный продукт и поток. Явно присланный продукт лендинга
+  // всегда главнее; к тому же продукту без потока правило добавляет поток.
+  if (utmCampaign) {
+    const rule = await findCampaignRule(admin, partner.id, utmCampaign);
+    if (rule) {
+      if (!productId) {
+        productId = rule.productId;
+        matchedProductPrice = rule.productPrice;
+        cohortStartDate = rule.cohortStartDate;
+      } else if (productId === rule.productId && !cohortStartDate) {
+        cohortStartDate = rule.cohortStartDate;
+      }
     }
   }
 

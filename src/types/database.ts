@@ -61,6 +61,51 @@ export type Database = {
           },
         ]
       }
+      campaign_lead_rules: {
+        Row: {
+          campaign_key: string
+          campaign_name: string
+          cohort_start_date: string | null
+          created_at: string
+          id: string
+          partner_id: string
+          product_id: string
+        }
+        Insert: {
+          campaign_key: string
+          campaign_name: string
+          cohort_start_date?: string | null
+          created_at?: string
+          id?: string
+          partner_id: string
+          product_id: string
+        }
+        Update: {
+          campaign_key?: string
+          campaign_name?: string
+          cohort_start_date?: string | null
+          created_at?: string
+          id?: string
+          partner_id?: string
+          product_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "campaign_lead_rules_partner_id_fkey"
+            columns: ["partner_id"]
+            isOneToOne: false
+            referencedRelation: "partners"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "campaign_lead_rules_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       meta_ad_connections: {
         Row: {
           access_token: string

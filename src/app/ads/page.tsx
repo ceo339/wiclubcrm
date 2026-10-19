@@ -9,6 +9,7 @@ import LocaleScope from "@/components/i18n/LocaleScope";
 import T from "@/components/i18n/T";
 import AppShell from "@/components/shell/AppShell";
 import AdsBoard, { type AdsConnectionInfo } from "@/components/ads/AdsBoard";
+import CampaignRulesCard from "@/components/ads/CampaignRulesCard";
 
 /** How far back the page loads daily rows — the board then filters
  * client-side (presets up to "всё время" within this window). */
@@ -67,6 +68,32 @@ export default async function AdsPage() {
     connection = data ?? null;
   }
 
+  // Round 76 — правила «кампания → продукт + поток» (только для одного клуба).
+  let rules: { id: string; campaign_name: string; product_id: string; cohort_start_date: string | null }[] = [];
+  let ruleProducts: { id: string; name: string }[] = [];
+  let ruleCohorts: { product_id: string; start_date: string }[] = [];
+  if (clubId) {
+    const admin = createAdminClient();
+    const [rulesRes, productsRes, cohortsRes] = await Promise.all([
+      admin
+        .from("campaign_lead_rules")
+        .select("id, campaign_name, product_id, cohort_start_date")
+        .eq("partner_id", clubId)
+        .order("created_at"),
+      admin.from("products").select("id, name").eq("partner_id", clubId).order("name"),
+      admin.from("product_cohorts").select("product_id, start_date").eq("partner_id", clubId),
+    ]);
+    rules = rulesRes.data ?? [];
+    ruleProducts = productsRes.data ?? [];
+    ruleCohorts = cohortsRes.data ?? [];
+  }
+  const campaignNames = Array.from(
+    new Set([
+      ...(insights ?? []).map((r) => r.campaign_name).filter((n): n is string => !!n),
+      ...(crmLeads ?? []).map((l) => l.utm_campaign as string),
+    ])
+  ).sort();
+
   const canManage = (profile.role === "partner" && !!profile.partner_id) || (profile.role === "hq" && !!scopePartnerId);
   const localeScope = localeScopeForProfile(profile);
 
@@ -88,6 +115,7 @@ export default async function AdsPage() {
       {error ? (
         <p className="rounded-lg bg-accent/10 px-4 py-3 text-sm text-accent-strong">{error.message}</p>
       ) : (
+        <div className="space-y-6">
         <AdsBoard
           rows={(insights ?? []).map((r) => ({ ...r, spend: Number(r.spend) }))}
           crmLeads={(crmLeads ?? []).map((l) => ({
@@ -99,6 +127,16 @@ export default async function AdsPage() {
           hasClub={!!clubId}
           canManage={canManage}
         />
+        {clubId && (
+          <CampaignRulesCard
+            rules={rules}
+            products={ruleProducts}
+            cohorts={ruleCohorts}
+            campaignNames={campaignNames}
+            canManage={canManage}
+          />
+        )}
+        </div>
       )}
     </AppShell>
   );

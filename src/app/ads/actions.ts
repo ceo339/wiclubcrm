@@ -4,6 +4,8 @@ import { revalidatePath } from "next/cache";
 import { getCurrentProfile, type Profile } from "@/lib/auth";
 import { getViewScopePartnerId } from "@/lib/viewScope";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { campaignKey } from "@/lib/campaignRules";
+import { applyRuleToExistingLeads } from "@/lib/server/campaignRules";
 import { fetchAdAccountInfo, normalizeAdAccountId, syncPartnerMetaAds } from "@/lib/metaAds";
 
 export type AdsActionResult = { error: string | null };
@@ -86,4 +88,83 @@ export async function syncMetaNow(): Promise<AdsActionResult> {
   const sync = await syncPartnerMetaAds(partnerId);
   revalidatePath("/ads");
   return { error: sync.ok ? null : sync.error };
+}
+
+export type RuleActionResult = { error: string | null; updated?: number };
+
+/** Round 76 — правило «кампания → продукт + поток» (см. lib/campaignRules.ts). */
+export async function saveCampaignRule(formData: FormData): Promise<RuleActionResult> {
+  const profile = await getCurrentProfile();
+  if (!profile) return { error: "errNotAuthorized" };
+  const partnerId = await manageablePartnerId(profile);
+  if (!partnerId) return { error: "errNotAuthorized" };
+
+  const campaignName = String(formData.get("campaign_name") ?? "").replace(/\s+/g, " ").trim();
+  const productId = String(formData.get("product_id") ?? "");
+  const cohortRaw = String(formData.get("cohort_start_date") ?? "");
+  if (!campaignName) return { error: "adsRuleErrCampaign" };
+  if (!productId) return { error: "adsRuleErrProduct" };
+
+  const admin = createAdminClient();
+  const { data: product } = await admin
+    .from("products")
+    .select("id")
+    .eq("partner_id", partnerId)
+    .eq("id", productId)
+    .maybeSingle();
+  if (!product) return { error: "adsRuleErrProduct" };
+
+  let cohortStartDate: string | null = null;
+  if (cohortRaw) {
+    const { data: cohort } = await admin
+      .from("product_cohorts")
+      .select("start_date")
+      .eq("partner_id", partnerId)
+      .eq("product_id", productId)
+      .eq("start_date", cohortRaw)
+      .maybeSingle();
+    if (!cohort) return { error: "adsRuleErrCohort" };
+    cohortStartDate = cohort.start_date;
+  }
+
+  const { error } = await admin.from("campaign_lead_rules").upsert(
+    {
+      partner_id: partnerId,
+      campaign_name: campaignName,
+      campaign_key: campaignKey(campaignName),
+      product_id: productId,
+      cohort_start_date: cohortStartDate,
+    },
+    { onConflict: "partner_id,campaign_key" }
+  );
+  if (error) return { error: error.message };
+  revalidatePath("/ads");
+  return { error: null };
+}
+
+export async function deleteCampaignRule(ruleId: string): Promise<RuleActionResult> {
+  const profile = await getCurrentProfile();
+  if (!profile) return { error: "errNotAuthorized" };
+  const partnerId = await manageablePartnerId(profile);
+  if (!partnerId) return { error: "errNotAuthorized" };
+
+  // Only the rule goes; leads it already placed keep their product/stream.
+  const admin = createAdminClient();
+  const { error } = await admin.from("campaign_lead_rules").delete().eq("id", ruleId).eq("partner_id", partnerId);
+  revalidatePath("/ads");
+  return { error: error?.message ?? null };
+}
+
+export async function applyCampaignRule(ruleId: string): Promise<RuleActionResult> {
+  const profile = await getCurrentProfile();
+  if (!profile) return { error: "errNotAuthorized" };
+  const partnerId = await manageablePartnerId(profile);
+  if (!partnerId) return { error: "errNotAuthorized" };
+
+  const admin = createAdminClient();
+  const r = await applyRuleToExistingLeads(admin, partnerId, ruleId);
+  revalidatePath("/leads");
+  revalidatePath("/cohorts");
+  revalidatePath("/ads");
+  return r;
 }
