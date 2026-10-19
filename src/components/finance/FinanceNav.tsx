@@ -19,6 +19,7 @@ export default function FinanceNav({
   years,
   filledMonths,
   hideTabs = false,
+  extraQuery = "",
 }: {
   tab: FinTab;
   period: string;
@@ -26,9 +27,11 @@ export default function FinanceNav({
   years: string[];
   filledMonths: string[];
   hideTabs?: boolean;
+  /** доп. параметры ссылок месяцев/годов, например «&plan=uk» на вкладке «План» */
+  extraQuery?: string;
 }) {
   const { locale, t } = useLocale();
-  const href = (tb: FinTab, p: string) => `/finance?tab=${tb}&month=${p}`;
+  const href = (tb: FinTab, p: string) => `/finance?tab=${tb}&month=${p}${tb === tab ? extraQuery : ""}`;
   const pill = "rounded-lg px-3 py-1.5 text-sm";
   // месяцы показываем только выбранного года: фильтр «год → месяц»
   const yr = period.slice(0, 4);

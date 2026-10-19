@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useState, useTransition } from "react";
 import { useLocale } from "@/components/i18n/LocaleProvider";
 import { monthLabel } from "@/lib/dashboard";
-import { isZero, sub, type Amt } from "@/lib/finance/amt";
+import { isZero, scale, sub, type Amt } from "@/lib/finance/amt";
 import type { Line, ProfitLoss } from "@/lib/finance/report";
 import { setMonthFilled } from "@/app/finance/actions";
 import { A, devClass, pctText } from "./A";
@@ -24,13 +24,18 @@ function Kpi({ label, value, hint, bad, bar }: { label: string; value: React.Rea
   );
 }
 
+const ZERO: Amt = { eur: 0, loc: 0, cur: null, ok: true };
+
 function Row({
-  name, plan, fact, higherIsBad, kind = "line", chip, hint, href,
+  name, plan, fact, higherIsBad, kind = "line", chip, hint, href, uk,
 }: {
   name: React.ReactNode; plan: Amt; fact: Amt; higherIsBad: boolean;
   kind?: "line" | "group" | "sub" | "sub2" | "total"; chip?: string; hint?: React.ReactNode; href?: string;
+  /** план УК по этой строке — только для hq/viewer (undefined = колонки УК не показываем) */
+  uk?: Amt;
 }) {
   const diff = sub(fact, plan);
+  const diffUk = uk ? sub(fact, uk) : null;
   const cls =
     kind === "group" || kind === "total" ? "font-semibold" : "";
   const pad = kind === "sub" ? "pl-7" : kind === "sub2" ? "pl-12" : "";
@@ -42,10 +47,17 @@ function Row({
         {chip && <span className="ml-2 rounded-full bg-accent-soft px-1.5 py-0.5 text-[10px] font-semibold text-accent-strong">{chip}</span>}
         {hint && <div className="text-[11px] font-normal text-muted">{hint}</div>}
       </td>
+      {uk && <td className="px-3 py-2 text-right text-ink-2"><A v={uk} /></td>}
       <td className="px-3 py-2 text-right"><A v={plan} /></td>
       <td className={`px-3 py-2 text-right ${cls}`}><A v={fact} /></td>
       <td className={`px-3 py-2 text-right ${devClass(diff.eur, higherIsBad)}`}>{isZero(diff) ? <span className="text-muted">0</span> : <A v={diff} signed />}</td>
       <td className={`px-3 py-2 text-right ${devClass(diff.eur, higherIsBad)}`}>{pctText(fact.eur, plan.eur)}</td>
+      {uk && diffUk && (
+        <td className={`px-3 py-2 text-right ${devClass(diffUk.eur, higherIsBad)}`}>
+          {isZero(diffUk) ? <span className="text-muted">0</span> : <A v={diffUk} signed />}
+          <div className="text-[11px]">{pctText(fact.eur, uk.eur)}</div>
+        </td>
+      )}
     </tr>
   );
 }
@@ -67,31 +79,46 @@ function FilledToggle({ month, filled, canManage }: { month: string; filled: boo
 }
 
 export default function PlanFactTab({
-  pl, period, filled, canManage, hasAnyPlan,
+  pl, period, filled, canManage, hasAnyPlan, uk,
 }: {
   pl: ProfitLoss; period: string; filled: boolean; canManage: boolean; hasAnyPlan: boolean;
+  /** план-факт по плану УК — передаётся только hq/viewer; партнёр видит только свой план */
+  uk?: ProfitLoss;
 }) {
   const { locale, t } = useLocale();
+  // план УК по строкам (для колонок «План УК» / «Откл. от УК»)
+  const ukRev = new Map((uk?.revenue ?? []).map((r) => [r.id, r] as const));
+  const ukGroup = new Map((uk?.groups ?? []).map((g) => [g.id, g.plan] as const));
+  const ukLeaf = new Map((uk?.groups ?? []).flatMap((g) => g.leaves).map((l) => [l.id, l] as const));
+  const u = (v: Amt | undefined) => (uk ? (v ?? ZERO) : undefined);
+  // продукт, который есть только в плане УК, тоже показываем строкой
+  const revenueRows = [
+    ...pl.revenue,
+    ...(uk?.revenue ?? []).filter((r) => !pl.revenue.some((x) => x.id === r.id)).map((r) => ({ ...r, plan: ZERO, planQty: 0 })),
+  ];
+  const colCount = uk ? 7 : 5;
   const isYear = /^\d{4}$/.test(period);
   const revDiff = sub(pl.revenueFact, pl.revenuePlan);
   const revPct = pl.revenuePlan.eur > 0 ? Math.round((pl.revenueFact.eur / pl.revenuePlan.eur) * 100) : null;
   const lagging = pl.cumulative ? sub(pl.cumulative.fact, pl.cumulative.plan) : null;
 
+  // под продуктом: план «N чел. × цена» и сколько записалось/пришло/оплатило
   const revHint = (r: ProfitLoss["revenue"][number]) => {
-    const parts: string[] = [];
-    if (r.planQty > 0) parts.push(t("finPlanQty", { n: r.planQty }));
-    if (r.counts.enrolled > 0 || r.counts.came > 0) {
-      parts.push(
-        t("finCameDetail", { came: r.counts.came, paid: r.counts.paid, free: r.counts.free, enrolled: r.counts.enrolled })
-      );
-    }
-    return parts.join(" · ");
+    const came = r.counts.enrolled > 0 || r.counts.came > 0
+      ? t("finCameDetail", { came: r.counts.came, paid: r.counts.paid, free: r.counts.free, enrolled: r.counts.enrolled })
+      : "";
+    const planPart = r.planQty > 0 ? <>{t("finPlanQty", { n: r.planQty })} × <A v={scale(r.plan, 1 / r.planQty)} /></> : null;
+    if (!planPart && !came) return undefined;
+    return <>{planPart}{planPart && came ? " · " : ""}{came}</>;
   };
   const catLink = (id: string) => `/finance?tab=journal&month=${period}&cat=${id}`;
-  const lineProducts = (ps: Line[], indent: "sub" | "sub2") =>
-    ps
-      .filter((p) => !(isZero(p.plan) && isZero(p.fact)))
-      .map((p) => <Row key={p.id} kind={indent} name={p.name} plan={p.plan} fact={p.fact} higherIsBad />);
+  const lineProducts = (ps: Line[], indent: "sub" | "sub2", leafId: string) => {
+    const ukPs = ukLeaf.get(leafId)?.products ?? [];
+    const all = [...ps, ...ukPs.filter((x) => !ps.some((p) => p.id === x.id)).map((x) => ({ ...x, plan: ZERO }))];
+    return all
+      .filter((p) => !(isZero(p.plan) && isZero(p.fact) && isZero(ukPs.find((x) => x.id === p.id)?.plan ?? ZERO)))
+      .map((p) => <Row key={p.id} kind={indent} name={p.name} plan={p.plan} fact={p.fact} higherIsBad uk={u(ukPs.find((x) => x.id === p.id)?.plan)} />);
+  };
 
   return (
     <div className="space-y-4">
@@ -113,14 +140,17 @@ export default function PlanFactTab({
           value={<A v={pl.revenueFact} />}
           bad={revDiff.eur < -0.005 && pl.revenuePlan.eur > 0}
           bar={revPct}
-          hint={pl.revenuePlan.eur > 0 ? <><A v={revDiff} signed /> · {t("finOfPlan", { p: revPct ?? 0 })}</> : t("finNoPlan")}
+          hint={<>
+            {pl.revenuePlan.eur > 0 ? <><A v={revDiff} signed /> · {t("finOfPlan", { p: revPct ?? 0 })}</> : t("finNoPlan")}
+            {uk && <div>{t("finPlanUkWord")} <A v={uk.revenuePlan} />{uk.revenuePlan.eur > 0 ? ` · ${Math.round((pl.revenueFact.eur / uk.revenuePlan.eur) * 100)}%` : ""}</div>}
+          </>}
         />
-        <Kpi label={t("finKpiExpenses")} value={<A v={pl.expensesFact} />} hint={<>{t("finPlanWord")} <A v={pl.expensesPlan} /></>} />
+        <Kpi label={t("finKpiExpenses")} value={<A v={pl.expensesFact} />} hint={<>{t("finPlanWord")} <A v={pl.expensesPlan} />{uk && <div>{t("finPlanUkWord")} <A v={uk.expensesPlan} /></div>}</>} />
         <Kpi
           label={t("finKpiProfit")}
           value={<A v={pl.profitFact} />}
           bad={pl.profitFact.eur < 0}
-          hint={<>{t("finPlanWord")} <A v={pl.profitPlan} /></>}
+          hint={<>{t("finPlanWord")} <A v={pl.profitPlan} />{uk && <div>{t("finPlanUkWord")} <A v={uk.profitPlan} /></div>}</>}
         />
         <Kpi
           label={pl.cumulative ? t("finKpiLag", { m: monthLabel(pl.cumulative.fromMonth, locale).split(" ")[0] }) : t("finKpiLagNoPlan")}
@@ -136,36 +166,38 @@ export default function PlanFactTab({
       )}
 
       <div className="overflow-x-auto rounded-xl border border-border bg-background shadow-card">
-        <table className="w-full min-w-[640px] text-sm">
+        <table className={`w-full ${uk ? "min-w-[860px]" : "min-w-[640px]"} text-sm`}>
           <thead>
             <tr className="text-[11px] uppercase tracking-wide text-muted">
               <th className="px-3 py-2 text-left font-medium">{t("finColItem")}</th>
-              <th className="px-3 py-2 text-right font-medium">{t("finColPlan")}</th>
+              {uk && <th className="px-3 py-2 text-right font-medium">{t("finColPlanUk")}</th>}
+              <th className="px-3 py-2 text-right font-medium">{uk ? t("finColPlanPartner") : t("finColPlan")}</th>
               <th className="px-3 py-2 text-right font-medium">{t("finColFact")}</th>
               <th className="px-3 py-2 text-right font-medium">{t("finColDev")}</th>
               <th className="px-3 py-2 text-right font-medium">%</th>
+              {uk && <th className="px-3 py-2 text-right font-medium">{t("finColDevUk")}</th>}
             </tr>
           </thead>
           <tbody>
-            <tr><td colSpan={5} className="bg-surface-2 px-3 py-1.5 text-[11px] font-medium uppercase tracking-wide text-muted">{t("finSecRevenue")}</td></tr>
-            {pl.revenue.map((r) => (
-              <Row key={r.id} name={r.name} plan={r.plan} fact={r.fact} higherIsBad={false} chip={t("finFromCrm")} hint={revHint(r)} />
+            <tr><td colSpan={colCount} className="bg-surface-2 px-3 py-1.5 text-[11px] font-medium uppercase tracking-wide text-muted">{t("finSecRevenue")}</td></tr>
+            {revenueRows.map((r) => (
+              <Row key={r.id} name={r.name} plan={r.plan} fact={r.fact} higherIsBad={false} chip={t("finFromCrm")} hint={revHint(r)} uk={u(ukRev.get(r.id)?.plan)} />
             ))}
             {!isZero(pl.otherIncome) && (
-              <Row name={t("finOtherIncome")} plan={{ eur: 0, loc: 0, cur: null, ok: true }} fact={pl.otherIncome} higherIsBad={false} />
+              <Row name={t("finOtherIncome")} plan={ZERO} fact={pl.otherIncome} higherIsBad={false} uk={u(ZERO)} />
             )}
             {pl.idleProducts.length > 0 && (
-              <tr className="border-t border-border"><td colSpan={5} className="px-3 py-2 text-xs text-muted">{pl.idleProducts.join(" · ")} — {t("finIdleProducts")}</td></tr>
+              <tr className="border-t border-border"><td colSpan={colCount} className="px-3 py-2 text-xs text-muted">{pl.idleProducts.join(" · ")} — {t("finIdleProducts")}</td></tr>
             )}
-            <Row kind="total" name={t("finTotalRevenue")} plan={pl.revenuePlan} fact={pl.revenueFact} higherIsBad={false} />
+            <Row kind="total" name={t("finTotalRevenue")} plan={pl.revenuePlan} fact={pl.revenueFact} higherIsBad={false} uk={u(uk?.revenuePlan)} />
 
-            <tr><td colSpan={5} className="bg-surface-2 px-3 py-1.5 text-[11px] font-medium uppercase tracking-wide text-muted">{t("finSecExpenses")}</td></tr>
+            <tr><td colSpan={colCount} className="bg-surface-2 px-3 py-1.5 text-[11px] font-medium uppercase tracking-wide text-muted">{t("finSecExpenses")}</td></tr>
             {pl.groups.filter((g) => g.inPl && !g.isTax).map((g) => {
               const single = g.leaves.length === 1 && g.leaves[0].perProduct && g.leaves[0].name.startsWith(g.name.slice(0, 5));
               return [
-                <Row key={g.id} kind="group" name={g.name} plan={g.plan} fact={g.fact} higherIsBad />,
+                <Row key={g.id} kind="group" name={g.name} plan={g.plan} fact={g.fact} higherIsBad uk={u(ukGroup.get(g.id))} />,
                 ...(single
-                  ? lineProducts(g.leaves[0].products, "sub")
+                  ? lineProducts(g.leaves[0].products, "sub", g.leaves[0].id)
                   : g.leaves.flatMap((l) => [
                       <Row
                         key={l.id}
@@ -177,18 +209,19 @@ export default function PlanFactTab({
                         chip={l.autoPercent !== null ? t("finAuto") : undefined}
                         hint={l.autoPercent !== null ? t("finAutoHint", { p: l.autoPercent }) : undefined}
                         href={l.autoPercent === null ? catLink(l.id) : undefined}
+                        uk={u(ukLeaf.get(l.id)?.plan)}
                       />,
-                      ...lineProducts(l.products, "sub2"),
+                      ...lineProducts(l.products, "sub2", l.id),
                     ])),
               ];
             })}
-            <Row kind="total" name={t("finTotalExpenses")} plan={pl.expensesPlan} fact={pl.expensesFact} higherIsBad />
-            <Row kind="total" name={t("finProfitBeforeTax")} plan={pl.profitPlan} fact={pl.profitFact} higherIsBad={false} />
+            <Row kind="total" name={t("finTotalExpenses")} plan={pl.expensesPlan} fact={pl.expensesFact} higherIsBad uk={u(uk?.expensesPlan)} />
+            <Row kind="total" name={t("finProfitBeforeTax")} plan={pl.profitPlan} fact={pl.profitFact} higherIsBad={false} uk={u(uk?.profitPlan)} />
             {pl.groups.filter((g) => g.isTax).map((g) => (
-              <Row key={g.id} kind="group" name={g.name} plan={g.plan} fact={g.fact} higherIsBad />
+              <Row key={g.id} kind="group" name={g.name} plan={g.plan} fact={g.fact} higherIsBad uk={u(ukGroup.get(g.id))} />
             ))}
             {pl.groups.some((g) => g.isTax) && (
-              <Row kind="total" name={t("finProfitAfterTax")} plan={pl.netProfitPlan} fact={pl.netProfitFact} higherIsBad={false} />
+              <Row kind="total" name={t("finProfitAfterTax")} plan={pl.netProfitPlan} fact={pl.netProfitFact} higherIsBad={false} uk={u(uk?.netProfitPlan)} />
             )}
           </tbody>
         </table>

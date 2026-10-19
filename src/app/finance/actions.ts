@@ -7,6 +7,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { BASE_CURRENCY, CURRENCIES } from "@/lib/currency";
 import { readLocal } from "@/lib/server/localMoney";
 import type { Database } from "@/types/database";
+import type { PlanType } from "@/lib/finance/report";
 
 type PlanLogInsert = Database["public"]["Tables"]["fin_plan_log"]["Insert"];
 
@@ -23,12 +24,17 @@ async function manageablePartnerId(profile: Profile): Promise<string | null> {
   return null;
 }
 
-async function guard(): Promise<{ partnerId: string; userId: string } | { error: string }> {
+async function guard(): Promise<{ partnerId: string; userId: string; role: Profile["role"] } | { error: string }> {
   const profile = await getCurrentProfile();
   if (!profile) return { error: "errNotAuthorized" };
   const partnerId = await manageablePartnerId(profile);
   if (!partnerId) return { error: "errNotAuthorized" };
-  return { partnerId, userId: profile.id };
+  return { partnerId, userId: profile.id, role: profile.role };
+}
+
+/** План УК правит только hq; план партнёра — партнёр и hq (составляют вместе). */
+function planAllowed(role: Profile["role"], planType: PlanType): boolean {
+  return planType === "partner" ? role === "partner" || role === "hq" : role === "hq";
 }
 
 const isDate = (v: string) => /^\d{4}-\d{2}-\d{2}$/.test(v);
@@ -120,9 +126,11 @@ export type PlanInput = {
 
 const lineKey = (kind: string, cat: string | null, prod: string | null) => `${kind}|${cat ?? ""}|${prod ?? ""}`;
 
-export async function savePlan(month: string, rows: PlanInput[]): Promise<FinResult> {
+export async function savePlan(month: string, rows: PlanInput[], planType: PlanType = "partner"): Promise<FinResult> {
   const g = await guard();
   if ("error" in g) return g;
+  if (planType !== "uk" && planType !== "partner") return { error: "errNotAuthorized" };
+  if (!planAllowed(g.role, planType)) return { error: "errNotAuthorized" };
   if (!isMonth(month)) return { error: "finErrDate" };
   const monthDate = `${month}-01`;
   const admin = createAdminClient();
@@ -130,7 +138,7 @@ export async function savePlan(month: string, rows: PlanInput[]): Promise<FinRes
   const [{ data: cats }, { data: prods }, { data: existing }] = await Promise.all([
     admin.from("fin_categories").select("id, partner_id, parent_id, auto_kind").or(`partner_id.is.null,partner_id.eq.${g.partnerId}`),
     admin.from("products").select("id").eq("partner_id", g.partnerId),
-    admin.from("fin_plan").select("*").eq("partner_id", g.partnerId).eq("month", monthDate),
+    admin.from("fin_plan").select("*").eq("partner_id", g.partnerId).eq("plan_type", planType).eq("month", monthDate),
   ]);
   const okCat = new Set((cats ?? []).filter((c) => c.parent_id && !c.auto_kind).map((c) => c.id));
   const okProd = new Set((prods ?? []).map((p) => p.id));
@@ -157,7 +165,7 @@ export async function savePlan(month: string, rows: PlanInput[]): Promise<FinRes
     const amount = Math.round(Number(r.amountEur) * 100) / 100;
     const local = cur(r.currency) && r.amountLocal !== null ? Math.round(Number(r.amountLocal) * 100) / 100 : null;
     const row = {
-      partner_id: g.partnerId, month: monthDate, kind: r.kind,
+      partner_id: g.partnerId, plan_type: planType, month: monthDate, kind: r.kind,
       category_id: r.kind === "revenue" ? null : r.categoryId, product_id: r.productId,
       qty: r.qty, amount, amount_local: local, local_currency: local === null ? null : cur(r.currency), updated_at: now,
     };
@@ -169,7 +177,7 @@ export async function savePlan(month: string, rows: PlanInput[]): Promise<FinRes
       if (error) return { error: error.message };
     }
     if (!prev || Number(prev.amount) !== amount || Number(prev.qty ?? 0) !== Number(r.qty ?? 0)) {
-      log.push({ partner_id: g.partnerId, month: monthDate, kind: r.kind, category_id: row.category_id, product_id: row.product_id, qty: r.qty, amount, changed_by: g.userId });
+      log.push({ partner_id: g.partnerId, plan_type: planType, month: monthDate, kind: r.kind, category_id: row.category_id, product_id: row.product_id, qty: r.qty, amount, changed_by: g.userId });
     }
   }
   // строки, которые очистили, убираем и тоже фиксируем в истории (сумма 0)
@@ -177,7 +185,7 @@ export async function savePlan(month: string, rows: PlanInput[]): Promise<FinRes
     if (wanted.has(key)) continue;
     const { error } = await admin.from("fin_plan").delete().eq("id", prev.id);
     if (error) return { error: error.message };
-    log.push({ partner_id: g.partnerId, month: monthDate, kind: prev.kind, category_id: prev.category_id, product_id: prev.product_id, qty: null, amount: 0, changed_by: g.userId });
+    log.push({ partner_id: g.partnerId, plan_type: planType, month: monthDate, kind: prev.kind, category_id: prev.category_id, product_id: prev.product_id, qty: null, amount: 0, changed_by: g.userId });
   }
   if (log.length) await admin.from("fin_plan_log").insert(log);
   revalidatePath("/finance");
@@ -185,19 +193,20 @@ export async function savePlan(month: string, rows: PlanInput[]): Promise<FinRes
 }
 
 /** Копирует план из одного месяца в другой (целевой месяц перезаписывается). */
-export async function copyPlanMonth(from: string, to: string): Promise<FinResult> {
+export async function copyPlanMonth(from: string, to: string, planType: PlanType = "partner"): Promise<FinResult> {
   const g = await guard();
   if ("error" in g) return g;
+  if (!planAllowed(g.role, planType)) return { error: "errNotAuthorized" };
   if (!isMonth(from) || !isMonth(to) || from === to) return { error: "finErrDate" };
   const admin = createAdminClient();
-  const { data: src } = await admin.from("fin_plan").select("*").eq("partner_id", g.partnerId).eq("month", `${from}-01`);
+  const { data: src } = await admin.from("fin_plan").select("*").eq("partner_id", g.partnerId).eq("plan_type", planType).eq("month", `${from}-01`);
   if (!src || src.length === 0) return { error: "finErrNothingToCopy" };
   const rows: PlanInput[] = src.map((r) => ({
     kind: r.kind as "revenue" | "expense", categoryId: r.category_id, productId: r.product_id,
     qty: r.qty === null ? null : Number(r.qty), amountEur: Number(r.amount),
     amountLocal: r.amount_local === null ? null : Number(r.amount_local), currency: r.local_currency,
   }));
-  return savePlan(to, rows);
+  return savePlan(to, rows, planType);
 }
 
 // ---------------------------------------------------------------- настройки и месяцы

@@ -32,7 +32,10 @@ export type Exp = {
   local_currency: string | null;
   comment: string | null;
 };
+/** Два плана (раунд 82): «uk» — план УК (финмодель, видят только hq/viewer), «partner» — план партнёра. */
+export type PlanType = "uk" | "partner";
 export type PlanRow = {
+  plan_type: PlanType;
   month: string; // YYYY-MM-01
   kind: "revenue" | "expense";
   category_id: string | null;
@@ -139,7 +142,8 @@ function factRevenueTotal(f: ClubFinance, months: Set<string>): Amt {
   return sum([...factRevenueByProduct(f, months).values()]);
 }
 
-export function computeProfitLoss(f: ClubFinance, period: string, today: Date): ProfitLoss {
+export function computeProfitLoss(f0: ClubFinance, period: string, today: Date, planType: PlanType = "partner"): ProfitLoss {
+  const f: ClubFinance = { ...f0, plan: f0.plan.filter((p) => p.plan_type === planType) };
   const months = new Set(periodMonths(period));
   const pct = autoPercents(f.categories);
 
@@ -327,19 +331,25 @@ export function computeCash(f: ClubFinance, endMonth: string, count: number): { 
 
 export type NetworkRow = {
   planRevenue: Amt;
+  planRevenueUk: Amt;
   factRevenue: Amt;
   ukDue: Amt;
   hasPlan: boolean;
+  hasPlanUk: boolean;
 };
 
 export function computeNetworkRow(f: ClubFinance, period: string): NetworkRow {
   const months = new Set(periodMonths(period));
   const pct = autoPercents(f.categories);
   const factRevenue = factRevenueTotal(f, months);
+  const partner = { ...f, plan: f.plan.filter((p) => p.plan_type === "partner") };
+  const uk = { ...f, plan: f.plan.filter((p) => p.plan_type === "uk") };
   return {
-    planRevenue: planRevenueTotal(f, months),
+    planRevenue: planRevenueTotal(partner, months),
+    planRevenueUk: planRevenueTotal(uk, months),
     factRevenue,
     ukDue: scale(factRevenue, (pct.royalty + pct.mkf) / 100),
-    hasPlan: f.plan.some((p) => months.has(mk(p.month))),
+    hasPlan: partner.plan.some((p) => months.has(mk(p.month))),
+    hasPlanUk: uk.plan.some((p) => months.has(mk(p.month))),
   };
 }

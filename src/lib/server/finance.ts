@@ -31,6 +31,7 @@ export type JournalPayment = {
 export type ClubFinanceData = ClubFinance & {
   filledMonths: string[];
   lastPlanChange: string | null;
+  lastPlanChangeUk: string | null;
   journalPayments: JournalPayment[];
 };
 
@@ -54,7 +55,7 @@ export async function loadClubFinance(db: Db, partnerId: string): Promise<ClubFi
     fetchAll((a, b) => db.from("member_enrollments").select("id, product_id, start_date, created_at, status").eq("partner_id", partnerId).range(a, b)),
     db.from("fin_settings").select("*").eq("partner_id", partnerId).maybeSingle(),
     db.from("fin_months").select("month, filled").eq("partner_id", partnerId).eq("filled", true),
-    db.from("fin_plan_log").select("changed_at").eq("partner_id", partnerId).order("changed_at", { ascending: false }).limit(1),
+    db.from("fin_plan_log").select("changed_at, plan_type").eq("partner_id", partnerId).order("changed_at", { ascending: false }).limit(50),
   ]);
 
   type PayRow = {
@@ -88,6 +89,7 @@ export async function loadClubFinance(db: Db, partnerId: string): Promise<ClubFi
       amount_local: num(e.amount_local), local_currency: e.local_currency, comment: e.comment,
     })),
     plan: plan.map((p): PlanRow => ({
+      plan_type: p.plan_type === "uk" ? "uk" : "partner",
       month: p.month, kind: p.kind as PlanRow["kind"], category_id: p.category_id, product_id: p.product_id,
       qty: num(p.qty), amount: Number(p.amount), amount_local: num(p.amount_local), local_currency: p.local_currency,
     })),
@@ -99,7 +101,8 @@ export async function loadClubFinance(db: Db, partnerId: string): Promise<ClubFi
     enrollments: enrollments.filter((e) => e.product_id).map((e) => ({ id: e.id, product_id: e.product_id as string, start_date: e.start_date, created_at: e.created_at, status: e.status })),
     settings,
     filledMonths: (monthsRes.data ?? []).map((m) => m.month.slice(0, 7)),
-    lastPlanChange: logRes.data?.[0]?.changed_at ?? null,
+    lastPlanChange: logRes.data?.find((l) => l.plan_type === "partner")?.changed_at ?? null,
+    lastPlanChangeUk: logRes.data?.find((l) => l.plan_type === "uk")?.changed_at ?? null,
     journalPayments: payRows
       .filter((p) => p.status === "paid")
       .map((p) => ({

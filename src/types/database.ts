@@ -227,6 +227,7 @@ export type Database = {
           local_currency: string | null
           month: string
           partner_id: string
+          plan_type: string
           product_id: string | null
           qty: number | null
           updated_at: string
@@ -240,6 +241,7 @@ export type Database = {
           local_currency?: string | null
           month: string
           partner_id: string
+          plan_type?: string
           product_id?: string | null
           qty?: number | null
           updated_at?: string
@@ -253,6 +255,7 @@ export type Database = {
           local_currency?: string | null
           month?: string
           partner_id?: string
+          plan_type?: string
           product_id?: string | null
           qty?: number | null
           updated_at?: string
@@ -269,6 +272,7 @@ export type Database = {
           kind: string
           month: string
           partner_id: string
+          plan_type: string
           product_id: string | null
           qty: number | null
         }
@@ -281,6 +285,7 @@ export type Database = {
           kind: string
           month: string
           partner_id: string
+          plan_type?: string
           product_id?: string | null
           qty?: number | null
         }
@@ -293,6 +298,7 @@ export type Database = {
           kind?: string
           month?: string
           partner_id?: string
+          plan_type?: string
           product_id?: string | null
           qty?: number | null
         }

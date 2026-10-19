@@ -5,17 +5,22 @@ import { useLocale } from "@/components/i18n/LocaleProvider";
 import { useCurrency } from "@/components/currency/CurrencyProvider";
 import { BASE_CURRENCY, convertFromEur, convertToEur, currencySymbol, roundMoney } from "@/lib/currency";
 import { monthLabel } from "@/lib/dashboard";
-import type { Cat, PlanRow, Prod } from "@/lib/finance/report";
+import Link from "next/link";
+import type { Cat, PlanRow, PlanType, Prod } from "@/lib/finance/report";
 import { savePlan, copyPlanMonth, type PlanInput } from "@/app/finance/actions";
 import { fmtNumber } from "./A";
 
 const key = (kind: string, cat: string | null, prod: string | null) => `${kind}|${cat ?? ""}|${prod ?? ""}`;
 
 export default function PlanTab({
-  month, products, categories, plan, prevMonth, prevHasPlan, lastChange, canManage,
+  month, products, categories, plan, prevMonth, prevHasPlan, lastChange, canManage, planType, switchHrefs,
 }: {
   month: string; products: Prod[]; categories: Cat[]; plan: PlanRow[]; prevMonth: string; prevHasPlan: boolean;
   lastChange: string | null; canManage: boolean;
+  /** какой план правим; `plan` уже отфильтрован по нему */
+  planType: PlanType;
+  /** переключатель «План УК / План партнёра» — только для hq/viewer */
+  switchHrefs?: { uk: string; partner: string };
 }) {
   const { locale, t } = useLocale();
   const { currency, rates } = useCurrency();
@@ -98,6 +103,22 @@ export default function PlanTab({
 
   return (
     <div className="space-y-4">
+      {switchHrefs && (
+        <div className="space-y-1.5">
+          <div className="inline-flex items-center gap-1 rounded-xl border border-border-strong bg-surface-2 p-1">
+            {(["uk", "partner"] as const).map((pt) => (
+              <Link
+                key={pt}
+                href={switchHrefs[pt]}
+                className={`rounded-lg px-3 py-1.5 text-sm font-semibold ${pt === planType ? "bg-foreground text-background shadow-card" : "text-ink-2 hover:bg-surface-3"}`}
+              >
+                {pt === "uk" ? t("finPlanTypeUk") : t("finPlanTypePartner")}
+              </Link>
+            ))}
+          </div>
+          <p className="text-xs text-muted">{planType === "uk" ? t("finPlanTypeHintUk") : t("finPlanTypeHintPartner")}</p>
+        </div>
+      )}
       <p className="text-sm text-muted">{t("finPlanHint", { m: monthLabel(month, locale) })}</p>
       {lastChange && (
         <p className="text-xs text-muted">{t("finPlanLastChange", { d: new Date(lastChange).toLocaleDateString(locale === "bg" ? "bg-BG" : "ru-RU") })}</p>
@@ -177,13 +198,13 @@ export default function PlanTab({
 
       {canManage && (
         <div className="flex flex-wrap items-center gap-3">
-          <button type="button" disabled={pending} onClick={() => run(() => savePlan(month, collect()))} className="rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-white hover:bg-accent-strong disabled:opacity-50">
+          <button type="button" disabled={pending} onClick={() => run(() => savePlan(month, collect(), planType))} className="rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-white hover:bg-accent-strong disabled:opacity-50">
             {pending ? t("finSaving") : t("finSavePlan")}
           </button>
           {prevHasPlan && (
             <button
               type="button" disabled={pending}
-              onClick={() => { if (confirm(t("finCopyConfirm", { m: monthLabel(prevMonth, locale) }))) run(() => copyPlanMonth(prevMonth, month)); }}
+              onClick={() => { if (confirm(t("finCopyConfirm", { m: monthLabel(prevMonth, locale) }))) run(() => copyPlanMonth(prevMonth, month, planType)); }}
               className="rounded-lg border border-border px-3 py-2 text-sm font-medium text-ink-2 hover:bg-surface-2 disabled:opacity-50"
             >
               {t("finCopyFrom", { m: monthLabel(prevMonth, locale).split(" ")[0] })}

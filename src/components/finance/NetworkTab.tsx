@@ -27,11 +27,12 @@ export default function NetworkTab({ clubs, period }: { clubs: NetworkClub[]; pe
     <div className="space-y-3">
       <p className="text-sm text-muted">{t("finNetworkHint", { p: /^\d{4}$/.test(period) ? period : monthLabel(period, locale) })}</p>
       <div className="overflow-x-auto rounded-xl border border-border bg-background shadow-card">
-        <table className="w-full min-w-[560px] text-sm">
+        <table className="w-full min-w-[680px] text-sm">
           <thead>
             <tr className="text-[11px] uppercase tracking-wide text-muted">
               <th className="px-3 py-2 text-left font-medium">{t("finColClub")}</th>
-              <th className="px-3 py-2 text-right font-medium">{t("finColPlan")}</th>
+              <th className="px-3 py-2 text-right font-medium">{t("finColPlanUk")}</th>
+              <th className="px-3 py-2 text-right font-medium">{t("finColPlanPartner")}</th>
               <th className="px-3 py-2 text-right font-medium">{t("finColFact")}</th>
               <th className="px-3 py-2 text-right font-medium">%</th>
               <th className="px-3 py-2 text-right font-medium">{t("finColUk")}</th>
@@ -46,6 +47,14 @@ export default function NetworkTab({ clubs, period }: { clubs: NetworkClub[]; pe
                     <button type="button" onClick={() => openClub(id)} className="text-left hover:text-accent-strong hover:underline">
                       {name} <span aria-hidden className="text-muted">›</span>
                     </button>
+                  </td>
+                  <td className="px-3 py-2 text-right text-ink-2">
+                    {row.hasPlanUk ? (
+                      <>
+                        <A v={row.planRevenueUk} />
+                        {row.planRevenueUk.eur > 0 && <div className="text-[11px] text-muted">{Math.round((row.factRevenue.eur / row.planRevenueUk.eur) * 100)}%</div>}
+                      </>
+                    ) : <span className="text-muted">—</span>}
                   </td>
                   {row.hasPlan ? (
                     <>

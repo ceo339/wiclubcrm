@@ -4,7 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { currencyForCountry } from "@/lib/currency";
 import { localeScopeForProfile } from "@/lib/i18n";
 import { isNetworkRole, getViewScopePartnerId, getViewMode } from "@/lib/viewScope";
-import { computeCash, computeNetworkRow, computeProfitLoss, periodMonths, shiftMonth } from "@/lib/finance/report";
+import { computeCash, computeNetworkRow, computeProfitLoss, periodMonths, shiftMonth, type PlanType } from "@/lib/finance/report";
 import { loadClubFinance } from "@/lib/server/finance";
 import CurrencySwitcher from "@/components/currency/CurrencySwitcher";
 import CurrencyScope from "@/components/currency/CurrencyScope";
@@ -25,7 +25,7 @@ const TABS: FinTab[] = ["pf", "journal", "cash", "plan"];
 export default async function FinancePage({
   searchParams,
 }: {
-  searchParams: Promise<{ tab?: string; month?: string; cat?: string }>;
+  searchParams: Promise<{ tab?: string; month?: string; cat?: string; plan?: string }>;
 }) {
   const sp = await searchParams;
   const profile = await getCurrentProfile();
@@ -120,15 +120,21 @@ export default async function FinancePage({
   const monthsOfPeriod = new Set(periodMonths(period));
 
   let content: React.ReactNode = null;
+  // Два плана (раунд 82): партнёр видит только свой план (RLS не отдаёт ему строки УК),
+  // hq/viewer видят и план УК — в план/факте отдельными колонками, в редакторе переключателем.
+  const partnerPlan = data.plan.filter((p) => p.plan_type === "partner");
+  const planType: PlanType = networkView && sp.plan !== "partner" ? "uk" : "partner";
   if (tab === "pf") {
-    const pl = computeProfitLoss(data, period, now);
+    const pl = computeProfitLoss(data, period, now, "partner");
+    const plUk = networkView ? computeProfitLoss(data, period, now, "uk") : undefined;
     content = (
       <PlanFactTab
         pl={pl}
+        uk={plUk}
         period={period}
         filled={data.filledMonths.includes(period)}
         canManage={canManage}
-        hasAnyPlan={data.plan.some((p) => monthsOfPeriod.has(p.month.slice(0, 7)))}
+        hasAnyPlan={(networkView ? data.plan : partnerPlan).some((p) => monthsOfPeriod.has(p.month.slice(0, 7)))}
       />
     );
   } else if (tab === "journal") {
@@ -153,15 +159,17 @@ export default async function FinancePage({
   } else {
     content = (
       <PlanTab
-        key={period}
+        key={`${planType}-${period}`}
         month={period}
         products={data.products}
         categories={data.categories}
-        plan={data.plan}
+        plan={data.plan.filter((p) => p.plan_type === planType)}
         prevMonth={shiftMonth(period, -1)}
-        prevHasPlan={data.plan.some((p) => p.month.slice(0, 7) === shiftMonth(period, -1))}
-        lastChange={data.lastPlanChange}
+        prevHasPlan={data.plan.some((p) => p.plan_type === planType && p.month.slice(0, 7) === shiftMonth(period, -1))}
+        lastChange={planType === "uk" ? data.lastPlanChangeUk : data.lastPlanChange}
         canManage={canManage}
+        planType={planType}
+        switchHrefs={networkView ? { uk: `/finance?tab=plan&month=${period}&plan=uk`, partner: `/finance?tab=plan&month=${period}&plan=partner` } : undefined}
       />
     );
   }
@@ -169,7 +177,7 @@ export default async function FinancePage({
   return shell(
     <div>
       {networkView && <CityBack />}
-      <FinanceNav tab={tab} period={period} months={months} years={years} filledMonths={data.filledMonths} />
+      <FinanceNav tab={tab} period={period} months={months} years={years} filledMonths={data.filledMonths} extraQuery={tab === "plan" && networkView ? `&plan=${planType}` : ""} />
       {content}
     </div>
   );
