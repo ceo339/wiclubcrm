@@ -199,7 +199,11 @@ export async function copyPlanMonth(from: string, to: string, planType: PlanType
   if (!planAllowed(g.role, planType)) return { error: "errNotAuthorized" };
   if (!isMonth(from) || !isMonth(to) || from === to) return { error: "finErrDate" };
   const admin = createAdminClient();
-  const { data: src } = await admin.from("fin_plan").select("*").eq("partner_id", g.partnerId).eq("plan_type", planType).eq("month", `${from}-01`);
+  let { data: src } = await admin.from("fin_plan").select("*").eq("partner_id", g.partnerId).eq("plan_type", planType).eq("month", `${from}-01`);
+  // план партнёра за месяц, который не правили, — это план УК (см. effectivePlan)
+  if (planType === "partner" && (!src || src.length === 0)) {
+    ({ data: src } = await admin.from("fin_plan").select("*").eq("partner_id", g.partnerId).eq("plan_type", "uk").eq("month", `${from}-01`));
+  }
   if (!src || src.length === 0) return { error: "finErrNothingToCopy" };
   const rows: PlanInput[] = src.map((r) => ({
     kind: r.kind as "revenue" | "expense", categoryId: r.category_id, productId: r.product_id,

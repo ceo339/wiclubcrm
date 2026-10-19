@@ -4,7 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { currencyForCountry } from "@/lib/currency";
 import { localeScopeForProfile } from "@/lib/i18n";
 import { isNetworkRole, getViewScopePartnerId, getViewMode } from "@/lib/viewScope";
-import { computeCash, computeNetworkRow, computeProfitLoss, periodMonths, shiftMonth, type PlanType } from "@/lib/finance/report";
+import { computeCash, computeNetworkRow, computeProfitLoss, effectivePlan, periodMonths, shiftMonth, type PlanType } from "@/lib/finance/report";
 import { loadClubFinance } from "@/lib/server/finance";
 import CurrencySwitcher from "@/components/currency/CurrencySwitcher";
 import CurrencyScope from "@/components/currency/CurrencyScope";
@@ -120,13 +120,15 @@ export default async function FinancePage({
   const monthsOfPeriod = new Set(periodMonths(period));
 
   let content: React.ReactNode = null;
-  // Два плана (раунд 82): партнёр видит только свой план (RLS не отдаёт ему строки УК),
-  // hq/viewer видят и план УК — в план/факте отдельными колонками, в редакторе переключателем.
-  const partnerPlan = data.plan.filter((p) => p.plan_type === "partner");
-  const planType: PlanType = networkView && sp.plan !== "partner" ? "uk" : "partner";
+  // Два плана (раунды 82–83): план УК и план партнёра видят все (партнёр тоже), в план/факте —
+  // отдельными колонками, в редакторе переключателем. План УК правит только hq; план партнёра —
+  // партнёр и hq. Месяц, который партнёр ещё не правил, берётся из плана УК (effectivePlan).
+  const planType: PlanType = sp.plan === "uk" || (sp.plan !== "partner" && networkView) ? "uk" : "partner";
+  const planRows = effectivePlan(data.plan, planType);
+  const monthHasOwnPartnerPlan = data.plan.some((p) => p.plan_type === "partner" && p.month.slice(0, 7) === period);
   if (tab === "pf") {
     const pl = computeProfitLoss(data, period, now, "partner");
-    const plUk = networkView ? computeProfitLoss(data, period, now, "uk") : undefined;
+    const plUk = computeProfitLoss(data, period, now, "uk");
     content = (
       <PlanFactTab
         pl={pl}
@@ -134,7 +136,7 @@ export default async function FinancePage({
         period={period}
         filled={data.filledMonths.includes(period)}
         canManage={canManage}
-        hasAnyPlan={(networkView ? data.plan : partnerPlan).some((p) => monthsOfPeriod.has(p.month.slice(0, 7)))}
+        hasAnyPlan={data.plan.some((p) => monthsOfPeriod.has(p.month.slice(0, 7)))}
       />
     );
   } else if (tab === "journal") {
@@ -163,13 +165,14 @@ export default async function FinancePage({
         month={period}
         products={data.products}
         categories={data.categories}
-        plan={data.plan.filter((p) => p.plan_type === planType)}
+        plan={planRows}
         prevMonth={shiftMonth(period, -1)}
-        prevHasPlan={data.plan.some((p) => p.plan_type === planType && p.month.slice(0, 7) === shiftMonth(period, -1))}
+        prevHasPlan={planRows.some((p) => p.month.slice(0, 7) === shiftMonth(period, -1))}
         lastChange={planType === "uk" ? data.lastPlanChangeUk : data.lastPlanChange}
-        canManage={canManage}
+        canManage={canManage && (planType === "partner" || profile.role === "hq")}
         planType={planType}
-        switchHrefs={networkView ? { uk: `/finance?tab=plan&month=${period}&plan=uk`, partner: `/finance?tab=plan&month=${period}&plan=partner` } : undefined}
+        fromUk={planType === "partner" && !monthHasOwnPartnerPlan && planRows.some((p) => p.month.slice(0, 7) === period)}
+        switchHrefs={{ uk: `/finance?tab=plan&month=${period}&plan=uk`, partner: `/finance?tab=plan&month=${period}&plan=partner` }}
       />
     );
   }
@@ -177,7 +180,7 @@ export default async function FinancePage({
   return shell(
     <div>
       {networkView && <CityBack />}
-      <FinanceNav tab={tab} period={period} months={months} years={years} filledMonths={data.filledMonths} extraQuery={tab === "plan" && networkView ? `&plan=${planType}` : ""} />
+      <FinanceNav tab={tab} period={period} months={months} years={years} filledMonths={data.filledMonths} extraQuery={tab === "plan" ? `&plan=${planType}` : ""} />
       {content}
     </div>
   );

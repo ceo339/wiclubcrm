@@ -46,6 +46,19 @@ export type PlanRow = {
   local_currency: string | null;
 };
 export type Prod = { id: string; name: string; price: number };
+
+/**
+ * Строки нужного плана. План партнёра «наследует» план УК: месяц, в котором у партнёра
+ * ещё нет своих строк, берётся из плана УК (Анастасия: «пустым не оставляй, бери данные
+ * на след месяц из плана УК»). Как только партнёр сохранит месяц — действует его версия.
+ */
+export function effectivePlan(plan: PlanRow[], planType: PlanType): PlanRow[] {
+  const uk = plan.filter((p) => p.plan_type === "uk");
+  if (planType === "uk") return uk;
+  const own = plan.filter((p) => p.plan_type === "partner");
+  const ownMonths = new Set(own.map((p) => p.month.slice(0, 7)));
+  return [...own, ...uk.filter((p) => !ownMonths.has(p.month.slice(0, 7))).map((p) => ({ ...p, plan_type: "partner" as const }))];
+}
 export type EnrInfo = { product_id: string; start_date: string | null; created_at: string; status: string };
 export type Pay = {
   id: string;
@@ -143,7 +156,7 @@ function factRevenueTotal(f: ClubFinance, months: Set<string>): Amt {
 }
 
 export function computeProfitLoss(f0: ClubFinance, period: string, today: Date, planType: PlanType = "partner"): ProfitLoss {
-  const f: ClubFinance = { ...f0, plan: f0.plan.filter((p) => p.plan_type === planType) };
+  const f: ClubFinance = { ...f0, plan: effectivePlan(f0.plan, planType) };
   const months = new Set(periodMonths(period));
   const pct = autoPercents(f.categories);
 
@@ -342,8 +355,8 @@ export function computeNetworkRow(f: ClubFinance, period: string): NetworkRow {
   const months = new Set(periodMonths(period));
   const pct = autoPercents(f.categories);
   const factRevenue = factRevenueTotal(f, months);
-  const partner = { ...f, plan: f.plan.filter((p) => p.plan_type === "partner") };
-  const uk = { ...f, plan: f.plan.filter((p) => p.plan_type === "uk") };
+  const partner = { ...f, plan: effectivePlan(f.plan, "partner") };
+  const uk = { ...f, plan: effectivePlan(f.plan, "uk") };
   return {
     planRevenue: planRevenueTotal(partner, months),
     planRevenueUk: planRevenueTotal(uk, months),

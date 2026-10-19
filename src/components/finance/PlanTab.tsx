@@ -13,14 +13,16 @@ import { fmtNumber } from "./A";
 const key = (kind: string, cat: string | null, prod: string | null) => `${kind}|${cat ?? ""}|${prod ?? ""}`;
 
 export default function PlanTab({
-  month, products, categories, plan, prevMonth, prevHasPlan, lastChange, canManage, planType, switchHrefs,
+  month, products, categories, plan, prevMonth, prevHasPlan, lastChange, canManage, planType, switchHrefs, fromUk = false,
 }: {
   month: string; products: Prod[]; categories: Cat[]; plan: PlanRow[]; prevMonth: string; prevHasPlan: boolean;
   lastChange: string | null; canManage: boolean;
   /** какой план правим; `plan` уже отфильтрован по нему */
   planType: PlanType;
-  /** переключатель «План УК / План партнёра» — только для hq/viewer */
+  /** переключатель «План УК / План партнёра» */
   switchHrefs?: { uk: string; partner: string };
+  /** план партнёра на этот месяц ещё не правили — показан план УК */
+  fromUk?: boolean;
 }) {
   const { locale, t } = useLocale();
   const { currency, rates } = useCurrency();
@@ -120,6 +122,7 @@ export default function PlanTab({
         </div>
       )}
       <p className="text-sm text-muted">{t("finPlanHint", { m: monthLabel(month, locale) })}</p>
+      {fromUk && <p className="rounded-lg bg-surface-2 px-3 py-2 text-sm text-ink-2">{t("finPlanFromUk")}</p>}
       {lastChange && (
         <p className="text-xs text-muted">{t("finPlanLastChange", { d: new Date(lastChange).toLocaleDateString(locale === "bg" ? "bg-BG" : "ru-RU") })}</p>
       )}

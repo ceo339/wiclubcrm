@@ -82,7 +82,7 @@ export default function PlanFactTab({
   pl, period, filled, canManage, hasAnyPlan, uk,
 }: {
   pl: ProfitLoss; period: string; filled: boolean; canManage: boolean; hasAnyPlan: boolean;
-  /** план-факт по плану УК — передаётся только hq/viewer; партнёр видит только свой план */
+  /** план-факт по плану УК (видят все, включая партнёра) */
   uk?: ProfitLoss;
 }) {
   const { locale, t } = useLocale();
