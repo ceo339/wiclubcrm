@@ -157,3 +157,12 @@ export function IconCoins() {
     </svg>
   );
 }
+
+export function IconOnboarding() {
+  return (
+    <svg {...iconProps()}>
+      <path d="M4 19V5l8 4 8-4v14l-8 4-8-4z" />
+      <path d="M12 9v14" />
+    </svg>
+  );
+}

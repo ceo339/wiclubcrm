@@ -24,7 +24,9 @@ import {
   IconFranchise,
   IconMegaphone,
   IconCoins,
+  IconOnboarding,
 } from "./icons";
+import { showOnboardingNav } from "@/modules/onboarding/access";
 
 const ROLE_LABEL_KEYS: Record<string, string> = {
   partner: "roleLabelPartner",
@@ -107,6 +109,12 @@ function navItemsForProfile(profile: Profile, viewMode: ViewMode): NavItem[] {
   if (hasFranchiseAccess && (!hasModeToggle || viewMode === "franchise")) {
     items.push({ href: "/franchise", labelKey: "navFranchiseSidebar", icon: <IconFranchise /> });
     items.push({ href: "/franchise/payments", labelKey: "navFranchisePayments", icon: <IconWallet /> });
+  }
+
+  // Модуль «Онбординг» (src/modules/onboarding): у hq/viewer в режиме «Франчайзи»,
+  // у партнёра всегда (свой онбординг).
+  if (showOnboardingNav(profile.role, viewMode)) {
+    items.push({ href: "/onboarding", labelKey: "navOnboarding", icon: <IconOnboarding />, matchPrefix: true });
   }
 
   return items;
