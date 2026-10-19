@@ -5,7 +5,7 @@ import { add, amt, isZero, scale, sub, sum, zero, type Amt } from "./amt";
  *  • выручка — по услуге: платёж, привязанный к записи, идёт в месяц СТАРТА ПОТОКА
  *    (как dashboard.enrollmentAttributionDate); платёж без записи в выручку не входит;
  *  • деньги (ДДС) — по дате оплаты;
- *  • роялти / МКФ / эквайринг считаются сами от выручки; остальные расходы вносит партнёр.
+ *  • роялти / МКФ считаются сами от выручки; остальные расходы (в т.ч. эквайринг и налоги) вносит партнёр.
  */
 
 export type Cat = {
@@ -15,7 +15,7 @@ export type Cat = {
   name: string;
   kind: "expense" | "income";
   per_product: boolean;
-  auto_kind: "royalty" | "mkf" | "acquiring" | null;
+  auto_kind: "royalty" | "mkf" | null;
   auto_percent: number | null;
   cash_group: "operating" | "acquiring" | "uk_payment" | "investment" | "tax";
   in_pl: boolean;
@@ -86,12 +86,12 @@ export function shiftMonth(month: string, delta: number): string {
 const attrMonth = (e: EnrInfo) => mk(e.start_date ?? e.created_at.slice(0, 10));
 
 export function autoPercents(cats: Cat[]) {
-  const pick = (kind: "royalty" | "mkf" | "acquiring", def: number) => {
+  const pick = (kind: "royalty" | "mkf", def: number) => {
     const own = cats.find((c) => c.auto_kind === kind && c.partner_id !== null && !c.archived);
     const std = cats.find((c) => c.auto_kind === kind);
     return Number((own ?? std)?.auto_percent ?? def);
   };
-  return { royalty: pick("royalty", 10), mkf: pick("mkf", 2), acquiring: pick("acquiring", 2) };
+  return { royalty: pick("royalty", 10), mkf: pick("mkf", 2) };
 }
 
 // ---------------------------------------------------------------- P&L
@@ -313,7 +313,7 @@ export function computeCash(f: ClubFinance, endMonth: string, count: number): { 
     const operating = byGroup("operating");
     const tax = byGroup("tax");
     const investment = byGroup("investment");
-    const acquiring = scale(receipts, pct.acquiring / 100);
+    const acquiring = byGroup("acquiring");
     const ukPayment = scale(receiptsOf(shiftMonth(m, -1)), (pct.royalty + pct.mkf) / 100);
     const outflow = sum([operating, tax, investment, acquiring, ukPayment]);
     const net = sub(add(receipts, otherIncome), outflow);

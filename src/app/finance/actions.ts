@@ -62,7 +62,7 @@ async function parseEntry(partnerId: string, formData: FormData): Promise<Parsed
     .select("id, partner_id, parent_id, per_product, auto_kind, archived")
     .eq("id", categoryId)
     .maybeSingle();
-  // только лист справочника сети или своего клуба; авто-статьи (роялти, МКФ, эквайринг) вручную не вносятся
+  // только лист справочника сети или своего клуба; авто-статьи (роялти, МКФ) вручную не вносятся
   if (!cat || !cat.parent_id || (cat.partner_id && cat.partner_id !== partnerId) || cat.auto_kind) return { error: "finErrCategory" };
   if (cat.per_product && !productId) return { error: "finErrProduct" };
 
