@@ -238,8 +238,33 @@ export async function setMonthFilled(month: string, filled: boolean): Promise<Fi
   const g = await guard();
   if ("error" in g) return g;
   if (!isMonth(month)) return { error: "finErrDate" };
+  // принятый УК месяц партнёр «разотметить» не может — сначала УК снимает «Отчёт принят»
+  if (!filled && g.role !== "hq") {
+    const { data: m } = await createAdminClient().from("fin_months").select("accepted").eq("partner_id", g.partnerId).eq("month", `${month}-01`).maybeSingle();
+    if (m?.accepted) return { error: "finErrMonthAccepted" };
+  }
   const { error } = await createAdminClient().from("fin_months").upsert(
     { partner_id: g.partnerId, month: `${month}-01`, filled, filled_at: filled ? new Date().toISOString() : null },
+    { onConflict: "partner_id,month" }
+  );
+  revalidatePath("/finance");
+  return { error: error?.message ?? null };
+}
+
+/** «Отчёт принят» — отметка головного офиса перед передачей финдиректору (только hq). */
+export async function setMonthAccepted(month: string, accepted: boolean): Promise<FinResult> {
+  const g = await guard();
+  if ("error" in g) return g;
+  if (g.role !== "hq") return { error: "errNotAuthorized" };
+  if (!isMonth(month)) return { error: "finErrDate" };
+  const profile = await getCurrentProfile();
+  const { error } = await createAdminClient().from("fin_months").upsert(
+    {
+      partner_id: g.partnerId, month: `${month}-01`, accepted,
+      accepted_at: accepted ? new Date().toISOString() : null,
+      accepted_by: accepted ? g.userId : null,
+      accepted_by_name: accepted ? (profile?.full_name ?? null) : null,
+    },
     { onConflict: "partner_id,month" }
   );
   revalidatePath("/finance");

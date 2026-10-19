@@ -28,8 +28,12 @@ export type JournalPayment = {
   linked: boolean;
 };
 
+/** «Отчёт принят» головным офисом (раунд 84) — месяц → когда и кто принял. */
+export type AcceptedMonths = Record<string, { at: string | null; by: string | null }>;
+
 export type ClubFinanceData = ClubFinance & {
   filledMonths: string[];
+  acceptedMonths: AcceptedMonths;
   lastPlanChange: string | null;
   lastPlanChangeUk: string | null;
   journalPayments: JournalPayment[];
@@ -54,7 +58,7 @@ export async function loadClubFinance(db: Db, partnerId: string): Promise<ClubFi
     ),
     fetchAll((a, b) => db.from("member_enrollments").select("id, product_id, start_date, created_at, status").eq("partner_id", partnerId).range(a, b)),
     db.from("fin_settings").select("*").eq("partner_id", partnerId).maybeSingle(),
-    db.from("fin_months").select("month, filled").eq("partner_id", partnerId).eq("filled", true),
+    db.from("fin_months").select("month, filled, accepted, accepted_at, accepted_by_name").eq("partner_id", partnerId),
     db.from("fin_plan_log").select("changed_at, plan_type").eq("partner_id", partnerId).order("changed_at", { ascending: false }).limit(50),
   ]);
 
@@ -100,7 +104,10 @@ export async function loadClubFinance(db: Db, partnerId: string): Promise<ClubFi
     })),
     enrollments: enrollments.filter((e) => e.product_id).map((e) => ({ id: e.id, product_id: e.product_id as string, start_date: e.start_date, created_at: e.created_at, status: e.status })),
     settings,
-    filledMonths: (monthsRes.data ?? []).map((m) => m.month.slice(0, 7)),
+    filledMonths: (monthsRes.data ?? []).filter((m) => m.filled).map((m) => m.month.slice(0, 7)),
+    acceptedMonths: Object.fromEntries(
+      (monthsRes.data ?? []).filter((m) => m.accepted).map((m) => [m.month.slice(0, 7), { at: m.accepted_at, by: m.accepted_by_name }])
+    ),
     lastPlanChange: logRes.data?.find((l) => l.plan_type === "partner")?.changed_at ?? null,
     lastPlanChangeUk: logRes.data?.find((l) => l.plan_type === "uk")?.changed_at ?? null,
     journalPayments: payRows

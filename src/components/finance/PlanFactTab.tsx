@@ -6,7 +6,7 @@ import { useLocale } from "@/components/i18n/LocaleProvider";
 import { monthLabel } from "@/lib/dashboard";
 import { isZero, scale, sub, type Amt } from "@/lib/finance/amt";
 import type { Line, ProfitLoss } from "@/lib/finance/report";
-import { setMonthFilled } from "@/app/finance/actions";
+import { setMonthAccepted, setMonthFilled } from "@/app/finance/actions";
 import { A, devClass, pctText } from "./A";
 
 function Kpi({ label, value, hint, bad, bar }: { label: string; value: React.ReactNode; hint?: React.ReactNode; bad?: boolean; bar?: number | null }) {
@@ -78,10 +78,44 @@ function FilledToggle({ month, filled, canManage }: { month: string; filled: boo
   );
 }
 
+/** «Отчёт принят» — головной офис подтверждает месяц перед передачей финдиректору; остальные видят статус. */
+function AcceptToggle({ month, accepted, canAccept }: { month: string; accepted: { at: string | null; by: string | null } | null; canAccept: boolean }) {
+  const { locale, t } = useLocale();
+  const [pending, start] = useTransition();
+  const [err, setErr] = useState<string | null>(null);
+  const d = accepted?.at ? new Date(accepted.at).toLocaleDateString(locale === "bg" ? "bg-BG" : "ru-RU") : "";
+  const label = accepted ? (accepted.by ? t("finReportAcceptedBy", { d, who: accepted.by }) : t("finReportAccepted", { d })) : "";
+  if (!canAccept) return accepted ? <span className="rounded-lg bg-foreground px-3 py-1.5 text-sm font-medium text-background">✓ {label}</span> : null;
+  return (
+    <span className="inline-flex items-center gap-2">
+      {accepted ? (
+        <>
+          <span className="rounded-lg bg-foreground px-3 py-1.5 text-sm font-medium text-background">✓ {label}</span>
+          <button type="button" disabled={pending} onClick={() => start(async () => { const r = await setMonthAccepted(month, false); setErr(r.error); })} className="text-xs text-muted underline hover:text-ink-2 disabled:opacity-50">
+            {t("finUnaccept")}
+          </button>
+        </>
+      ) : (
+        <button
+          type="button"
+          disabled={pending}
+          onClick={() => { if (confirm(t("finAcceptConfirm", { m: monthLabel(month, locale) }))) start(async () => { const r = await setMonthAccepted(month, true); setErr(r.error); }); }}
+          className="rounded-lg bg-accent px-3 py-1.5 text-sm font-semibold text-white hover:bg-accent-strong disabled:opacity-50"
+        >
+          {t("finAcceptReport")}
+        </button>
+      )}
+      {err && <span className="text-xs text-accent-strong">{t(err)}</span>}
+    </span>
+  );
+}
+
 export default function PlanFactTab({
-  pl, period, filled, canManage, hasAnyPlan, uk,
+  pl, period, filled, canManage, hasAnyPlan, uk, accepted = null, canAccept = false,
 }: {
   pl: ProfitLoss; period: string; filled: boolean; canManage: boolean; hasAnyPlan: boolean;
+  accepted?: { at: string | null; by: string | null } | null;
+  canAccept?: boolean;
   /** план-факт по плану УК (видят все, включая партнёра) */
   uk?: ProfitLoss;
 }) {
@@ -131,7 +165,12 @@ export default function PlanFactTab({
 
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="text-sm text-muted">{t("finDeadlinesHint")}</div>
-        {!isYear && <FilledToggle month={period} filled={filled} canManage={canManage} />}
+        {!isYear && (
+          <div className="flex flex-wrap items-center gap-2">
+            <FilledToggle month={period} filled={filled} canManage={canManage && !accepted} />
+            <AcceptToggle month={period} accepted={accepted} canAccept={canAccept} />
+          </div>
+        )}
       </div>
 
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">

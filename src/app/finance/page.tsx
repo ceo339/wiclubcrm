@@ -84,7 +84,8 @@ export default async function FinancePage({
     for (const c of clubs ?? []) {
       const data = await loadClubFinance(supabase, c.id);
       netData.push(data);
-      rows.push({ id: c.id, name: c.name, row: computeNetworkRow(data, period) });
+      const status = data.acceptedMonths[period] ? "accepted" : data.filledMonths.includes(period) ? "filled" : "empty";
+      rows.push({ id: c.id, name: c.name, row: computeNetworkRow(data, period), status: /^\d{4}-\d{2}$/.test(period) ? status : null });
     }
     // месяцы и годы — от самого раннего месяца с планом/данными по любому клубу
     const netSet = new Set<string>([curMonth]);
@@ -136,6 +137,8 @@ export default async function FinancePage({
         period={period}
         filled={data.filledMonths.includes(period)}
         canManage={canManage}
+        accepted={data.acceptedMonths[period] ?? null}
+        canAccept={profile.role === "hq" && !!scopePartnerId}
         hasAnyPlan={data.plan.some((p) => monthsOfPeriod.has(p.month.slice(0, 7)))}
       />
     );
@@ -180,7 +183,7 @@ export default async function FinancePage({
   return shell(
     <div>
       {networkView && <CityBack />}
-      <FinanceNav tab={tab} period={period} months={months} years={years} filledMonths={data.filledMonths} extraQuery={tab === "plan" ? `&plan=${planType}` : ""} />
+      <FinanceNav tab={tab} period={period} months={months} years={years} filledMonths={data.filledMonths} acceptedMonths={Object.keys(data.acceptedMonths)} extraQuery={tab === "plan" ? `&plan=${planType}` : ""} />
       {content}
     </div>
   );

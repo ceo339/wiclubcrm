@@ -6,7 +6,7 @@ import type { NetworkRow } from "@/lib/finance/report";
 import { A, devClass, pctText } from "./A";
 import { VIEW_SCOPE_COOKIE } from "@/lib/role";
 
-export type NetworkClub = { id: string; name: string; row: NetworkRow };
+export type NetworkClub = { id: string; name: string; row: NetworkRow; status: "empty" | "filled" | "accepted" | null };
 
 function dueDate(period: string): string {
   if (/^\d{4}$/.test(period)) return "";
@@ -27,7 +27,7 @@ export default function NetworkTab({ clubs, period }: { clubs: NetworkClub[]; pe
     <div className="space-y-3">
       <p className="text-sm text-muted">{t("finNetworkHint", { p: /^\d{4}$/.test(period) ? period : monthLabel(period, locale) })}</p>
       <div className="overflow-x-auto rounded-xl border border-border bg-background shadow-card">
-        <table className="w-full min-w-[680px] text-sm">
+        <table className="w-full min-w-[780px] text-sm">
           <thead>
             <tr className="text-[11px] uppercase tracking-wide text-muted">
               <th className="px-3 py-2 text-left font-medium">{t("finColClub")}</th>
@@ -36,10 +36,11 @@ export default function NetworkTab({ clubs, period }: { clubs: NetworkClub[]; pe
               <th className="px-3 py-2 text-right font-medium">{t("finColFact")}</th>
               <th className="px-3 py-2 text-right font-medium">%</th>
               <th className="px-3 py-2 text-right font-medium">{t("finColUk")}</th>
+              <th className="px-3 py-2 text-right font-medium">{t("finColMonthStatus")}</th>
             </tr>
           </thead>
           <tbody>
-            {clubs.map(({ id, name, row }) => {
+            {clubs.map(({ id, name, row, status }) => {
               const diff = row.factRevenue.eur - row.planRevenue.eur;
               return (
                 <tr key={id} className="border-t border-border">
@@ -75,6 +76,9 @@ export default function NetworkTab({ clubs, period }: { clubs: NetworkClub[]; pe
                   <td className="px-3 py-2 text-right">
                     <A v={row.ukDue} />
                     {dueDate(period) && <span className="ml-1 text-xs text-muted">{t("finUkDue", { d: dueDate(period) })}</span>}
+                  </td>
+                  <td className={`px-3 py-2 text-right text-xs ${status === "accepted" ? "font-semibold text-foreground" : status === "filled" ? "text-accent-strong" : "text-muted"}`}>
+                    {status === "accepted" ? `✓✓ ${t("finStatusAccepted")}` : status === "filled" ? `✓ ${t("finStatusFilled")}` : status === "empty" ? t("finStatusEmpty") : "—"}
                   </td>
                 </tr>
               );

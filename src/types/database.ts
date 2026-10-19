@@ -198,18 +198,30 @@ export type Database = {
       }
       fin_months: {
         Row: {
+          accepted: boolean
+          accepted_at: string | null
+          accepted_by: string | null
+          accepted_by_name: string | null
           filled: boolean
           filled_at: string | null
           month: string
           partner_id: string
         }
         Insert: {
+          accepted?: boolean
+          accepted_at?: string | null
+          accepted_by?: string | null
+          accepted_by_name?: string | null
           filled?: boolean
           filled_at?: string | null
           month: string
           partner_id: string
         }
         Update: {
+          accepted?: boolean
+          accepted_at?: string | null
+          accepted_by?: string | null
+          accepted_by_name?: string | null
           filled?: boolean
           filled_at?: string | null
           month?: string

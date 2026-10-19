@@ -18,6 +18,7 @@ export default function FinanceNav({
   months,
   years,
   filledMonths,
+  acceptedMonths = [],
   hideTabs = false,
   extraQuery = "",
 }: {
@@ -26,6 +27,8 @@ export default function FinanceNav({
   months: string[];
   years: string[];
   filledMonths: string[];
+  /** месяцы, где головной офис отметил «Отчёт принят» — ✓✓ */
+  acceptedMonths?: string[];
   hideTabs?: boolean;
   /** доп. параметры ссылок месяцев/годов, например «&plan=uk» на вкладке «План» */
   extraQuery?: string;
@@ -78,7 +81,7 @@ export default function FinanceNav({
               className={`${pill} ${m === period ? "bg-accent font-semibold text-white" : "bg-surface-2 text-ink-2 hover:bg-surface-3"}`}
             >
               {short} {m.slice(2, 4)}
-              {filledMonths.includes(m) ? " ✓" : ""}
+              {acceptedMonths.includes(m) ? " ✓✓" : filledMonths.includes(m) ? " ✓" : ""}
             </Link>
           );
         })}
