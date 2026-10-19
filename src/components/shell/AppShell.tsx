@@ -84,7 +84,13 @@ function navItemsForProfile(profile: Profile, viewMode: ViewMode): NavItem[] {
     }
   }
 
-  if (profile.role === "hq") {
+  // Round 78 (19 окт 2026): "Все, что относится в левом меню к клубам — пусть
+  // будет видно, когда выбрана вкладка «Клубы», все, что к франчайзи — когда
+  // выбрана «Франчайзи». А то бардак." Переключатель есть только у hq/viewer
+  // (CityScopeSwitcher); у остальных ролей режима нет — для них пункты не прячем.
+  const hasModeToggle = profile.role === "hq" || profile.role === "viewer";
+
+  if (profile.role === "hq" && (!hasModeToggle || viewMode === "clubs")) {
     items.push({ href: "/partners", labelKey: "navPartners", icon: <IconBuilding /> });
   }
 
@@ -98,7 +104,7 @@ function navItemsForProfile(profile: Profile, viewMode: ViewMode): NavItem[] {
     profile.franchise_access === "view" ||
     profile.franchise_access === "edit" ||
     profile.franchise_access === "finance";
-  if (hasFranchiseAccess) {
+  if (hasFranchiseAccess && (!hasModeToggle || viewMode === "franchise")) {
     items.push({ href: "/franchise", labelKey: "navFranchiseSidebar", icon: <IconFranchise /> });
     items.push({ href: "/franchise/payments", labelKey: "navFranchisePayments", icon: <IconWallet /> });
   }
