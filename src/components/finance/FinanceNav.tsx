@@ -45,7 +45,7 @@ export default function FinanceNav({
       </div>}
       <div className="flex flex-wrap items-center gap-1.5">
         {months.map((m) => {
-          const [y, mm] = m.split("-");
+          const [y] = m.split("-");
           const short = monthLabel(m, locale).split(" ")[0].slice(0, 3);
           return (
             <Link
@@ -54,8 +54,7 @@ export default function FinanceNav({
               title={monthLabel(m, locale)}
               className={`${pill} ${m === period ? "bg-accent font-semibold text-white" : "bg-surface-2 text-ink-2 hover:bg-surface-3"}`}
             >
-              {short}
-              {mm === "01" || m === months[0] ? ` ${y}` : ""}
+              {short} {y}
               {filledMonths.includes(m) ? " ✓" : ""}
             </Link>
           );

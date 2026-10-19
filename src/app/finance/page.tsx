@@ -18,6 +18,7 @@ import JournalTab from "@/components/finance/JournalTab";
 import CashTab from "@/components/finance/CashTab";
 import PlanTab from "@/components/finance/PlanTab";
 import NetworkTab, { type NetworkClub } from "@/components/finance/NetworkTab";
+import CityBack from "@/components/finance/CityBack";
 
 const TABS: FinTab[] = ["pf", "journal", "cash", "plan"];
 
@@ -105,7 +106,8 @@ export default async function FinancePage({
   if (/^\d{4}-\d{2}$/.test(period)) monthSet.add(period);
   // план правится по одному месяцу: на «весь год» открываем текущий месяц этого года
   if (tabRaw === "plan" && /^\d{4}$/.test(period)) period = period === curMonth.slice(0, 4) ? curMonth : `${period}-01`;
-  const months = [...monthSet].sort().slice(-12);
+  // все месяцы с данными или планом, слева направо от самого раннего (раньше брались последние 12 — из-за плана на 24 месяца вперёд список уезжал в 2027–2028)
+  const months = [...monthSet].sort();
   const years = [...new Set([...monthSet].map((m) => m.slice(0, 4)))].sort();
   const tab = tabRaw;
   const monthsOfPeriod = new Set(periodMonths(period));
@@ -159,6 +161,7 @@ export default async function FinancePage({
 
   return shell(
     <div>
+      {networkView && <CityBack />}
       <FinanceNav tab={tab} period={period} months={months} years={years} filledMonths={data.filledMonths} />
       {content}
     </div>
