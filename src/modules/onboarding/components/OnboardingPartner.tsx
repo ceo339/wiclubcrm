@@ -38,7 +38,6 @@ export default function OnboardingPartner({
   const prog = progress(items);
   const openTasks = tasks.filter((x) => !x.done).length;
   const todo = items.filter((i) => /^w\d+$/.test(i.week_key) && !i.hidden && isDoItem(i) && i.status !== "done" && i.status !== "moved").length;
-  const lastWithNumbers = meetings.find((m) => m.numbers.length > 0);
   const weekKeys = new Set(weeks.filter((w) => w.kind === "week").map((w) => w.key));
 
   const tabs: { id: Tab; label: string; n?: number | string; red?: boolean; show: boolean }[] = [
@@ -185,23 +184,17 @@ export default function OnboardingPartner({
         {!opened ? (
           <Milestones onboardingId={onb.id} milestones={milestones} canManage={canManage} nextCall={onb.next_call_at} zoomUrl={onb.zoom_url} onCall={() => { setNewCall(true); setTab("meet"); }} />
         ) : (
-          <Card className="p-5">
-            <SectionTitle>
-              {t("onbClubNow")} <span className="normal-case tracking-normal">· {t("onbFromLastProtocol")}</span>
-            </SectionTitle>
-            {lastWithNumbers ? (
-              lastWithNumbers.numbers.map((n, k) => (
-                <div key={k} className="flex justify-between gap-2.5 border-t border-dashed border-border py-2 text-[13px] first:border-t-0">
-                  <span>{n.label}</span>
-                  <b>
-                    {n.value} {n.note && <span className="font-medium text-muted">{n.note}</span>}
-                  </b>
-                </div>
-              ))
-            ) : (
-              <p className="text-sm text-muted">{t("onbNoNumbers")}</p>
-            )}
-          </Card>
+          <NextCallCard
+            nextCall={onb.next_call_at}
+            zoomUrl={onb.zoom_url}
+            openTasks={openTasks}
+            overdue={tasks.filter((x) => !x.done && !!x.due && x.due < new Date().toISOString().slice(0, 10)).length}
+            canManage={canManage}
+            onCall={() => {
+              setNewCall(true);
+              setTab("meet");
+            }}
+          />
         )}
       </div>
 
@@ -336,6 +329,50 @@ function Milestones({
             </button>
           )}
         </div>
+      </div>
+    </Card>
+  );
+}
+
+/** После открытия: следующий созвон, Zoom и сколько задач открыто. Цифры клуба живут в CRM, не здесь. */
+function NextCallCard({
+  nextCall,
+  zoomUrl,
+  openTasks,
+  overdue,
+  canManage,
+  onCall,
+}: {
+  nextCall: string | null;
+  zoomUrl: string | null;
+  openTasks: number;
+  overdue: number;
+  canManage: boolean;
+  onCall: () => void;
+}) {
+  const { t } = useLocale();
+  return (
+    <Card className="flex flex-col p-5">
+      <SectionTitle>{t("onbNextCall")}</SectionTitle>
+      <b className="text-lg">
+        {nextCall ? new Date(nextCall).toLocaleString("ru-RU", { weekday: "short", day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }) : "—"}
+      </b>
+      <div className="mt-2 text-[13px] text-muted">
+        {t("onbOpenTasksTotal")}: <b className="text-ink-2">{openTasks}</b>
+        {overdue > 0 && <span className="font-semibold text-accent-strong"> · {t("onbOverdueN", { n: overdue })}</span>}
+      </div>
+      <p className="mt-1 text-xs text-muted">{t("onbCrmNumbersHint")}</p>
+      <div className="mt-auto flex flex-wrap gap-1.5 pt-3">
+        {zoomUrl && (
+          <a href={zoomUrl} target="_blank" rel="noreferrer" className={`${btnCls} !py-1 !text-xs`}>
+            Zoom ↗
+          </a>
+        )}
+        {canManage && (
+          <button type="button" className={`${btnPriCls} !py-1 !text-xs`} onClick={onCall}>
+            + {t("onbNewCall")}
+          </button>
+        )}
       </div>
     </Card>
   );

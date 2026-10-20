@@ -221,19 +221,41 @@ export async function saveMilestone(onboardingId: string, fd: FormData): Promise
 
 // ------------------------------------------------------------ звонки и задачи
 
+/**
+ * Созвон: дата, заметки (необязательно) и задачи (что, кто, дедлайн).
+ * Неделя только пока идет онбординг; после открытия клуба просто дата.
+ */
+type TaskInput = { title: string; assignee: string; kind: "partner" | "hq"; due: string };
+
+function parseTasks(raw: string): TaskInput[] | null {
+  try {
+    const arr = JSON.parse(raw || "[]") as Partial<TaskInput>[];
+    if (!Array.isArray(arr)) return null;
+    return arr
+      .map((x) => ({
+        title: String(x.title ?? "").trim(),
+        assignee: String(x.assignee ?? "").trim(),
+        kind: x.kind === "hq" ? ("hq" as const) : ("partner" as const),
+        due: String(x.due ?? "").trim(),
+      }))
+      .filter((x) => x.title);
+  } catch {
+    return null;
+  }
+}
+
 export async function addMeeting(onboardingId: string, fd: FormData): Promise<OnbResult> {
   const g = await requireOnboardingAccess("manage");
   if ("error" in g) return { error: g.error };
   const heldOn = str(fd, "held_on") || today();
   if (!isDate(heldOn)) return { error: "onbErrDate" };
   const week = Number(str(fd, "week"));
-  // цифры недели: по строке «название: значение (комментарий)»
-  const numbers = lines(str(fd, "numbers")).map((l) => {
-    const [label, ...rest] = l.split(":");
-    const tail = rest.join(":").trim();
-    const m = tail.match(/^(.*?)\s*\((.*)\)\s*$/);
-    return { label: label.trim(), value: m ? m[1] : tail, note: m ? m[2] : "" };
-  });
+  const tasks = parseTasks(str(fd, "tasks_json"));
+  if (!tasks) return { error: "onbErrSave" };
+  if (tasks.some((x) => x.due && !isDate(x.due))) return { error: "onbErrDate" };
+  const notes = lines(str(fd, "notes"));
+  if (!tasks.length && !notes.length) return { error: "onbErrEmptyCall" };
+
   const db = onboardingWriteDb();
   const { data, error } = await db
     .from("meetings")
@@ -241,35 +263,49 @@ export async function addMeeting(onboardingId: string, fd: FormData): Promise<On
       onboarding_id: onboardingId,
       held_on: heldOn,
       week: Number.isInteger(week) && week > 0 ? week : null,
-      participants: opt(fd, "participants"),
-      done_items: lines(str(fd, "done_items")),
-      notes: lines(str(fd, "notes")),
-      numbers,
+      notes,
       created_by: g.profile.id,
     })
     .select("id")
     .single();
   if (error || !data) return { error: error?.message ?? "onbErrSave" };
 
-  // задачи по итогам звонка: «задача; кто; дд.мм.гггг»
-  const taskRows = lines(str(fd, "tasks")).map((l) => {
-    const [title, who, due] = l.split(";").map((s) => s?.trim() ?? "");
-    const m = due?.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})$/);
-    return {
-      onboarding_id: onboardingId,
-      meeting_id: data.id,
-      title,
-      assignee: who || "Партнёр",
-      assignee_kind: /куратор|ук|hq/i.test(who ?? "") ? "hq" : "partner",
-      due: m ? `${m[3]}-${m[2].padStart(2, "0")}-${m[1].padStart(2, "0")}` : null,
-    };
-  });
-  if (taskRows.length) {
-    const { error: e2 } = await db.from("tasks").insert(taskRows.filter((t) => t.title));
+  if (tasks.length) {
+    const { error: e2 } = await db.from("tasks").insert(
+      tasks.map((x) => ({
+        onboarding_id: onboardingId,
+        meeting_id: data.id,
+        title: x.title,
+        assignee: x.assignee || (x.kind === "hq" ? "Куратор" : "Партнёр"),
+        assignee_kind: x.kind,
+        due: x.due || null,
+      }))
+    );
     if (e2) return { error: e2.message };
   }
   refresh(onboardingId);
   return { error: null, id: data.id };
+}
+
+/** Правка задачи (hq): название, кто, сторона, дедлайн. */
+export async function updateTask(taskId: string, fd: FormData): Promise<OnbResult> {
+  const g = await requireOnboardingAccess("manage");
+  if ("error" in g) return { error: g.error };
+  const title = str(fd, "title");
+  const due = str(fd, "due");
+  if (!title) return { error: "onbErrTitle" };
+  if (due && !isDate(due)) return { error: "onbErrDate" };
+  const kind = str(fd, "assignee_kind") === "hq" ? "hq" : "partner";
+  const db = onboardingWriteDb();
+  const onbId = await onboardingOfItem("tasks", taskId);
+  if (!onbId) return { error: "onbErrSave" };
+  const { error } = await db
+    .from("tasks")
+    .update({ title, assignee: str(fd, "assignee") || (kind === "hq" ? "Куратор" : "Партнёр"), assignee_kind: kind, due: due || null })
+    .eq("id", taskId);
+  if (error) return { error: error.message };
+  refresh(onbId);
+  return { error: null };
 }
 
 export async function addTask(onboardingId: string, fd: FormData): Promise<OnbResult> {

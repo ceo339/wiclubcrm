@@ -93,7 +93,7 @@ function TaskCard({ task: x, meeting, canToggle }: { task: Task; meeting?: Meeti
       </div>
       {meeting && (
         <div className="mt-2 border-t border-dashed border-border pt-2 text-[11.5px] text-muted">
-          {t("onbFromCall", { d: fmtDate(meeting.held_on), w: meeting.week ?? "—" })}
+          {t("onbFromCallDate", { d: fmtDate(meeting.held_on, true) })}
         </div>
       )}
     </Card>
