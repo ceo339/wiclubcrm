@@ -6,5 +6,7 @@
  * этот файл для серверного кода.
  */
 export { canViewOnboarding, canMarkOnboarding, canManageOnboarding, showOnboardingNav } from "./access";
-export { loadOverview as loadOnboardingOverview } from "./server/load";
-export type { OnboardingCard, OnbStatus } from "./types";
+export { loadOverview as loadOnboardingOverview, loadClubCandidates as loadOnboardingClubCandidates } from "./server/load";
+/** Для «+ Клуб»: создать онбординг уже привязанным к новому клубу. Только после проверки роли hq. */
+export { createOnboarding as startOnboardingForClub } from "./server/start";
+export type { OnboardingCard, OnbStatus, ClubCandidate as OnboardingClubCandidate } from "./types";

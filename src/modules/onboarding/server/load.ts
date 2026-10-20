@@ -1,9 +1,10 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { Profile } from "@/lib/auth";
 import { canManageOnboarding } from "../access";
-import { onboardingReadDb } from "./db";
+import { onboardingReadDb, onboardingWriteDb } from "./db";
 import {
   progress,
+  type ClubCandidate,
   type Meeting,
   type Milestone,
   type Onboarding,
@@ -103,6 +104,21 @@ export async function loadStartableCandidates(existing: string[]): Promise<Start
   return (data ?? [])
     .filter((c) => !existing.includes(c.id))
     .map((c) => ({ id: c.id, name: c.name ?? "—", city: c.target_city ?? null }));
+}
+
+/**
+ * Кандидаты для «+ Клуб»: договор отправлен и дальше, и их онбординг (если есть)
+ * еще не привязан к клубу. Вызывать только после проверки роли hq.
+ */
+export async function loadClubCandidates(): Promise<ClubCandidate[]> {
+  const [{ data: cands }, { data: onbs }] = await Promise.all([
+    createAdminClient().from("franchise_candidates").select("id, name, target_city, email").in("stage", STARTABLE_STAGES).order("name"),
+    onboardingWriteDb().from("onboardings").select("candidate_id, partner_id"),
+  ]);
+  const byCand = new Map(((onbs ?? []) as { candidate_id: string; partner_id: string | null }[]).map((o) => [o.candidate_id, o.partner_id]));
+  return (cands ?? [])
+    .filter((c) => !byCand.get(c.id))
+    .map((c) => ({ id: c.id, name: c.name ?? "—", city: c.target_city ?? null, email: c.email ?? null, hasOnboarding: byCand.has(c.id) }));
 }
 
 export async function loadClubs(): Promise<{ id: string; name: string }[]> {

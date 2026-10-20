@@ -10,6 +10,7 @@ import PartnersBoard from "@/components/partners/PartnersBoard";
 import TeamAccessSection from "@/components/partners/TeamAccessSection";
 import { listTeamAccounts } from "@/app/partners/viewer-actions";
 import AppShell from "@/components/shell/AppShell";
+import { loadOnboardingClubCandidates } from "@/modules/onboarding/api";
 
 export default async function PartnersPage() {
   const profile = await getCurrentProfile();
@@ -17,9 +18,11 @@ export default async function PartnersPage() {
   if (profile.role !== "hq") redirect("/");
 
   const supabase = await createClient();
-  const [{ data: partners, error }, teamAccounts] = await Promise.all([
+  const [{ data: partners, error }, teamAccounts, candidates] = await Promise.all([
     supabase.from("partners").select("*").order("created_at", { ascending: false }),
     listTeamAccounts(),
+    // «+ Клуб» сразу открывает онбординг кандидата из воронки (модуль «Онбординг»)
+    loadOnboardingClubCandidates().catch(() => []),
   ]);
 
   return (
@@ -41,7 +44,7 @@ export default async function PartnersPage() {
             <T k="errLoadClubsFailed" />: {error.message}
           </p>
         ) : (
-          <PartnersBoard initialPartners={partners ?? []} />
+          <PartnersBoard initialPartners={partners ?? []} candidates={candidates} />
         )}
 
         <hr className="border-border" />

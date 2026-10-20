@@ -54,8 +54,8 @@ export default function OnboardingPartner({
     <div>
       {isPartner && !opened && <div className="mb-4 rounded-xl border border-accent-soft bg-accent-soft px-4 py-3.5 font-semibold text-accent-strong">{t("onbPartnerBanner")}</div>}
 
-      <div className="mb-4 grid gap-4 xl:grid-cols-[1.35fr_1fr_1fr]">
-        <Card className="flex items-center gap-5 p-5">
+      <div className="mb-4 grid gap-4 md:grid-cols-2 lg:grid-cols-[1.35fr_1fr_1fr]">
+        <Card className="flex items-center gap-5 p-5 md:col-span-2 lg:col-span-1">
           <Ring pct={opened ? 100 : prog.pct} label={opened ? "✓" : undefined} />
           <div className="min-w-0">
             <div className="mb-2 flex flex-wrap gap-1.5">
@@ -91,6 +91,11 @@ export default function OnboardingPartner({
                 <span>
                   {t("onbCallDay")}: <b className="text-ink-2">{onb.call_day}</b>
                 </span>
+              )}
+              {onb.zoom_url && (
+                <a href={onb.zoom_url} target="_blank" rel="noreferrer" className="font-semibold text-accent-strong underline">
+                  {t("onbZoomJoin")} ↗
+                </a>
               )}
               {onb.drive_folder_url && (
                 <a href={onb.drive_folder_url} target="_blank" rel="noreferrer" className="font-semibold text-ink-2 underline">
@@ -178,7 +183,7 @@ export default function OnboardingPartner({
         )}
 
         {!opened ? (
-          <Milestones onboardingId={onb.id} milestones={milestones} canManage={canManage} nextCall={onb.next_call_at} onCall={() => { setNewCall(true); setTab("meet"); }} />
+          <Milestones onboardingId={onb.id} milestones={milestones} canManage={canManage} nextCall={onb.next_call_at} zoomUrl={onb.zoom_url} onCall={() => { setNewCall(true); setTab("meet"); }} />
         ) : (
           <Card className="p-5">
             <SectionTitle>
@@ -259,12 +264,14 @@ function Milestones({
   milestones,
   canManage,
   nextCall,
+  zoomUrl,
   onCall,
 }: {
   onboardingId: string;
   milestones: OnboardingFull["milestones"];
   canManage: boolean;
   nextCall: string | null;
+  zoomUrl: string | null;
   onCall: () => void;
 }) {
   const { t } = useLocale();
@@ -317,11 +324,18 @@ function Milestones({
           <div className="text-xs text-muted">{t("onbNextCall")}</div>
           <b>{nextCall ? new Date(nextCall).toLocaleString("ru-RU", { weekday: "short", day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }) : "—"}</b>
         </div>
-        {canManage && (
-          <button type="button" className={`${btnPriCls} !py-1 !text-xs`} onClick={onCall}>
-            {t("onbStartCall")}
-          </button>
-        )}
+        <div className="flex flex-wrap justify-end gap-1.5">
+          {zoomUrl && (
+            <a href={zoomUrl} target="_blank" rel="noreferrer" className={`${btnCls} !py-1 !text-xs`}>
+              Zoom ↗
+            </a>
+          )}
+          {canManage && (
+            <button type="button" className={`${btnPriCls} !py-1 !text-xs`} onClick={onCall}>
+              {t("onbStartCall")}
+            </button>
+          )}
+        </div>
       </div>
     </Card>
   );
@@ -372,8 +386,10 @@ function Settings({ data, clubs, onDone }: { data: OnboardingFull; clubs: { id: 
   const local = o.next_call_at ? new Date(o.next_call_at) : null;
   const nextVal = local ? new Date(local.getTime() - local.getTimezoneOffset() * 60000).toISOString().slice(0, 16) : "";
   return (
-    <Card className="mb-4 p-5">
+    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/30 p-4 sm:items-center" onClick={onDone}>
+    <Card className="w-full max-w-3xl p-5 shadow-card-lg">
       <form
+        onClick={(e) => e.stopPropagation()}
         className="grid gap-3 sm:grid-cols-3"
         action={(fd) => {
           const v = String(fd.get("next_call_local") ?? "");
@@ -381,6 +397,7 @@ function Settings({ data, clubs, onDone }: { data: OnboardingFull; clubs: { id: 
           run(() => saveOnboarding(o.id, fd), onDone);
         }}
       >
+        <h3 className="font-display text-lg sm:col-span-3">{t("onbSettings")}</h3>
         <F label={t("onbFieldCity")}>
           <input name="city" defaultValue={o.city ?? ""} className={inputCls} />
         </F>
@@ -409,7 +426,12 @@ function Settings({ data, clubs, onDone }: { data: OnboardingFull; clubs: { id: 
         <F label={t("onbNextCall")}>
           <input type="datetime-local" name="next_call_local" defaultValue={nextVal} className={inputCls} />
         </F>
-        <div className="sm:col-span-2">
+        <div className="sm:col-span-3">
+          <F label={t("onbZoomUrl")}>
+            <input name="zoom_url" defaultValue={o.zoom_url ?? ""} placeholder="https://zoom.us/j/..." className={inputCls} />
+          </F>
+        </div>
+        <div className="sm:col-span-3">
           <F label={t("onbDriveFolder")}>
             <input name="drive_folder_url" defaultValue={o.drive_folder_url ?? ""} placeholder="https://drive.google.com/..." className={inputCls} />
           </F>
@@ -425,6 +447,7 @@ function Settings({ data, clubs, onDone }: { data: OnboardingFull; clubs: { id: 
         </div>
       </form>
     </Card>
+    </div>
   );
 }
 

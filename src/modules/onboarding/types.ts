@@ -49,6 +49,8 @@ export type Onboarding = {
   status: OnbStatus;
   opened_at: string | null;
   drive_folder_url: string | null;
+  /** Постоянная ссылка на еженедельный звонок в Zoom (видит и партнер). */
+  zoom_url: string | null;
   next_call_at: string | null;
   created_at: string;
 };
@@ -133,6 +135,9 @@ export type OnboardingFull = {
 
 /** Кандидат, которому можно начать онбординг (договор отправлен и дальше). */
 export type StartableCandidate = { id: string; name: string; city: string | null };
+
+/** Кандидат для формы «+ Клуб»: подставляем город и почту из анкеты. */
+export type ClubCandidate = StartableCandidate & { email: string | null; hasOnboarding: boolean };
 
 /** Пункт входит в прогресс, если он в неделях 1-10, не убран и не перенесен. */
 export function countsForProgress(i: Pick<PlanItem, "week_key" | "hidden" | "status">): boolean {

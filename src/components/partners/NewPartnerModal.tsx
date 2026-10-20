@@ -4,10 +4,17 @@ import { useActionState, useState } from "react";
 import { createClubPartner, type ActionResult } from "@/app/partners/actions";
 import { COUNTRIES } from "@/lib/leads";
 import { useT } from "@/components/i18n/LocaleProvider";
+import type { OnboardingClubCandidate } from "@/modules/onboarding/api";
 
 const initialState: ActionResult = { error: null };
 
-export default function NewPartnerModal({ onClose }: { onClose: () => void }) {
+export default function NewPartnerModal({
+  onClose,
+  candidates = [],
+}: {
+  onClose: () => void;
+  candidates?: OnboardingClubCandidate[];
+}) {
   const t = useT();
   const [email, setEmail] = useState("");
   const [credentials, setCredentials] = useState<{ email: string; password: string } | null>(
@@ -16,12 +23,24 @@ export default function NewPartnerModal({ onClose }: { onClose: () => void }) {
   const [country, setCountry] = useState("");
   const [city, setCity] = useState("");
   const [copied, setCopied] = useState(false);
+  const [candidateId, setCandidateId] = useState("");
+  const [startOnb, setStartOnb] = useState(true);
+  const [onb, setOnb] = useState<{ id?: string; error?: string } | null>(null);
+
+  // кандидат из воронки: подставляем город и почту из анкеты (их можно поправить)
+  function handleCandidateChange(id: string) {
+    setCandidateId(id);
+    const c = candidates.find((x) => x.id === id);
+    if (c?.city) setCity(c.city);
+    if (c?.email) setEmail(c.email);
+  }
 
   const [state, formAction, pending] = useActionState(
     async (_prev: ActionResult, formData: FormData) => {
       const result = await createClubPartner(formData);
       if (!result.error && result.tempPassword) {
         setCredentials({ email, password: result.tempPassword });
+        if (result.onboardingId || result.onboardingError) setOnb({ id: result.onboardingId, error: result.onboardingError });
       }
       return result;
     },
@@ -76,6 +95,19 @@ export default function NewPartnerModal({ onClose }: { onClose: () => void }) {
             >
               {copied ? t("btnCopied") : t("btnCopy")}
             </button>
+            {onb?.id && (
+              <a
+                href={`/onboarding/${onb.id}`}
+                className="mt-4 block rounded-lg bg-accent-soft px-3 py-2 text-sm font-semibold text-accent-strong hover:underline"
+              >
+                {t("onbClubStarted")} →
+              </a>
+            )}
+            {onb?.error && (
+              <p className="mt-4 rounded-lg bg-accent/10 px-3 py-2 text-sm text-accent-strong">
+                {t("onbClubStartFailed")}: {t(onb.error)}
+              </p>
+            )}
             <div className="mt-5 flex justify-end">
               <button
                 type="button"
@@ -91,6 +123,45 @@ export default function NewPartnerModal({ onClose }: { onClose: () => void }) {
             <h3 className="text-base font-semibold text-foreground">{t("headingAddClub")}</h3>
 
             <div className="mt-4 flex flex-col gap-3">
+              {candidates.length > 0 && (
+                <div className="flex flex-col gap-1.5 rounded-lg bg-surface-2 p-3 text-sm">
+                  <span className="font-medium text-ink-2">{t("onbClubCandidate")}</span>
+                  <select
+                    name="candidate_id"
+                    value={candidateId}
+                    onChange={(e) => handleCandidateChange(e.target.value)}
+                    className="rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-accent focus:ring-1 focus:ring-accent"
+                  >
+                    <option value="">{t("onbClubCandidateNone")}</option>
+                    {candidates.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.name}
+                        {c.city ? ` · ${c.city}` : ""}
+                      </option>
+                    ))}
+                  </select>
+                  {candidateId && (
+                    <label className="mt-1 flex items-start gap-2 text-ink-2">
+                      <input
+                        type="checkbox"
+                        name="start_onboarding"
+                        checked={startOnb}
+                        onChange={(e) => setStartOnb(e.target.checked)}
+                        className="mt-0.5"
+                      />
+                      <span>
+                        {t("onbClubStartCheckbox")}
+                        <span className="block text-xs text-muted">
+                          {candidates.find((c) => c.id === candidateId)?.hasOnboarding
+                            ? t("onbClubLinkHint")
+                            : t("onbClubStartHint")}
+                        </span>
+                      </span>
+                    </label>
+                  )}
+                </div>
+              )}
+
               <label className="flex flex-col gap-1.5 text-sm">
                 <span className="font-medium text-ink-2">{t("fieldClubName")}</span>
                 <input

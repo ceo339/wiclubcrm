@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getCurrentProfile } from "@/lib/auth";
 import { sendTelegramMessage, validChatId } from "@/lib/server/telegram";
+import { startOnboardingForClub } from "@/modules/onboarding/api";
 
 export type ActionResult = {
   error: string | null;
@@ -14,6 +15,10 @@ export type ActionResult = {
    * the fresh tempPassword above belongs to, so the confirmation screen
    * can show both together even though this form never asked for it. */
   resetEmail?: string | null;
+  /** createClubPartner: id онбординга, если он открыт вместе с клубом. */
+  onboardingId?: string;
+  /** createClubPartner: клуб создан, но онбординг открыть не удалось (ключ перевода). */
+  onboardingError?: string;
 };
 
 const PASSWORD_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789";
@@ -83,8 +88,30 @@ export async function createClubPartner(formData: FormData): Promise<ActionResul
     return { error: "errCreateLoginFailed", errorDetail: userError.message };
   }
 
+  // «+ Клуб» сразу открывает онбординг выбранного кандидата из воронки (модуль «Онбординг»).
+  // Ошибка здесь клуб не откатывает: клуб и логин уже созданы, онбординг можно открыть потом.
+  const candidateId = String(formData.get("candidate_id") || "").trim();
+  let onboardingId: string | undefined;
+  let onboardingError: string | undefined;
+  if (candidateId && formData.get("start_onboarding") === "on") {
+    try {
+      const r = await startOnboardingForClub({
+        candidateId,
+        partnerId: partner.id,
+        city: [city, country].filter(Boolean).join(" · "),
+        startDate: new Date().toISOString().slice(0, 10),
+        curator: profile.full_name,
+      });
+      if ("error" in r) onboardingError = r.error;
+      else onboardingId = r.id;
+    } catch (e) {
+      onboardingError = e instanceof Error ? e.message : "onbErrSave";
+    }
+    revalidatePath("/onboarding");
+  }
+
   revalidatePath("/partners");
-  return { error: null, tempPassword };
+  return { error: null, tempPassword, onboardingId, onboardingError };
 }
 
 /**

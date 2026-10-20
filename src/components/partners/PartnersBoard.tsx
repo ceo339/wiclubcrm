@@ -4,12 +4,15 @@ import { useState } from "react";
 import { useLocale } from "@/components/i18n/LocaleProvider";
 import type { Tables } from "@/types/database";
 import NewPartnerModal from "./NewPartnerModal";
+import type { OnboardingClubCandidate } from "@/modules/onboarding/api";
 import EditPartnerModal from "./EditPartnerModal";
 
 export default function PartnersBoard({
   initialPartners,
+  candidates = [],
 }: {
   initialPartners: Tables<"partners">[];
+  candidates?: OnboardingClubCandidate[];
 }) {
   const { locale, t } = useLocale();
   const [showNew, setShowNew] = useState(false);
@@ -67,7 +70,7 @@ export default function PartnersBoard({
         </div>
       )}
 
-      {showNew && <NewPartnerModal onClose={() => setShowNew(false)} />}
+      {showNew && <NewPartnerModal candidates={candidates} onClose={() => setShowNew(false)} />}
       {editingPartner && (
         <EditPartnerModal partner={editingPartner} onClose={() => setEditingId(null)} />
       )}

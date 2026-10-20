@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { onboardingWriteDb } from "./server/db";
 import { ownsOnboarding, requireOnboardingAccess } from "./server/guard";
+import { createOnboarding } from "./server/start";
 import { ITEM_STATUSES, OWNERS, type ItemStatus, type Owner, type TemplateItem } from "./types";
 
 /**
@@ -45,49 +46,17 @@ export async function startOnboarding(fd: FormData): Promise<OnbResult> {
   if (!candidateId) return { error: "onbErrCandidate" };
   if (!isDate(startDate)) return { error: "onbErrDate" };
 
-  const db = onboardingWriteDb();
-  const { data: onb, error } = await db
-    .from("onboardings")
-    .insert({
-      candidate_id: candidateId,
-      partner_id: opt(fd, "partner_id"),
-      city: opt(fd, "city"),
-      start_date: startDate,
-      curator: opt(fd, "curator"),
-      call_day: opt(fd, "call_day"),
-      current_week: 1,
-    })
-    .select("id")
-    .single();
-  if (error || !onb) return { error: error?.code === "23505" ? "onbErrExists" : error?.message ?? "onbErrSave" };
-
-  // план партнера = копия шаблона УК; правки партнера шаблон не меняют
-  const { data: tpl } = await db.from("template_items").select("*").eq("archived", false).order("sort");
-  const rows = ((tpl ?? []) as TemplateItem[]).map((t) => ({
-    onboarding_id: onb.id,
-    template_item_id: t.id,
-    week_key: t.week_key,
-    block: t.block,
-    title: t.title,
-    action: t.action,
-    doc_type: t.doc_type,
-    owner: t.owner,
-    tags: t.tags,
-    link_mode: t.link_mode,
-    template_url: t.template_url,
-    sort: t.sort,
-  }));
-  if (rows.length) {
-    const { error: e2 } = await db.from("plan_items").insert(rows);
-    if (e2) return { error: e2.message };
-  }
-  await db.from("milestones").insert([
-    { onboarding_id: onb.id, date: startDate, title: "Старт онбординга", sort: 0 },
-    { onboarding_id: onb.id, date: null, title: "День рождения WiClub", is_key: true, sort: 1 },
-    { onboarding_id: onb.id, date: null, title: "Письменный допуск к открытию", sort: 9 },
-  ]);
-  refresh(onb.id);
-  return { error: null, id: onb.id };
+  const r = await createOnboarding({
+    candidateId,
+    partnerId: opt(fd, "partner_id"),
+    city: opt(fd, "city"),
+    startDate,
+    curator: opt(fd, "curator"),
+    callDay: opt(fd, "call_day"),
+  });
+  if ("error" in r) return { error: r.error };
+  refresh(r.id);
+  return { error: null, id: r.id };
 }
 
 export async function saveOnboarding(id: string, fd: FormData): Promise<OnbResult> {
@@ -97,7 +66,8 @@ export async function saveOnboarding(id: string, fd: FormData): Promise<OnbResul
   if (start && !isDate(start)) return { error: "onbErrDate" };
   const week = Number(str(fd, "current_week"));
   const drive = opt(fd, "drive_folder_url");
-  if (!isUrl(drive)) return { error: "onbErrUrl" };
+  const zoom = opt(fd, "zoom_url");
+  if (!isUrl(drive) || !isUrl(zoom)) return { error: "onbErrUrl" };
   const nextCall = opt(fd, "next_call_at");
   const { error } = await onboardingWriteDb()
     .from("onboardings")
@@ -109,6 +79,7 @@ export async function saveOnboarding(id: string, fd: FormData): Promise<OnbResul
       call_day: opt(fd, "call_day"),
       current_week: Number.isInteger(week) && week > 0 ? week : null,
       drive_folder_url: drive,
+      zoom_url: zoom,
       next_call_at: nextCall,
       updated_at: new Date().toISOString(),
     })
