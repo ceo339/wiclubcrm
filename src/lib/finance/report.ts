@@ -31,6 +31,7 @@ export type Exp = {
   amount_local: number | null;
   local_currency: string | null;
   comment: string | null;
+  amount_usd?: number | null;
 };
 /** Два плана (раунд 82): «uk» — план УК (финмодель, видят только hq/viewer), «partner» — план партнёра. */
 export type PlanType = "uk" | "partner";
@@ -44,6 +45,7 @@ export type PlanRow = {
   amount: number;
   amount_local: number | null;
   local_currency: string | null;
+  amount_usd?: number | null;
 };
 export type Prod = { id: string; name: string; price: number };
 
@@ -69,6 +71,7 @@ export type Pay = {
   paid_date: string;
   enrollment_id: string | null;
   enr: EnrInfo | null;
+  amount_usd?: number | null;
 };
 export type Settings = {
   opening_balance: number;
@@ -141,13 +144,13 @@ export type ProfitLoss = {
 };
 
 function planRevenueTotal(f: ClubFinance, months: Set<string>): Amt {
-  return sum(f.plan.filter((p) => p.kind === "revenue" && months.has(mk(p.month))).map((p) => amt(p.amount, p.amount_local, p.local_currency)));
+  return sum(f.plan.filter((p) => p.kind === "revenue" && months.has(mk(p.month))).map((p) => amt(p.amount, p.amount_local, p.local_currency, p.amount_usd)));
 }
 function factRevenueByProduct(f: ClubFinance, months: Set<string>): Map<string, Amt> {
   const m = new Map<string, Amt>();
   for (const p of f.payments) {
     if (p.status !== "paid" || !p.enr || !months.has(attrMonth(p.enr))) continue;
-    m.set(p.enr.product_id, add(m.get(p.enr.product_id) ?? zero(), amt(p.amount, p.amount_local, p.local_currency)));
+    m.set(p.enr.product_id, add(m.get(p.enr.product_id) ?? zero(), amt(p.amount, p.amount_local, p.local_currency, p.amount_usd)));
   }
   return m;
 }
@@ -167,7 +170,7 @@ export function computeProfitLoss(f0: ClubFinance, period: string, today: Date, 
   for (const p of f.plan) {
     if (p.kind !== "revenue" || !p.product_id || !months.has(mk(p.month))) continue;
     const cur = planBy.get(p.product_id) ?? { qty: 0, amt: zero() };
-    planBy.set(p.product_id, { qty: cur.qty + Number(p.qty ?? 0), amt: add(cur.amt, amt(p.amount, p.amount_local, p.local_currency)) });
+    planBy.set(p.product_id, { qty: cur.qty + Number(p.qty ?? 0), amt: add(cur.amt, amt(p.amount, p.amount_local, p.local_currency, p.amount_usd)) });
   }
   const revenue: RevenueLine[] = [];
   const idle: string[] = [];
@@ -193,7 +196,7 @@ export function computeProfitLoss(f0: ClubFinance, period: string, today: Date, 
   const otherIncome = sum(
     f.expenses
       .filter((e) => months.has(mk(e.date)) && f.categories.find((c) => c.id === e.category_id)?.kind === "income")
-      .map((e) => amt(e.amount, e.amount_local, e.local_currency))
+      .map((e) => amt(e.amount, e.amount_local, e.local_currency, e.amount_usd))
   );
   const revenuePlan = sum(revenue.map((r) => r.plan));
   const serviceFact = sum(revenue.map((r) => r.fact));
@@ -216,8 +219,8 @@ export function computeProfitLoss(f0: ClubFinance, period: string, today: Date, 
       } else {
         const exps = f.expenses.filter((e) => e.category_id === leaf.id && months.has(mk(e.date)));
         const plans = f.plan.filter((p) => p.kind === "expense" && p.category_id === leaf.id && months.has(mk(p.month)));
-        fact = sum(exps.map((e) => amt(e.amount, e.amount_local, e.local_currency)));
-        plan = sum(plans.map((p) => amt(p.amount, p.amount_local, p.local_currency)));
+        fact = sum(exps.map((e) => amt(e.amount, e.amount_local, e.local_currency, e.amount_usd)));
+        plan = sum(plans.map((p) => amt(p.amount, p.amount_local, p.local_currency, p.amount_usd)));
         if (leaf.per_product) {
           const ids = new Set<string | null>([...exps.map((e) => e.product_id), ...plans.map((p) => p.product_id)]);
           for (const pid of ids) {
@@ -225,8 +228,8 @@ export function computeProfitLoss(f0: ClubFinance, period: string, today: Date, 
             products.push({
               id: pid ?? "none",
               name,
-              plan: sum(plans.filter((p) => p.product_id === pid).map((p) => amt(p.amount, p.amount_local, p.local_currency))),
-              fact: sum(exps.filter((e) => e.product_id === pid).map((e) => amt(e.amount, e.amount_local, e.local_currency))),
+              plan: sum(plans.filter((p) => p.product_id === pid).map((p) => amt(p.amount, p.amount_local, p.local_currency, p.amount_usd))),
+              fact: sum(exps.filter((e) => e.product_id === pid).map((e) => amt(e.amount, e.amount_local, e.local_currency, e.amount_usd))),
             });
           }
           const order = (id: string) => { const i = f.products.findIndex((x) => x.id === id); return i === -1 ? 999 : i; };
@@ -317,16 +320,16 @@ export function computeCash(f: ClubFinance, endMonth: string, count: number): { 
     : zero();
 
   const receiptsOf = (m: string) =>
-    sum(paid.filter((p) => mk(p.paid_date) === m).map((p) => amt(p.amount, p.amount_local, p.local_currency)));
+    sum(paid.filter((p) => mk(p.paid_date) === m).map((p) => amt(p.amount, p.amount_local, p.local_currency, p.amount_usd)));
 
   const all: CashMonth[] = [];
   let closing = opening;
   for (let m = start; m <= endMonth && all.length < 120; m = shiftMonth(m, 1)) {
     const exps = f.expenses.filter((e) => mk(e.date) === m);
     const byGroup = (g: Cat["cash_group"]) =>
-      sum(exps.filter((e) => { const c = catOf.get(e.category_id); return c && c.kind === "expense" && c.cash_group === g; }).map((e) => amt(e.amount, e.amount_local, e.local_currency)));
+      sum(exps.filter((e) => { const c = catOf.get(e.category_id); return c && c.kind === "expense" && c.cash_group === g; }).map((e) => amt(e.amount, e.amount_local, e.local_currency, e.amount_usd)));
     const receipts = receiptsOf(m);
-    const otherIncome = sum(exps.filter((e) => catOf.get(e.category_id)?.kind === "income").map((e) => amt(e.amount, e.amount_local, e.local_currency)));
+    const otherIncome = sum(exps.filter((e) => catOf.get(e.category_id)?.kind === "income").map((e) => amt(e.amount, e.amount_local, e.local_currency, e.amount_usd)));
     const operating = byGroup("operating");
     const tax = byGroup("tax");
     const investment = byGroup("investment");

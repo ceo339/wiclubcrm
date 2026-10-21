@@ -485,6 +485,8 @@ export async function deletePackagePayment(paymentId: string): Promise<ActionRes
 export type PackagePayment = {
   id: string;
   amount: number;
+  /** Round 94: $ по курсу на дату взноса */
+  amount_usd?: number | null;
   amount_local: number | null;
   local_currency: string | null;
   paid_date: string;
@@ -522,7 +524,7 @@ export async function getPackageSalesForMember(memberId: string): Promise<Packag
   const supabase = await createClient();
   const { data } = await supabase
     .from("package_sales")
-    .select("id, label, total_price, total_price_local, local_currency, paid_date, package_sale_items(id, product_id, allocated_price, allocated_price_local, local_currency, start_date, enrollment_id, products(name)), package_sale_payments(id, amount, amount_local, local_currency, paid_date)")
+    .select("id, label, total_price, total_price_local, local_currency, paid_date, package_sale_items(id, product_id, allocated_price, allocated_price_local, local_currency, start_date, enrollment_id, products(name)), package_sale_payments(id, amount, amount_local, local_currency, paid_date, amount_usd)")
     .eq("member_id", memberId)
     .order("created_at", { ascending: false });
 
@@ -534,7 +536,7 @@ export async function getPackageSalesForMember(memberId: string): Promise<Packag
     local_currency: sale.local_currency,
     paid_date: sale.paid_date,
     payments: (((sale as unknown as { package_sale_payments?: PackagePayment[] }).package_sale_payments) ?? [])
-      .map((p) => ({ id: p.id, amount: Number(p.amount), amount_local: p.amount_local === null ? null : Number(p.amount_local), local_currency: p.local_currency, paid_date: p.paid_date }))
+      .map((p) => ({ id: p.id, amount: Number(p.amount), amount_local: p.amount_local === null ? null : Number(p.amount_local), local_currency: p.local_currency, paid_date: p.paid_date, amount_usd: p.amount_usd === null || p.amount_usd === undefined ? null : Number(p.amount_usd) }))
       .sort((a, b) => a.paid_date.localeCompare(b.paid_date)),
     items: (
       (sale as unknown as {
@@ -582,7 +584,7 @@ export async function getPackageSalesForPayments(scopePartnerId: string | null):
   let query = supabase
     .from("package_sales")
     .select(
-      "id, label, total_price, total_price_local, local_currency, paid_date, members(name), partners(name), package_sale_items(id, product_id, allocated_price, allocated_price_local, local_currency, start_date, enrollment_id, products(name)), package_sale_payments(id, amount, amount_local, local_currency, paid_date)"
+      "id, label, total_price, total_price_local, local_currency, paid_date, members(name), partners(name), package_sale_items(id, product_id, allocated_price, allocated_price_local, local_currency, start_date, enrollment_id, products(name)), package_sale_payments(id, amount, amount_local, local_currency, paid_date, amount_usd)"
     )
     .order("paid_date", { ascending: false });
   if (scopePartnerId) query = query.eq("partner_id", scopePartnerId);
@@ -598,7 +600,7 @@ export async function getPackageSalesForPayments(scopePartnerId: string | null):
     member_name: (sale as { members?: { name: string } | null }).members?.name ?? null,
     partner_name: (sale as { partners?: { name: string } | null }).partners?.name ?? null,
     payments: (((sale as unknown as { package_sale_payments?: PackagePayment[] }).package_sale_payments) ?? [])
-      .map((p) => ({ id: p.id, amount: Number(p.amount), amount_local: p.amount_local === null ? null : Number(p.amount_local), local_currency: p.local_currency, paid_date: p.paid_date }))
+      .map((p) => ({ id: p.id, amount: Number(p.amount), amount_local: p.amount_local === null ? null : Number(p.amount_local), local_currency: p.local_currency, paid_date: p.paid_date, amount_usd: p.amount_usd === null || p.amount_usd === undefined ? null : Number(p.amount_usd) }))
       .sort((a, b) => a.paid_date.localeCompare(b.paid_date)),
     items: (
       (sale as unknown as {

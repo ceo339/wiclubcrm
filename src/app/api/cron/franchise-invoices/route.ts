@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { sendOverdueDigest, type OverdueRow } from "@/lib/invoice/email";
+import { syncFxRates } from "@/lib/server/fx";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -23,6 +24,9 @@ export async function GET(request: Request) {
   const force = new URL(request.url).searchParams.get("force") === "1";
 
   const admin = createAdminClient();
+  // Round 94: тем же ежедневным запуском догружаем курсы EUR→USD (лимит кронов на Vercel);
+  // ошибка курсов не мешает рассылке по счетам.
+  const fx = await syncFxRates(admin).catch((e) => ({ ok: false, error: String(e) }));
   const today = new Date().toISOString().slice(0, 10);
   const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
 
@@ -48,7 +52,7 @@ export async function GET(request: Request) {
   const isMonday = new Date().getUTCDay() === 1;
   const newlyOverdue = rows.some((r) => r.due_date === yesterday);
   if (rows.length === 0 || (!force && !isMonday && !newlyOverdue)) {
-    return NextResponse.json({ overdue: rows.length, sent: false });
+    return NextResponse.json({ overdue: rows.length, sent: false, fx });
   }
 
   const recipients = new Set<string>();
@@ -66,5 +70,5 @@ export async function GET(request: Request) {
 
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://wiclubcrm.vercel.app";
   const error = await sendOverdueDigest([...recipients], rows, appUrl);
-  return NextResponse.json({ overdue: rows.length, sent: !error, recipients: recipients.size, error });
+  return NextResponse.json({ overdue: rows.length, sent: !error, recipients: recipients.size, error, fx });
 }

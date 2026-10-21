@@ -9,6 +9,8 @@ export function useAmtNumber(v: Amt): number {
   const { currency, rates } = useCurrency();
   const local = toLocal(v);
   if (local && local.currency === currency) return local.amount ?? 0;
+  // Round 94: $ по курсу на дату оплаты/расхода, если он есть у всех слагаемых
+  if (currency === "USD" && v.usdOk) return v.usd ?? 0;
   return convertFromEur(v.eur, currency, rates);
 }
 

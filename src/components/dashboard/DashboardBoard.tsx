@@ -380,7 +380,7 @@ function RevenueTrendChart({ months }: { months: MonthlyRevenue[] }) {
           {months.map((m) => (
             <div key={m.monthKey} className="flex flex-1 flex-col items-center gap-2">
               <div className="text-xs font-medium text-foreground">
-                <Money amountEur={m.amount} />
+                <Money amountEur={m.amount} usd={m.usd} />
               </div>
               <div className="flex h-32 w-full items-end justify-center">
                 <div
@@ -855,7 +855,7 @@ export default function DashboardBoard({
   yearOptions: string[];
   /** "/dashboard" for the network view, "/dashboard/<id>" for a club's own. */
   basePath: string;
-  revenue: { amount: number; delta: number | null; local?: LocalAmount | null };
+  revenue: { amount: number; delta: number | null; local?: LocalAmount | null; usd?: number | null };
   revenueTrend: MonthlyRevenue[];
   /** Real running member-count trend behind the "Участниц" tile's
    * sparkline — see monthlyMemberTotal in lib/dashboard.ts. */
@@ -865,7 +865,7 @@ export default function DashboardBoard({
   conversionTrend: MonthlyCount[];
   membersAdded: number;
   conversion: { value: number | null; previous: number | null };
-  royalty: { amount: number; percent: number; local?: LocalAmount | null };
+  royalty: { amount: number; percent: number; local?: LocalAmount | null; usd?: number | null };
   productsPeriod: ProductCount[];
   productsAllTime: ProductCount[];
   /** "Ближайшие события" — every course/поток starting in the next 30 days,
@@ -915,7 +915,7 @@ export default function DashboardBoard({
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <StatTile
           label={t("statRevenue")}
-          value={<Money amountEur={revenue.amount} local={revenue.local} />}
+          value={<Money amountEur={revenue.amount} local={revenue.local} usd={revenue.usd} />}
           delta={noPrevComparison ? t("deltaForPeriod") : formatPctDelta(revenue.delta, locale)}
           spark={{ values: revenueTrend.map((m) => m.amount), color: "var(--accent)" }}
         />
@@ -927,7 +927,7 @@ export default function DashboardBoard({
         />
         <StatTile
           label={t("statRoyaltyDue")}
-          value={<Money amountEur={royalty.amount} local={royalty.local} />}
+          value={<Money amountEur={royalty.amount} local={royalty.local} usd={royalty.usd} />}
           delta={t("deltaRoyaltyPercent", { percent: royalty.percent })}
         />
         <StatTile

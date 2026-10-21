@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { STATUSES, statusLabel, statusPillClasses } from "@/lib/payments";
-import {
+import { usdTotal,
   currentMonthKey,
   formatPctDelta,
   inPeriod,
@@ -200,11 +200,12 @@ export default function PaymentsBoard({
     () => [
       ...cashPayments
         .filter((p) => p.status === "paid")
-        .map((p) => ({ date: p.paid_date, amount: Number(p.amount), local: localOf(p.amount_local, p.local_currency) })),
+        .map((p) => ({ date: p.paid_date, amount: Number(p.amount), local: localOf(p.amount_local, p.local_currency), amount_usd: p.amount_usd })),
       ...packageInstallments.map((k) => ({
         date: k.pay.paid_date,
         amount: Number(k.pay.amount),
         local: localOf(k.pay.amount_local, k.pay.local_currency),
+        amount_usd: k.pay.amount_usd ?? null,
       })),
     ],
     [cashPayments, packageInstallments]
@@ -229,6 +230,9 @@ export default function PaymentsBoard({
     [cashIn, period]
   );
   const collectedAllTimeLocal = useMemo(() => sumLocal(cashIn.map((c) => c.local as LocalAmount | null)), [cashIn]);
+  // Round 94: те же суммы в $ по курсу на дату каждой оплаты
+  const collectedInPeriodUsd = useMemo(() => usdTotal(cashIn.filter((c) => inPeriod(period, c.date))), [cashIn, period]);
+  const collectedAllTimeUsd = useMemo(() => usdTotal(cashIn), [cashIn]);
   const pendingInPeriod = useMemo(
     () => pendingPayments.filter((p) => inPeriod(period, p.paid_date)),
     [pendingPayments, period]
@@ -252,7 +256,7 @@ export default function PaymentsBoard({
             className="mt-1 font-display text-[28px] leading-[1.05] tracking-[-0.02em] text-foreground"
             style={{ fontVariantNumeric: "tabular-nums" }}
           >
-            <Money amountEur={collectedInPeriod} local={collectedInPeriodLocal} />
+            <Money amountEur={collectedInPeriod} local={collectedInPeriodLocal} usd={collectedInPeriodUsd} />
           </div>
           <div className="mt-1 text-xs text-muted">
             {period.mode === "month" ? formatPctDelta(collectedDelta, locale) : t("deltaForPeriod")}
@@ -274,7 +278,7 @@ export default function PaymentsBoard({
             className="mt-1 font-display text-[28px] leading-[1.05] tracking-[-0.02em] text-foreground"
             style={{ fontVariantNumeric: "tabular-nums" }}
           >
-            <Money amountEur={collectedAllTime} local={collectedAllTimeLocal} />
+            <Money amountEur={collectedAllTime} local={collectedAllTimeLocal} usd={collectedAllTimeUsd} />
           </div>
           <div className="mt-1 text-xs text-muted">{t("deltaAllTime")}</div>
         </div>
@@ -406,7 +410,7 @@ export default function PaymentsBoard({
                       </td>
                       <td className="px-4 py-3 text-muted">{row.pay.paid_date}</td>
                       <td className="px-4 py-3 text-right font-medium text-foreground">
-                        <Money amountEur={row.pay.amount} local={localOf(row.pay.amount_local, row.pay.local_currency)} />
+                        <Money amountEur={row.pay.amount} local={localOf(row.pay.amount_local, row.pay.local_currency)} usd={row.pay.amount_usd} />
                       </td>
                     </tr>
                   ) : (
@@ -464,7 +468,7 @@ export default function PaymentsBoard({
                       </td>
                       <td className="px-4 py-3 text-muted">{row.payment.paid_date}</td>
                       <td className="px-4 py-3 text-right font-medium text-foreground">
-                        <Money amountEur={row.payment.amount} local={localOf(row.payment.amount_local, row.payment.local_currency)} />
+                        <Money amountEur={row.payment.amount} local={localOf(row.payment.amount_local, row.payment.local_currency)} usd={row.payment.amount_usd} />
                       </td>
                     </tr>
                   )

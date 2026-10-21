@@ -50,7 +50,7 @@ export async function loadClubFinance(db: Db, partnerId: string): Promise<ClubFi
       db
         .from("payments")
         .select(
-          "id, amount, amount_local, local_currency, status, paid_date, enrollment_id, members(name), products(name), member_enrollments(product_id, start_date, created_at, status)"
+          "id, amount, amount_local, local_currency, amount_usd, status, paid_date, enrollment_id, members(name), products(name), member_enrollments(product_id, start_date, created_at, status)"
         )
         .eq("partner_id", partnerId)
         .order("paid_date", { ascending: false })
@@ -63,7 +63,7 @@ export async function loadClubFinance(db: Db, partnerId: string): Promise<ClubFi
   ]);
 
   type PayRow = {
-    id: string; amount: number; amount_local: number | null; local_currency: string | null; status: string; paid_date: string;
+    id: string; amount: number; amount_local: number | null; local_currency: string | null; amount_usd: number | null; status: string; paid_date: string;
     enrollment_id: string | null;
     members: { name: string } | null; products: { name: string } | null;
     member_enrollments: { product_id: string; start_date: string | null; created_at: string; status: string } | null;
@@ -90,17 +90,17 @@ export async function loadClubFinance(db: Db, partnerId: string): Promise<ClubFi
     })),
     expenses: expenses.map((e): Exp => ({
       id: e.id, date: e.date, category_id: e.category_id, product_id: e.product_id, amount: Number(e.amount),
-      amount_local: num(e.amount_local), local_currency: e.local_currency, comment: e.comment,
+      amount_local: num(e.amount_local), local_currency: e.local_currency, comment: e.comment, amount_usd: num(e.amount_usd),
     })),
     plan: plan.map((p): PlanRow => ({
       plan_type: p.plan_type === "uk" ? "uk" : "partner",
       month: p.month, kind: p.kind as PlanRow["kind"], category_id: p.category_id, product_id: p.product_id,
-      qty: num(p.qty), amount: Number(p.amount), amount_local: num(p.amount_local), local_currency: p.local_currency,
+      qty: num(p.qty), amount: Number(p.amount), amount_local: num(p.amount_local), local_currency: p.local_currency, amount_usd: num(p.amount_usd),
     })),
     payments: payRows.map((p) => ({
       id: p.id, amount: Number(p.amount), amount_local: num(p.amount_local), local_currency: p.local_currency,
       status: p.status, paid_date: p.paid_date, enrollment_id: p.enrollment_id,
-      enr: p.member_enrollments,
+      enr: p.member_enrollments, amount_usd: num(p.amount_usd),
     })),
     enrollments: enrollments.filter((e) => e.product_id).map((e) => ({ id: e.id, product_id: e.product_id as string, start_date: e.start_date, created_at: e.created_at, status: e.status })),
     settings,

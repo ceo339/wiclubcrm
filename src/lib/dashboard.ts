@@ -239,7 +239,7 @@ export function yearsWithActivity(
   return [...set].sort().reverse();
 }
 
-export type MonthlyRevenue = { monthKey: string; amount: number };
+export type MonthlyRevenue = { monthKey: string; amount: number; usd?: number | null };
 
 /**
  * Real collected revenue for each of the last `months` calendar months,
@@ -265,16 +265,28 @@ export function lastNMonthKeys(months: number): string[] {
 }
 
 export function monthlyRevenue(
-  payments: (PaymentContext & { amount: number; status: string | null })[],
+  payments: (PaymentContext & { amount: number; status: string | null; amount_usd?: number | null })[],
   months = 6
 ): MonthlyRevenue[] {
   const paid = payments.filter((p) => p.status === "paid");
-  return lastNMonthKeys(months).map((monthKey) => ({
-    monthKey,
-    amount: paid
-      .filter((p) => monthKeyOf(paymentAttributionDate(p)) === monthKey)
-      .reduce((sum, p) => sum + Number(p.amount), 0),
-  }));
+  return lastNMonthKeys(months).map((monthKey) => {
+    const inMonth = paid.filter((p) => monthKeyOf(paymentAttributionDate(p)) === monthKey);
+    return {
+      monthKey,
+      amount: inMonth.reduce((sum, p) => sum + Number(p.amount), 0),
+      usd: usdTotal(inMonth),
+    };
+  });
+}
+
+/** Round 94: сумма в $ по курсу на дату каждой оплаты — null, если хоть у одной её нет. */
+export function usdTotal(rows: { amount_usd?: number | null }[]): number | null {
+  let total = 0;
+  for (const r of rows) {
+    if (r.amount_usd === null || r.amount_usd === undefined) return null;
+    total += Number(r.amount_usd);
+  }
+  return Math.round(total * 100) / 100;
 }
 
 export type MonthlyCount = { monthKey: string; value: number };
@@ -411,10 +423,10 @@ export function computeSourceConversion(leads: { source: string | null; stage: s
 }
 
 export type CoreMetrics = {
-  revenue: { amount: number; delta: number | null; local?: LocalAmount | null };
+  revenue: { amount: number; delta: number | null; local?: LocalAmount | null; usd?: number | null };
   membersAdded: number;
   conversion: { value: number | null; previous: number | null };
-  royalty: { amount: number; percent: number; local?: LocalAmount | null };
+  royalty: { amount: number; percent: number; local?: LocalAmount | null; usd?: number | null };
   funnel: FunnelStage[];
   declinedCount: number;
   sourceConversion: SourceConversion[];
@@ -439,6 +451,7 @@ export function computeCoreMetrics({
     status: string | null;
     amount_local?: number | null;
     local_currency?: string | null;
+    amount_usd?: number | null;
   })[];
   period: Period;
 }): CoreMetrics {
@@ -472,18 +485,21 @@ export function computeCoreMetrics({
   const conversionPrevious = period.mode === "month" ? conversionRate(conversionLeadsPrevious) : null;
 
   const royaltyAmount = Math.round((revenue * ROYALTY_PERCENT) / 100);
+  const revenueUsd = usdTotal(paidInPeriod);
 
   return {
     revenue: {
       amount: revenue,
       delta: period.mode === "month" ? pctChange(revenue, revenuePrevious) : null,
       local: revenueLocal,
+      usd: revenueUsd,
     },
     membersAdded,
     conversion: { value: conversion, previous: conversionPrevious },
     royalty: {
       amount: royaltyAmount,
       percent: ROYALTY_PERCENT,
+      usd: revenueUsd === null ? null : Math.round((revenueUsd * ROYALTY_PERCENT) / 100),
       local: revenueLocal
         ? { amount: Math.round((Number(revenueLocal.amount) * ROYALTY_PERCENT) / 100), currency: revenueLocal.currency }
         : null,

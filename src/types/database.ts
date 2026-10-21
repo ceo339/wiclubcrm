@@ -106,6 +106,12 @@ export type Database = {
           },
         ]
       }
+      fx_eur_usd: {
+        Row: { day: string; rate: number; source: string; updated_at: string }
+        Insert: { day: string; rate: number; source?: string; updated_at?: string }
+        Update: { day?: string; rate?: number; source?: string; updated_at?: string }
+        Relationships: []
+      }
       fin_categories: {
         Row: {
           archived: boolean
@@ -156,6 +162,7 @@ export type Database = {
       }
       fin_expenses: {
         Row: {
+          amount_usd: number | null
           amount: number
           amount_local: number | null
           category_id: string
@@ -169,6 +176,7 @@ export type Database = {
           product_id: string | null
         }
         Insert: {
+          amount_usd?: number | null
           amount: number
           amount_local?: number | null
           category_id: string
@@ -182,6 +190,7 @@ export type Database = {
           product_id?: string | null
         }
         Update: {
+          amount_usd?: number | null
           amount?: number
           amount_local?: number | null
           category_id?: string
@@ -231,6 +240,7 @@ export type Database = {
       }
       fin_plan: {
         Row: {
+          amount_usd: number | null
           amount: number
           amount_local: number | null
           category_id: string | null
@@ -245,6 +255,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          amount_usd?: number | null
           amount?: number
           amount_local?: number | null
           category_id?: string | null
@@ -259,6 +270,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          amount_usd?: number | null
           amount?: number
           amount_local?: number | null
           category_id?: string | null
@@ -1266,6 +1278,7 @@ export type Database = {
       }
       package_sale_payments: {
         Row: {
+          amount_usd: number | null
           amount: number
           amount_local: number | null
           created_at: string
@@ -1276,6 +1289,7 @@ export type Database = {
           partner_id: string
         }
         Insert: {
+          amount_usd?: number | null
           amount?: number
           amount_local?: number | null
           created_at?: string
@@ -1286,6 +1300,7 @@ export type Database = {
           partner_id: string
         }
         Update: {
+          amount_usd?: number | null
           amount?: number
           amount_local?: number | null
           created_at?: string
@@ -1391,6 +1406,7 @@ export type Database = {
       }
       payments: {
         Row: {
+          amount_usd: number | null
           local_currency: string | null
           amount_local: number | null
           amount: number
@@ -1409,6 +1425,7 @@ export type Database = {
           stripe_checkout_session_id: string | null
         }
         Insert: {
+          amount_usd?: number | null
           local_currency?: string | null
           amount_local?: number | null
           amount: number
@@ -1427,6 +1444,7 @@ export type Database = {
           stripe_checkout_session_id?: string | null
         }
         Update: {
+          amount_usd?: number | null
           local_currency?: string | null
           amount_local?: number | null
           amount?: number
@@ -1676,6 +1694,7 @@ export type Database = {
       can_view_franchise: { Args: never; Returns: boolean }
       can_view_network: { Args: never; Returns: boolean }
       current_partner_id: { Args: never; Returns: string }
+      fx_recompute_usd: { Args: { from_day: string }; Returns: undefined }
       is_hq: { Args: never; Returns: boolean }
     }
     Enums: {

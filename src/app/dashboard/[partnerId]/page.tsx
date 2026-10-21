@@ -69,7 +69,7 @@ export default async function ClubDashboardPage({
       supabase
         .from("payments")
         .select(
-          "member_id, product_id, amount, amount_local, local_currency, status, paid_date, member_enrollments(start_date, created_at), leads(cohort_start_date, added_date)"
+          "member_id, product_id, amount, amount_local, local_currency, amount_usd, status, paid_date, member_enrollments(start_date, created_at), leads(cohort_start_date, added_date)"
         )
         .eq("partner_id", partnerId),
       supabase.from("products").select("id, name").eq("partner_id", partnerId),
