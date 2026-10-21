@@ -7,11 +7,12 @@ import { OWNERS, progress, type OnboardingFull } from "../types";
 import MeetingsTab from "./MeetingsTab";
 import PlanTab, { isDoItem, type PlanFilter } from "./PlanTab";
 import TasksTab from "./TasksTab";
+import QuizTab from "./QuizTab";
 import TemplateTab from "./TemplateTab";
 import { Bar, Card, Chip, OWNER_KEY, OwnerChip, Ring, SectionTitle, StatusDot, btnCls, btnPriCls, fmtDate, inputCls } from "./ui";
 import { useAct } from "./useAct";
 
-type Tab = "plan" | "meet" | "tasks" | "rhythm" | "tpl";
+type Tab = "plan" | "meet" | "tasks" | "quiz" | "rhythm" | "tpl";
 
 export default function OnboardingPartner({
   data,
@@ -38,6 +39,10 @@ export default function OnboardingPartner({
   const { pending, error, run } = useAct();
 
   const prog = progress(items);
+  const quizLast: Record<string, { score: number; total: number; passed: boolean }> = {};
+  for (const a of data.quizAttempts) if (!quizLast[a.plan_item_id]) quizLast[a.plan_item_id] = { score: a.score, total: a.total, passed: a.passed };
+  const quizCount = items.filter((i) => i.tags.includes("квиз") && !i.hidden).length;
+  const quizFailed = Object.values(quizLast).filter((q) => !q.passed).length;
   const openTasks = tasks.filter((x) => !x.done).length;
   const todo = items.filter((i) => /^w\d+$/.test(i.week_key) && !i.hidden && isDoItem(i) && i.status !== "done" && i.status !== "moved").length;
   const weekKeys = new Set(weeks.filter((w) => w.kind === "week").map((w) => w.key));
@@ -46,10 +51,11 @@ export default function OnboardingPartner({
     { id: "plan", label: t(opened ? "onbTabPlanArchive" : "onbTabPlan"), n: `${prog.done}/${prog.total}`, show: true },
     { id: "meet", label: t("onbTabMeet"), n: meetings.length, show: true },
     { id: "tasks", label: t("onbTabTasks"), n: openTasks, red: openTasks > 0, show: true },
+    { id: "quiz", label: t("onbTabQuiz"), n: quizFailed || undefined, red: quizFailed > 0, show: quizCount > 0 },
     { id: "rhythm", label: t("onbTabRhythm"), show: opened },
     { id: "tpl", label: t("onbTabTpl"), show: canManage && !!data.template },
   ];
-  const order: Tab[] = opened ? ["meet", "tasks", "rhythm", "plan", "tpl"] : ["plan", "meet", "tasks", "tpl"];
+  const order: Tab[] = opened ? ["meet", "tasks", "rhythm", "plan", "quiz", "tpl"] : ["plan", "meet", "tasks", "quiz", "tpl"];
 
   return (
     <div>
@@ -230,6 +236,7 @@ export default function OnboardingPartner({
           canManage={canManage}
           filter={filter}
           setFilter={setFilter}
+          quizLast={quizLast}
         />
       )}
       {tab === "meet" && (
@@ -248,6 +255,7 @@ export default function OnboardingPartner({
         />
       )}
       {tab === "tasks" && <TasksTab onboardingId={onb.id} tasks={tasks} meetings={meetings} canMark={canMark} canManage={canManage} isPartner={isPartner} />}
+      {tab === "quiz" && <QuizTab items={items} attempts={data.quizAttempts} questions={data.quizQuestions} canTake={canMark} />}
       {tab === "rhythm" && <Rhythm data={data} canMark={canMark} />}
       {tab === "tpl" && data.template && <TemplateTab weeks={weeks} template={data.template} />}
     </div>

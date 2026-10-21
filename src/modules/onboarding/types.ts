@@ -144,6 +144,49 @@ export type OnboardingFull = {
   tasks: Task[];
   /** Только для hq: эталонный шаблон (вкладка «Шаблон онбординга»). */
   template: TemplateItem[] | null;
+  /** Попытки квизов этого онбординга, новые сверху. */
+  quizAttempts: QuizAttempt[];
+  /** Только для hq: вопросы квизов (с правильными ответами) для разбора ошибок. */
+  quizQuestions: QuizQuestion[] | null;
+};
+
+/** Квиз засчитан при стольких верных ответах (или всех, если вопросов меньше). */
+export const QUIZ_PASS = 3;
+export function quizPassMark(total: number): number {
+  return Math.min(QUIZ_PASS, total);
+}
+
+export type QuizQuestion = {
+  id: string;
+  template_item_id: string;
+  sort: number;
+  question: string;
+  options: string[];
+  correct: number;
+  explanation: string;
+};
+
+/** Вопрос для прохождения: без правильного ответа. */
+export type QuizQuestionPublic = Pick<QuizQuestion, "id" | "question" | "options">;
+
+export type QuizAttempt = {
+  id: string;
+  onboarding_id: string;
+  plan_item_id: string;
+  template_item_id: string;
+  /** { [question_id]: выбранный вариант } */
+  answers: Record<string, number>;
+  score: number;
+  total: number;
+  passed: boolean;
+  created_at: string;
+};
+
+export type QuizReview = {
+  score: number;
+  total: number;
+  passed: boolean;
+  items: { question: string; options: string[]; chosen: number | null; correct: number; explanation: string }[];
 };
 
 /** Кандидат, которому можно начать онбординг (договор отправлен и дальше). */

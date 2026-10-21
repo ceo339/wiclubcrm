@@ -15,6 +15,8 @@ import {
   type Task,
   type TemplateItem,
   type TemplateWeek,
+  type QuizAttempt,
+  type QuizQuestion,
 } from "../types";
 
 /** Стадии воронки, с которых можно начинать онбординг: договор отправлен и дальше. */
@@ -66,7 +68,7 @@ export async function loadOnboarding(id: string, profile: Profile): Promise<Onbo
   const { data: onb } = await db.from("onboardings").select("*").eq("id", id).maybeSingle();
   if (!onb) return null;
   const manage = canManageOnboarding(profile.role);
-  const [weeks, items, milestones, meetings, tasks, template, names] = await Promise.all([
+  const [weeks, items, milestones, meetings, tasks, template, names, attempts, questions] = await Promise.all([
     db.from("template_weeks").select("*").order("sort"),
     db.from("plan_items").select("*").eq("onboarding_id", id).order("sort"),
     db.from("milestones").select("*").eq("onboarding_id", id).order("sort"),
@@ -74,6 +76,8 @@ export async function loadOnboarding(id: string, profile: Profile): Promise<Onbo
     db.from("tasks").select("*").eq("onboarding_id", id).order("created_at"),
     manage ? db.from("template_items").select("*").eq("archived", false).order("sort") : Promise.resolve({ data: null }),
     candidateNames([(onb as Onboarding).candidate_id]),
+    db.from("quiz_attempts").select("*").eq("onboarding_id", id).order("created_at", { ascending: false }),
+    manage ? db.from("quiz_questions").select("*").order("sort") : Promise.resolve({ data: null }),
   ]);
   return {
     onb: onb as Onboarding,
@@ -84,6 +88,8 @@ export async function loadOnboarding(id: string, profile: Profile): Promise<Onbo
     meetings: (meetings.data ?? []) as Meeting[],
     tasks: (tasks.data ?? []) as Task[],
     template: (template.data as TemplateItem[] | null) ?? null,
+    quizAttempts: (attempts.data ?? []) as QuizAttempt[],
+    quizQuestions: (questions.data as QuizQuestion[] | null) ?? null,
   };
 }
 

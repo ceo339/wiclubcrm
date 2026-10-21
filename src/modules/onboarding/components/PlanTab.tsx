@@ -5,6 +5,7 @@ import { useLocale } from "@/components/i18n/LocaleProvider";
 import { addItem, moveItem, setItemHidden, setItemStatus, updateItem } from "../actions";
 import { OWNERS, type ItemStatus, type OnbStatus, type PlanItem, type TemplateWeek } from "../types";
 import { Card, Chip, OWNER_KEY, OwnerChip, STATUS_KEY, StatusDot, btnCls, btnPriCls, chipBtnCls, fmtDate, inputCls } from "./ui";
+import QuizModal from "./QuizModal";
 import { useAct } from "./useAct";
 
 export type PlanFilter = "all" | "do" | "open" | "hw" | "quiz";
@@ -30,6 +31,7 @@ export default function PlanTab({
   canMark,
   canManage,
   filter,
+  quizLast,
   setFilter,
 }: {
   onboardingId: string;
@@ -40,6 +42,8 @@ export default function PlanTab({
   canMark: boolean;
   canManage: boolean;
   filter: PlanFilter;
+  /** Последняя попытка квиза по пункту плана. */
+  quizLast?: Record<string, { score: number; total: number; passed: boolean }>;
   setFilter: (f: PlanFilter) => void;
 }) {
   const { t } = useLocale();
@@ -164,6 +168,7 @@ export default function PlanTab({
                     canMark={canMark}
                     canManage={canManage}
                     dragging={dragId === i.id}
+                    quiz={quizLast?.[i.id]}
                     onDragStart={() => setDragId(i.id)}
                     onDragEnd={() => {
                       setDragId(null);
@@ -207,10 +212,12 @@ function ItemRow({
   canMark,
   canManage,
   dragging = false,
+  quiz,
   onDragStart,
   onDragEnd,
 }: {
   item: PlanItem;
+  quiz?: { score: number; total: number; passed: boolean };
   weeks: TemplateWeek[];
   canMark: boolean;
   canManage: boolean;
@@ -221,6 +228,8 @@ function ItemRow({
   const { t } = useLocale();
   const { pending, error, run } = useAct();
   const [edit, setEdit] = useState(false);
+  const [quizOpen, setQuizOpen] = useState(false);
+  const hasQuiz = i.tags.includes("квиз") && !!i.template_item_id;
   const isDo = isDoItem(i);
   const link = i.link_mode === "copy" ? i.file_url : i.file_url ?? i.template_url;
 
@@ -257,6 +266,12 @@ function ItemRow({
             {i.custom && <Chip tone="red">{t("onbCustom")}</Chip>}
             {i.hidden && <Chip tone="line">{t("onbHiddenChip")}</Chip>}
             {i.doc_type && <Chip tone="line">{i.doc_type}</Chip>}
+            {hasQuiz && quiz && <Chip tone={quiz.passed ? "dark" : "red"}>{`${t("onbQuiz")} ${quiz.score}/${quiz.total}`}</Chip>}
+            {hasQuiz && canMark && i.status === "done" && (
+              <button type="button" className="rounded-full border border-accent px-2 py-px text-[11px] font-semibold text-accent-strong hover:bg-accent-soft" onClick={() => setQuizOpen(true)}>
+                {quiz ? t("onbQuizRetry") : t("onbQuizTake")}
+              </button>
+            )}
           </div>
           <div className="mt-1 text-xs text-muted md:hidden">
             {i.action} · {t(OWNER_KEY[i.owner])}
@@ -296,6 +311,7 @@ function ItemRow({
         )}
       </div>
       {edit && canManage && <EditItem item={i} weeks={weeks} onDone={() => setEdit(false)} />}
+      {quizOpen && <QuizModal planItemId={i.id} onClose={() => setQuizOpen(false)} />}
     </div>
   );
 }

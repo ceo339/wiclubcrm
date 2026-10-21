@@ -5,7 +5,7 @@ import { onboardingWriteDb } from "./server/db";
 import { ownsOnboarding, requireOnboardingAccess } from "./server/guard";
 import { createOnboarding } from "./server/start";
 import { createPartnerDriveFolder } from "./server/folder";
-import { ITEM_STATUSES, OWNERS, PARTNER_SUBFOLDERS, driveFileIdFromUrl, type ItemStatus, type Owner, type PlanItem, type TemplateItem } from "./types";
+import { ITEM_STATUSES, OWNERS, PARTNER_SUBFOLDERS, driveFileIdFromUrl, quizPassMark, type ItemStatus, type QuizQuestion, type QuizQuestionPublic, type QuizReview, type Owner, type PlanItem, type TemplateItem } from "./types";
 
 /**
  * Серверные действия модуля «Онбординг». Каждое начинается с проверки роли
@@ -528,4 +528,74 @@ export async function moveItem(itemId: string, weekKey: string): Promise<OnbResu
   if (error) return { error: error.message };
   refresh(onbId);
   return { error: null };
+}
+
+// ------------------------------------------------------------ Квизы по материалам
+
+async function quizContext(planItemId: string) {
+  const g = await requireOnboardingAccess("mark");
+  if ("error" in g) return { error: g.error } as const;
+  const { data: item } = await onboardingWriteDb()
+    .from("plan_items")
+    .select("id, onboarding_id, template_item_id, status, title")
+    .eq("id", planItemId)
+    .maybeSingle();
+  if (!item || !item.template_item_id) return { error: "onbErrSave" } as const;
+  if (!(await ownsOnboarding(g.profile, item.onboarding_id as string))) return { error: "errNotAuthorized" } as const;
+  const { data: qs } = await onboardingWriteDb()
+    .from("quiz_questions")
+    .select("*")
+    .eq("template_item_id", item.template_item_id)
+    .order("sort");
+  return { profile: g.profile, item, questions: (qs ?? []) as QuizQuestion[] } as const;
+}
+
+/** Вопросы квиза для прохождения (без правильных ответов). */
+export async function getQuiz(planItemId: string): Promise<{ error: string | null; title?: string; questions?: QuizQuestionPublic[] }> {
+  const c = await quizContext(planItemId);
+  if ("error" in c) return { error: c.error ?? "onbErrSave" };
+  if (c.item.status !== "done") return { error: "onbQuizLocked" };
+  if (!c.questions.length) return { error: "onbQuizEmpty" };
+  return { error: null, title: c.item.title as string, questions: c.questions.map((q) => ({ id: q.id, question: q.question, options: q.options })) };
+}
+
+/** Проверка ответов на сервере, запись попытки, разбор для партнера. */
+export async function submitQuiz(planItemId: string, answers: Record<string, number>): Promise<{ error: string | null; review?: QuizReview }> {
+  const c = await quizContext(planItemId);
+  if ("error" in c) return { error: c.error ?? "onbErrSave" };
+  if (c.item.status !== "done") return { error: "onbQuizLocked" };
+  const qs = c.questions;
+  if (!qs.length) return { error: "onbQuizEmpty" };
+  const clean: Record<string, number> = {};
+  let score = 0;
+  for (const q of qs) {
+    const a = answers[q.id];
+    if (typeof a === "number" && a >= 0 && a < q.options.length) {
+      clean[q.id] = a;
+      if (a === q.correct) score += 1;
+    }
+  }
+  const total = qs.length;
+  const passed = score >= quizPassMark(total);
+  const { error } = await onboardingWriteDb().from("quiz_attempts").insert({
+    onboarding_id: c.item.onboarding_id,
+    plan_item_id: c.item.id,
+    template_item_id: c.item.template_item_id,
+    answers: clean,
+    score,
+    total,
+    passed,
+    user_id: c.profile.id,
+  });
+  if (error) return { error: error.message };
+  refresh(c.item.onboarding_id as string);
+  return {
+    error: null,
+    review: {
+      score,
+      total,
+      passed,
+      items: qs.map((q) => ({ question: q.question, options: q.options, chosen: clean[q.id] ?? null, correct: q.correct, explanation: q.explanation })),
+    },
+  };
 }
