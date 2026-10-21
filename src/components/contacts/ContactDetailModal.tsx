@@ -8,9 +8,10 @@ import Money from "@/components/currency/Money";
 import MoneyAmountField from "@/components/currency/MoneyAmountField";
 import { localOf } from "@/lib/currency";
 import { useLocale, useT } from "@/components/i18n/LocaleProvider";
-import { addContactComment, addContactCourse, getContactDetail, updateContact, type ContactDetail } from "@/app/contacts/actions";
+import { addContactComment, addContactCourse, getContactDetail, sellContactPackage, updateContact, type ContactDetail } from "@/app/contacts/actions";
+import { getPackageSalesForMember, type PackageSaleDetail } from "@/app/packages/actions";
 import { useRouter } from "next/navigation";
-import { NewEnrollmentForm } from "@/components/members/MemberDetailModal";
+import { NewEnrollmentForm, PackageSalesSection } from "@/components/members/MemberDetailModal";
 import type { Tables } from "@/types/database";
 import { contactPaidTotal, type Contact, type ContactEnrollment } from "./types";
 
@@ -52,6 +53,17 @@ export default function ContactDetailModal({
   useEffect(() => {
     setEnrollments(contact.enrollments);
   }, [contact.enrollments]);
+
+  // «Пакеты курсов» с рассрочкой (раунд 90) — пакеты участницы этого контакта
+  const [packages, setPackages] = useState<PackageSaleDetail[] | null>(null);
+  function loadPackages() {
+    if (contact.member_id) getPackageSalesForMember(contact.member_id).then(setPackages);
+    else setPackages([]);
+  }
+  useEffect(() => {
+    loadPackages();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [contact.member_id]);
 
   function handleEnrollmentSaved(updated: { id: string; status: string; start_date: string | null; price: number }) {
     setEnrollments((prev) => prev.map((e) => (e.id === updated.id ? { ...e, ...updated } : e)));
@@ -154,6 +166,19 @@ export default function ContactDetailModal({
             <ContactEnrollmentsList enrollments={enrollments} canEdit={canEdit} onSaved={handleEnrollmentSaved} />
           )}
         </div>
+
+        <PackageSalesSection
+          memberId={contact.member_id ?? ""}
+          packages={packages}
+          products={products}
+          cohorts={cohorts}
+          canEdit={canEdit}
+          createPackage={(fd) => sellContactPackage(contact.id, fd)}
+          onChanged={() => {
+            loadPackages();
+            router.refresh();
+          }}
+        />
 
         <CommentsSection contactId={contact.id} detail={detail} canEdit={canEdit} onChanged={refresh} />
       </div>

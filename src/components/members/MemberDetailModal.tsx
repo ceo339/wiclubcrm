@@ -1068,13 +1068,14 @@ export function NewEnrollmentForm({
  * course enrollment by then too, same as a normal EnrollmentCard above (see
  * assignPackageItem in app/packages/actions.ts).
  */
-function PackageSalesSection({
+export function PackageSalesSection({
   memberId,
   packages,
   products,
   cohorts,
   canEdit,
   onChanged,
+  createPackage,
 }: {
   memberId: string;
   packages: PackageSaleDetail[] | null;
@@ -1082,6 +1083,8 @@ function PackageSalesSection({
   cohorts: Tables<"product_cohorts">[];
   canEdit: boolean;
   onChanged: () => void;
+  /** Другой обработчик продажи пакета — из карточки контакта (раунд 90). */
+  createPackage?: (formData: FormData) => Promise<{ error: string | null }>;
 }) {
   const t = useT();
   const [selling, setSelling] = useState(false);
@@ -1124,6 +1127,7 @@ function PackageSalesSection({
         <NewPackageSaleForm
           memberId={memberId}
           products={products}
+          submitCreate={createPackage}
           onCancel={() => setSelling(false)}
           onSaved={() => {
             setSelling(false);
@@ -1507,9 +1511,11 @@ function NewPackageSaleForm({
   pkg,
   onCancel,
   onSaved,
+  submitCreate,
 }: {
   memberId: string;
   products: Tables<"products">[];
+  submitCreate?: (formData: FormData) => Promise<{ error: string | null }>;
   /** Round 68: when given, the form edits this package instead of selling a new one. */
   pkg?: PackageSaleDetail;
   onCancel: () => void;
@@ -1561,7 +1567,11 @@ function NewPackageSaleForm({
   function handleSubmit(formData: FormData) {
     setError(null);
     startTransition(async () => {
-      const res = pkg ? await updatePackageSale(pkg.id, formData) : await createPackageSale(memberId, formData);
+      const res = pkg
+        ? await updatePackageSale(pkg.id, formData)
+        : submitCreate
+          ? await submitCreate(formData)
+          : await createPackageSale(memberId, formData);
       if (res.error) setError(res.error);
       else onSaved();
     });

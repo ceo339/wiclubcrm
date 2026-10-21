@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getCurrentProfile } from "@/lib/auth";
 import { findOrCreateContact } from "@/lib/server/contacts";
 import { addEnrollment } from "@/app/members/actions";
+import { createPackageSale } from "@/app/packages/actions";
 import { currentMonthYear } from "@/lib/members";
 import type { Tables } from "@/types/database";
 
@@ -246,7 +247,8 @@ export async function addContactComment(contactId: string, text: string): Promis
  * создаём участницу из полей контакта и связываем её с ним, потом добавляем курс
  * тем же addEnrollment, что и в «Участницах» (оплата, поток, валюта — без отличий).
  */
-export async function addContactCourse(contactId: string, formData: FormData): Promise<ActionResult> {
+/** Участница контакта: существующая карточка или новая из полей контакта (раунды 88/90). */
+async function ensureContactMember(contactId: string): Promise<{ memberId: string } | { error: string }> {
   const profile = await getCurrentProfile();
   if (!profile) return { error: "errNotAuthorized" };
   if (!profile.partner_id) return { error: "errHqNoClubGeneric" };
@@ -260,7 +262,6 @@ export async function addContactCourse(contactId: string, formData: FormData): P
     .maybeSingle();
   if (!contact) return { error: "errGeneric" };
 
-  let memberId: string | null = null;
   const { data: existing } = await supabase
     .from("members")
     .select("id")
@@ -268,28 +269,45 @@ export async function addContactCourse(contactId: string, formData: FormData): P
     .eq("partner_id", profile.partner_id)
     .order("created_at")
     .limit(1);
-  memberId = existing?.[0]?.id ?? null;
+  if (existing?.[0]?.id) return { memberId: existing[0].id };
 
-  if (!memberId) {
-    const { data: member, error } = await supabase
-      .from("members")
-      .insert({
-        partner_id: profile.partner_id,
-        contact_id: contact.id,
-        name: contact.name,
-        phone: contact.phone,
-        email: contact.email,
-        city: contact.city,
-        birthday: contact.birthday,
-        member_since: currentMonthYear(),
-      })
-      .select("id")
-      .single();
-    if (error || !member) return { error: error?.message ?? "errGeneric" };
-    memberId = member.id;
-  }
+  const { data: member, error } = await supabase
+    .from("members")
+    .insert({
+      partner_id: profile.partner_id,
+      contact_id: contact.id,
+      name: contact.name,
+      phone: contact.phone,
+      email: contact.email,
+      city: contact.city,
+      birthday: contact.birthday,
+      member_since: currentMonthYear(),
+    })
+    .select("id")
+    .single();
+  if (error || !member) return { error: error?.message ?? "errGeneric" };
+  return { memberId: member.id };
+}
 
-  const res = await addEnrollment(memberId, formData);
+/**
+ * «+ Курс» прямо из карточки контакта (раунд 88). Курс в CRM живёт на участнице
+ * (member_enrollments): если у контакта ещё нет карточки участницы — она
+ * создаётся из полей контакта и связывается с ним; дальше тот же addEnrollment,
+ * что в «Участницах».
+ */
+export async function addContactCourse(contactId: string, formData: FormData): Promise<ActionResult> {
+  const m = await ensureContactMember(contactId);
+  if ("error" in m) return m;
+  const res = await addEnrollment(m.memberId, formData);
+  revalidatePath("/contacts");
+  return res;
+}
+
+/** «Пакеты курсов» в карточке контакта (раунд 90) — та же продажа пакета с рассрочкой, что в «Участницах». */
+export async function sellContactPackage(contactId: string, formData: FormData): Promise<ActionResult> {
+  const m = await ensureContactMember(contactId);
+  if ("error" in m) return m;
+  const res = await createPackageSale(m.memberId, formData);
   revalidatePath("/contacts");
   return res;
 }
