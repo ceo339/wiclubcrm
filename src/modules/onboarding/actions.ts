@@ -392,6 +392,57 @@ export async function updateTemplateItem(itemId: string, fd: FormData): Promise<
   return { error: null };
 }
 
+/** Новый пункт шаблона УК; по галочке сразу добавляется в планы идущих онбордингов. */
+export async function addTemplateItem(fd: FormData): Promise<OnbResult> {
+  const g = await requireOnboardingAccess("manage");
+  if ("error" in g) return { error: g.error };
+  const title = str(fd, "title");
+  const weekKey = str(fd, "week_key");
+  if (!title) return { error: "onbErrTitle" };
+  if (!weekKey) return { error: "onbErrSave" };
+  const url = opt(fd, "template_url");
+  if (!isUrl(url)) return { error: "onbErrUrl" };
+  const mode = str(fd, "link_mode");
+  const linkMode = mode === "copy" || mode === "none" ? mode : "template";
+  const db = onboardingWriteDb();
+  const { data: last } = await db
+    .from("template_items")
+    .select("sort")
+    .eq("week_key", weekKey)
+    .order("sort", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  const sort = ((last?.sort as number | undefined) ?? 0) + 1;
+  const row = {
+    week_key: weekKey,
+    block: str(fd, "block"),
+    title,
+    action: str(fd, "action"),
+    owner: asOwner(str(fd, "owner")),
+    tags: fd.get("hw") === "on" ? ["ДЗ"] : [],
+    link_mode: linkMode,
+    template_url: url,
+    sort,
+  };
+  const { data: created, error } = await db
+    .from("template_items")
+    .insert({
+      ...row,
+      drive_file_id: driveFileIdFromUrl(url),
+      drive_folder: PARTNER_SUBFOLDERS.includes(str(fd, "drive_folder")) ? str(fd, "drive_folder") : null,
+    })
+    .select("id")
+    .single();
+  if (error) return { error: error.message };
+  if (fd.get("sync") === "on") {
+    const { data: active } = await db.from("onboardings").select("id").eq("status", "onboarding");
+    const rows = (active ?? []).map((o) => ({ ...row, onboarding_id: o.id as string, template_item_id: created.id as string }));
+    if (rows.length) await db.from("plan_items").insert(rows);
+  }
+  revalidatePath("/onboarding", "layout");
+  return { error: null };
+}
+
 /**
  * Правка шаблона в планы идущих онбордингов: только в несделанных пунктах
  * и только те поля, которые у партнера совпадают со старым шаблоном

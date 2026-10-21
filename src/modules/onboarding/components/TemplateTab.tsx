@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useLocale } from "@/components/i18n/LocaleProvider";
-import { pushTemplateLinks, updateTemplateItem } from "../actions";
+import { addTemplateItem, pushTemplateLinks, updateTemplateItem } from "../actions";
 import { OWNERS, PARTNER_SUBFOLDERS, type TemplateItem, type TemplateWeek } from "../types";
 import { weekLabel } from "./PlanTab";
 import { Card, Chip, OWNER_KEY, btnCls, btnPriCls, inputCls } from "./ui";
@@ -36,6 +36,7 @@ export default function TemplateTab({ weeks, template }: { weeks: TemplateWeek[]
                 <span className="text-sm text-muted">{t("onbNItems", { n: list.length })}</span>
               </button>
               {isOpen && list.map((i) => <TplRow key={i.id} item={i} weeks={weeks} />)}
+              {isOpen && <AddTplItem weekKey={w.key} />}
             </div>
           );
         })}
@@ -151,5 +152,70 @@ function TplRow({ item: i, weeks }: { item: TemplateItem; weeks: TemplateWeek[] 
         </form>
       )}
     </div>
+  );
+}
+
+function AddTplItem({ weekKey }: { weekKey: string }) {
+  const { t } = useLocale();
+  const { pending, error, run } = useAct();
+  const [open, setOpen] = useState(false);
+  if (!open)
+    return (
+      <div className="border-t border-dashed border-border px-4 py-2.5">
+        <button type="button" className="text-sm font-semibold text-muted hover:text-accent-strong" onClick={() => setOpen(true)}>
+          ＋ {t("onbAddItem")}
+        </button>
+      </div>
+    );
+  return (
+    <form className="grid gap-2.5 border-t border-dashed border-border bg-surface-2/50 px-4 py-3 sm:grid-cols-2" action={(fd) => run(() => addTemplateItem(fd), () => setOpen(false))}>
+      <input type="hidden" name="week_key" value={weekKey} />
+      <input name="title" placeholder={t("onbFieldTitle")} className={`${inputCls} sm:col-span-2`} />
+      <input name="action" placeholder={t("onbFieldAction")} className={inputCls} />
+      <input name="block" placeholder={t("onbFieldBlock")} className={inputCls} />
+      <select name="owner" defaultValue="curator" className={inputCls}>
+        {OWNERS.map((o) => (
+          <option key={o} value={o}>
+            {t(OWNER_KEY[o])}
+          </option>
+        ))}
+      </select>
+      <select name="link_mode" defaultValue="template" className={inputCls}>
+        {(["template", "copy", "none"] as const).map((m) => (
+          <option key={m} value={m}>
+            {t(`onbLink_${m}`)}
+          </option>
+        ))}
+      </select>
+      <input name="template_url" placeholder={t("onbFieldTemplateUrl")} className={`${inputCls} sm:col-span-2`} />
+      <label className="block sm:col-span-2">
+        <span className="mb-1 block text-xs text-muted">{t("onbFieldDriveFolder")}</span>
+        <select name="drive_folder" defaultValue="" className={inputCls}>
+          <option value="">{t("onbDriveFolderRoot")}</option>
+          {PARTNER_SUBFOLDERS.map((f) => (
+            <option key={f} value={f}>
+              {f}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label className="flex items-center gap-2 text-sm sm:col-span-2">
+        <input type="checkbox" name="hw" className="h-4 w-4" />
+        <span>{t("onbHwLabel")}</span>
+      </label>
+      <label className="flex items-start gap-2 rounded-lg bg-surface-2 px-3 py-2 text-sm sm:col-span-2">
+        <input type="checkbox" name="sync" defaultChecked className="mt-0.5 h-4 w-4" />
+        <span>{t("onbTplAddSync")}</span>
+      </label>
+      {error && <p className="text-sm text-accent-strong sm:col-span-2">{t(error)}</p>}
+      <div className="flex gap-2 sm:col-span-2">
+        <button type="submit" className={btnPriCls} disabled={pending}>
+          {t("onbAdd")}
+        </button>
+        <button type="button" className={btnCls} onClick={() => setOpen(false)}>
+          {t("cancel")}
+        </button>
+      </div>
+    </form>
   );
 }
