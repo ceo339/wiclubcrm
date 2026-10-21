@@ -8,7 +8,10 @@ import Money from "@/components/currency/Money";
 import MoneyAmountField from "@/components/currency/MoneyAmountField";
 import { localOf } from "@/lib/currency";
 import { useLocale, useT } from "@/components/i18n/LocaleProvider";
-import { addContactComment, getContactDetail, updateContact, type ContactDetail } from "@/app/contacts/actions";
+import { addContactComment, addContactCourse, getContactDetail, updateContact, type ContactDetail } from "@/app/contacts/actions";
+import { useRouter } from "next/navigation";
+import { NewEnrollmentForm } from "@/components/members/MemberDetailModal";
+import type { Tables } from "@/types/database";
 import { contactPaidTotal, type Contact, type ContactEnrollment } from "./types";
 
 /**
@@ -23,10 +26,14 @@ export default function ContactDetailModal({
   contact,
   canEdit,
   onClose,
+  products = [],
+  cohorts = [],
 }: {
   contact: Contact;
   canEdit: boolean;
   onClose: () => void;
+  products?: Tables<"products">[];
+  cohorts?: Tables<"product_cohorts">[];
 }) {
   const t = useT();
   const [detail, setDetail] = useState<ContactDetail | null>(null);
@@ -39,6 +46,12 @@ export default function ContactDetailModal({
   // state patched from the save response fixes that without a round trip,
   // matching what MemberDetailModal already does for its own enrollments.
   const [enrollments, setEnrollments] = useState(contact.enrollments);
+  // «+ Курс» (раунд 88): после добавления страница перечитывает контакты — подхватываем новый список
+  const [addingCourse, setAddingCourse] = useState(false);
+  const router = useRouter();
+  useEffect(() => {
+    setEnrollments(contact.enrollments);
+  }, [contact.enrollments]);
 
   function handleEnrollmentSaved(updated: { id: string; status: string; start_date: string | null; price: number }) {
     setEnrollments((prev) => prev.map((e) => (e.id === updated.id ? { ...e, ...updated } : e)));
@@ -105,13 +118,37 @@ export default function ContactDetailModal({
                 (Anastasiia, 16 сен 2026) — каждый курс уже показывает свою
                 цену ниже; здесь только сумма по-настоящему оплаченных
                 курсов (sPaid/sCompleted), см. contactPaidTotal. */}
-            {enrollments.length > 0 && (
-              <span className="text-xs text-muted">
-                {t("contactPaidTotalLabel")}: <Money amountEur={contactPaidTotal(enrollments)} />
-              </span>
-            )}
+            <span className="flex items-center gap-3">
+              {enrollments.length > 0 && (
+                <span className="text-xs text-muted">
+                  {t("contactPaidTotalLabel")}: <Money amountEur={contactPaidTotal(enrollments)} />
+                </span>
+              )}
+              {canEdit && !addingCourse && (
+                <button
+                  type="button"
+                  onClick={() => setAddingCourse(true)}
+                  className="text-xs font-medium text-ink-2 hover:underline"
+                >
+                  {t("btnAddCourseShort")}
+                </button>
+              )}
+            </span>
           </div>
-          {enrollments.length === 0 ? (
+          {addingCourse && (
+            <NewEnrollmentForm
+              memberId={contact.member_id ?? ""}
+              products={products}
+              cohorts={cohorts}
+              submit={(fd) => addContactCourse(contact.id, fd)}
+              onCancel={() => setAddingCourse(false)}
+              onSaved={() => {
+                setAddingCourse(false);
+                router.refresh();
+              }}
+            />
+          )}
+          {enrollments.length === 0 && !addingCourse ? (
             <p className="mt-2 text-xs text-muted">{t("emptyNoCoursesForMember")}</p>
           ) : (
             <ContactEnrollmentsList enrollments={enrollments} canEdit={canEdit} onSaved={handleEnrollmentSaved} />

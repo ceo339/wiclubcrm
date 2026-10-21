@@ -937,18 +937,21 @@ function EditEnrollmentForm({
   );
 }
 
-function NewEnrollmentForm({
+export function NewEnrollmentForm({
   memberId,
   products,
   cohorts,
   onCancel,
   onSaved,
+  submit,
 }: {
   memberId: string;
   products: Tables<"products">[];
   cohorts: Tables<"product_cohorts">[];
   onCancel: () => void;
   onSaved: () => void;
+  /** Другой обработчик сохранения — «+ Курс» из карточки контакта (раунд 88). */
+  submit?: (formData: FormData) => Promise<{ error: string | null }>;
 }) {
   const t = useT();
   const { currency, rates } = useCurrency();
@@ -977,7 +980,7 @@ function NewEnrollmentForm({
   function handleSubmit(formData: FormData) {
     setError(null);
     startTransition(async () => {
-      const res = await addEnrollment(memberId, formData);
+      const res = submit ? await submit(formData) : await addEnrollment(memberId, formData);
       if (res.error) setError(res.error);
       else onSaved();
     });

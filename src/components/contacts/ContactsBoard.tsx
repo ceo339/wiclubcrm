@@ -13,6 +13,7 @@ import MultiSelectFilter, { type MultiSelectOption } from "@/components/leads/Mu
 import { contactPaidTotal, type Contact } from "./types";
 import ContactDetailModal from "./ContactDetailModal";
 import ImportContactsModal from "./ImportContactsModal";
+import type { Tables } from "@/types/database";
 import type { FranchiseCandidate } from "@/components/franchise/types";
 import CandidateDetailModal from "@/components/franchise/CandidateDetailModal";
 
@@ -24,8 +25,13 @@ export default function ContactsBoard({
   canViewFranchise,
   canEditFranchise,
   canBillFranchise = false,
+  products = [],
+  cohorts = [],
 }: {
   initialContacts: Contact[];
+  /** Для «+ Курс» в карточке контакта. */
+  products?: Tables<"products">[];
+  cohorts?: Tables<"product_cohorts">[];
   isHq: boolean;
   canEdit: boolean;
   /** "В контактах так же сделать выбор франчайзи, чтоб видеть только
@@ -380,7 +386,7 @@ export default function ContactsBoard({
       )}
 
       {selected && (
-        <ContactDetailModal contact={selected} canEdit={canEdit} onClose={() => setSelectedId(null)} />
+        <ContactDetailModal contact={selected} canEdit={canEdit} products={products} cohorts={cohorts} onClose={() => setSelectedId(null)} />
       )}
 
       {showImport && <ImportContactsModal onClose={() => setShowImport(false)} />}

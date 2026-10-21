@@ -62,6 +62,13 @@ export default async function ContactsPage() {
   const { scope, fallback } = scopeForProfile(profile);
   const localeScope = localeScopeForProfile(profile);
   const canEdit = !!profile.partner_id;
+  // «+ Курс» в карточке контакта (раунд 88): те же списки курсов и потоков, что в «Участницах».
+  const [{ data: products }, { data: cohorts }] = canEdit
+    ? await Promise.all([
+        supabase.from("products").select("*").order("name"),
+        supabase.from("product_cohorts").select("*").order("start_date"),
+      ])
+    : [{ data: [] }, { data: [] }];
 
   return (
     <AppShell
@@ -140,6 +147,8 @@ export default async function ContactsPage() {
           })}
           isHq={networkView && !scopePartnerId}
           canEdit={canEdit}
+          products={products ?? []}
+          cohorts={cohorts ?? []}
           franchiseCandidates={franchiseCandidates ?? []}
           canViewFranchise={canViewFranchise}
           canEditFranchise={canEditFranchise}

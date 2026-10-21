@@ -4,6 +4,8 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentProfile } from "@/lib/auth";
 import { findOrCreateContact } from "@/lib/server/contacts";
+import { addEnrollment } from "@/app/members/actions";
+import { currentMonthYear } from "@/lib/members";
 import type { Tables } from "@/types/database";
 
 export type ActionResult = { error: string | null };
@@ -235,4 +237,59 @@ export async function addContactComment(contactId: string, text: string): Promis
 
   revalidatePath("/contacts");
   return { error: null };
+}
+
+/**
+ * «+ Курс» прямо из карточки контакта (раунд 88). Курс в CRM живёт на участнице
+ * (member_enrollments), поэтому: если у контакта уже есть карточка участницы —
+ * добавляем курс ей; если нет (контакт только из заявок или импорта) — сначала
+ * создаём участницу из полей контакта и связываем её с ним, потом добавляем курс
+ * тем же addEnrollment, что и в «Участницах» (оплата, поток, валюта — без отличий).
+ */
+export async function addContactCourse(contactId: string, formData: FormData): Promise<ActionResult> {
+  const profile = await getCurrentProfile();
+  if (!profile) return { error: "errNotAuthorized" };
+  if (!profile.partner_id) return { error: "errHqNoClubGeneric" };
+
+  const supabase = await createClient();
+  const { data: contact } = await supabase
+    .from("contacts")
+    .select("id, name, phone, email, city, birthday")
+    .eq("id", contactId)
+    .eq("partner_id", profile.partner_id)
+    .maybeSingle();
+  if (!contact) return { error: "errGeneric" };
+
+  let memberId: string | null = null;
+  const { data: existing } = await supabase
+    .from("members")
+    .select("id")
+    .eq("contact_id", contact.id)
+    .eq("partner_id", profile.partner_id)
+    .order("created_at")
+    .limit(1);
+  memberId = existing?.[0]?.id ?? null;
+
+  if (!memberId) {
+    const { data: member, error } = await supabase
+      .from("members")
+      .insert({
+        partner_id: profile.partner_id,
+        contact_id: contact.id,
+        name: contact.name,
+        phone: contact.phone,
+        email: contact.email,
+        city: contact.city,
+        birthday: contact.birthday,
+        member_since: currentMonthYear(),
+      })
+      .select("id")
+      .single();
+    if (error || !member) return { error: error?.message ?? "errGeneric" };
+    memberId = member.id;
+  }
+
+  const res = await addEnrollment(memberId, formData);
+  revalidatePath("/contacts");
+  return res;
 }
