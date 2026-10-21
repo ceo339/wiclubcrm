@@ -122,6 +122,10 @@ function TplRow({ item: i, weeks }: { item: TemplateItem; weeks: TemplateWeek[] 
             <input type="checkbox" name="hw" defaultChecked={i.tags.includes("ДЗ")} className="h-4 w-4" />
             <span>{t("onbHwLabel")}</span>
           </label>
+          <label className="flex items-start gap-2 rounded-lg bg-surface-2 px-3 py-2 text-sm sm:col-span-2">
+            <input type="checkbox" name="sync" defaultChecked className="mt-0.5 h-4 w-4" />
+            <span>{t("onbTplSync")}</span>
+          </label>
           <input name="template_url" defaultValue={i.template_url ?? ""} placeholder={t("onbFieldTemplateUrl")} className={`${inputCls} sm:col-span-2`} />
           <label className="block sm:col-span-2">
             <span className="mb-1 block text-xs text-muted">{t("onbFieldDriveFolder")}</span>

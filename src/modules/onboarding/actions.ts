@@ -5,7 +5,7 @@ import { onboardingWriteDb } from "./server/db";
 import { ownsOnboarding, requireOnboardingAccess } from "./server/guard";
 import { createOnboarding } from "./server/start";
 import { createPartnerDriveFolder } from "./server/folder";
-import { ITEM_STATUSES, OWNERS, PARTNER_SUBFOLDERS, driveFileIdFromUrl, type ItemStatus, type Owner, type TemplateItem } from "./types";
+import { ITEM_STATUSES, OWNERS, PARTNER_SUBFOLDERS, driveFileIdFromUrl, type ItemStatus, type Owner, type PlanItem, type TemplateItem } from "./types";
 
 /**
  * Серверные действия модуля «Онбординг». Каждое начинается с проверки роли
@@ -364,25 +364,65 @@ export async function updateTemplateItem(itemId: string, fd: FormData): Promise<
   const url = opt(fd, "template_url");
   if (!isUrl(url)) return { error: "onbErrUrl" };
   const mode = str(fd, "link_mode");
-  const { data: cur } = await onboardingWriteDb().from("template_items").select("tags").eq("id", itemId).maybeSingle();
-  const { error } = await onboardingWriteDb()
+  const db = onboardingWriteDb();
+  const { data: cur } = await db.from("template_items").select("*").eq("id", itemId).maybeSingle();
+  if (!cur) return { error: "onbErrSave" };
+  const old = cur as TemplateItem;
+  const next = {
+    title,
+    action: str(fd, "action"),
+    block: str(fd, "block"),
+    owner: asOwner(str(fd, "owner")),
+    week_key: str(fd, "week_key") || old.week_key,
+    template_url: url,
+    tags: withHw(old.tags ?? [], fd.get("hw") === "on"),
+  };
+  const { error } = await db
     .from("template_items")
     .update({
-      tags: withHw((cur?.tags as string[] | null) ?? [], fd.get("hw") === "on"),
-      week_key: str(fd, "week_key") || undefined,
-      title,
-      action: str(fd, "action"),
-      block: str(fd, "block"),
-      owner: asOwner(str(fd, "owner")),
-      template_url: url,
+      ...next,
       link_mode: mode === "copy" || mode === "none" ? mode : "template",
       drive_file_id: driveFileIdFromUrl(url),
       drive_folder: PARTNER_SUBFOLDERS.includes(str(fd, "drive_folder")) ? str(fd, "drive_folder") : null,
     })
     .eq("id", itemId);
   if (error) return { error: error.message };
-  refresh();
+  if (fd.get("sync") === "on") await syncTemplateToPlans(itemId, old, next);
+  revalidatePath("/onboarding", "layout");
   return { error: null };
+}
+
+/**
+ * Правка шаблона в планы идущих онбордингов: только в несделанных пунктах
+ * и только те поля, которые у партнера совпадают со старым шаблоном
+ * (то, что куратор поменяла у конкретного партнера, не перетираем).
+ */
+async function syncTemplateToPlans(
+  templateItemId: string,
+  old: TemplateItem,
+  next: Pick<TemplateItem, "title" | "action" | "block" | "owner" | "week_key" | "template_url" | "tags">
+) {
+  const db = onboardingWriteDb();
+  const { data: active } = await db.from("onboardings").select("id").eq("status", "onboarding");
+  const ids = (active ?? []).map((o) => o.id as string);
+  if (!ids.length) return;
+  const { data: rows } = await db
+    .from("plan_items")
+    .select("id, title, action, block, owner, week_key, template_url, tags, status")
+    .eq("template_item_id", templateItemId)
+    .in("onboarding_id", ids)
+    .neq("status", "done");
+  const oldHw = (old.tags ?? []).includes("ДЗ");
+  const newHw = next.tags.includes("ДЗ");
+  for (const r of (rows ?? []) as Pick<PlanItem, "id" | "title" | "action" | "block" | "owner" | "week_key" | "template_url" | "tags">[]) {
+    const patch: Record<string, unknown> = {};
+    for (const f of ["title", "action", "block", "owner", "week_key"] as const) {
+      if (r[f] === old[f] && old[f] !== next[f]) patch[f] = next[f];
+    }
+    if ((r.template_url ?? null) === (old.template_url ?? null) && old.template_url !== next.template_url) patch.template_url = next.template_url;
+    if (oldHw !== newHw && (r.tags ?? []).includes("ДЗ") === oldHw) patch.tags = withHw(r.tags ?? [], newHw);
+    if (Object.keys(patch).length) await db.from("plan_items").update({ ...patch, updated_at: new Date().toISOString() }).eq("id", r.id);
+  }
 }
 
 /**
