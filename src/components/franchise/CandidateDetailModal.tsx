@@ -1,12 +1,10 @@
 "use client";
 
-import { useRouter } from "next/navigation";
 import { useEffect, useState, useTransition } from "react";
 import {
   addCandidateComment,
   addCandidateTask,
   getCandidateDetail,
-  mergeCandidates,
   setCandidateInterviewDate,
   setCandidateName,
   setCandidateTaskDone,
@@ -54,22 +52,6 @@ export default function CandidateDetailModal({
 }) {
   const { locale, t } = useLocale();
   const [detail, setDetail] = useState<FranchiseCandidateDetail | null>(null);
-  // Round 95: объединение дубля в эту карточку
-  const router = useRouter();
-  const [merging, setMerging] = useState(false);
-  const [mergeError, setMergeError] = useState<string | null>(null);
-  async function handleMerge(dupId: string, dupName: string) {
-    if (!confirm(t("fMergeConfirm", { name: dupName }))) return;
-    setMerging(true);
-    setMergeError(null);
-    const res = await mergeCandidates(candidate.id, dupId);
-    setMerging(false);
-    if (res.error) setMergeError(res.error);
-    else {
-      getCandidateDetail(candidate.id).then(setDetail);
-      router.refresh();
-    }
-  }
   const [application, setApplication] = useState<ApplicationFields>(() => applicationFieldsFromCandidate(candidate));
   const [editingApplication, setEditingApplication] = useState(false);
   const [stage, setStage] = useState<FranchiseCandidate["stage"]>(candidate.stage);
@@ -199,33 +181,20 @@ export default function CandidateDetailModal({
               <h3 className="text-xs font-semibold uppercase tracking-wide text-muted">{t("fHeadingOtherApplications")}</h3>
               <div className="mt-2 flex flex-col gap-2">
                 {detail.related.map((r) => (
-                  <div key={r.id} className="flex items-stretch gap-2">
-                    <Link
-                      href={`/franchise?open=${r.id}`}
-                      className="min-w-0 flex-1 rounded-lg border border-border bg-background px-3 py-2 text-sm hover:border-accent"
-                    >
-                      <div className="font-medium text-foreground">
-                        {r.name} · {new Date(r.submitted_at).toLocaleDateString(locale === "bg" ? "bg-BG" : "ru-RU")}
-                      </div>
-                      <div className="text-xs text-muted">
-                        {franchiseStageLabel(r.stage, locale)}
-                        {r.reject_reason ? ` — ${r.reject_reason}` : ""}
-                      </div>
-                    </Link>
-                    {canEdit && (
-                      <button
-                        type="button"
-                        disabled={merging}
-                        onClick={() => handleMerge(r.id, r.name)}
-                        className="shrink-0 rounded-lg border border-border px-3 text-xs font-medium text-ink-2 hover:bg-surface-2 disabled:opacity-50"
-                        title={t("fMergeHint")}
-                      >
-                        {t("fMergeBtn")}
-                      </button>
-                    )}
-                  </div>
+                  <Link
+                    key={r.id}
+                    href={`/franchise?open=${r.id}`}
+                    className="rounded-lg border border-border bg-background px-3 py-2 text-sm hover:border-accent"
+                  >
+                    <div className="font-medium text-foreground">
+                      {r.name} · {new Date(r.submitted_at).toLocaleDateString(locale === "bg" ? "bg-BG" : "ru-RU")}
+                    </div>
+                    <div className="text-xs text-muted">
+                      {franchiseStageLabel(r.stage, locale)}
+                      {r.reject_reason ? ` — ${r.reject_reason}` : ""}
+                    </div>
+                  </Link>
                 ))}
-                {mergeError && <p className="text-xs text-accent-strong">{t(mergeError)}</p>}
               </div>
             </div>
           )}

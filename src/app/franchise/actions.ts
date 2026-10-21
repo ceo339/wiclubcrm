@@ -2,8 +2,6 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
-import { createAdminClient } from "@/lib/supabase/admin";
-import { onboardingWriteDb } from "@/modules/onboarding/server/db";
 import { getCurrentProfile } from "@/lib/auth";
 import { findRelatedCandidates, isFranchiseStage, type FranchiseStageId, type RelatedCandidate } from "@/lib/franchise";
 import type { Tables, TablesUpdate } from "@/types/database";
@@ -357,78 +355,5 @@ export async function addCandidateComment(candidateId: string, text: string): Pr
   if (error) return { error: error.message };
 
   revalidatePath("/franchise");
-  return { error: null };
-}
-
-/**
- * Round 95 — «почему ты их не объединила?»: склеить дубль кандидатки в эту
- * карточку. Пустые поля анкеты заполняются из дубля, этап — более поздний из
- * двух (кроме отказа/паузы), история этапов, комментарии, задачи, счета и
- * онбординг переносятся, дубль удаляется. Только с правом редактирования франшизы.
- */
-export async function mergeCandidates(keepId: string, dupId: string): Promise<ActionResult> {
-  const profile = await getCurrentProfile();
-  if (!profile) return { error: "errNotAuthorized" };
-  const { canEdit } = franchiseAccess(profile);
-  if (!canEdit) return { error: "errNotAuthorized" };
-  if (!keepId || !dupId || keepId === dupId) return { error: "errGeneric" };
-
-  const admin = createAdminClient();
-  const [{ data: keep }, { data: dup }] = await Promise.all([
-    admin.from("franchise_candidates").select("*").eq("id", keepId).maybeSingle(),
-    admin.from("franchise_candidates").select("*").eq("id", dupId).maybeSingle(),
-  ]);
-  if (!keep || !dup) return { error: "errGeneric" };
-
-  // онбординг: переносим, только если у основной карточки его ещё нет
-  const onb = onboardingWriteDb();
-  const [{ data: dupOnb }, { data: keepOnb }] = await Promise.all([
-    onb.from("onboardings").select("id").eq("candidate_id", dupId),
-    onb.from("onboardings").select("id").eq("candidate_id", keepId),
-  ]);
-  if ((dupOnb ?? []).length > 0 && (keepOnb ?? []).length > 0) return { error: "fErrMergeBothOnboarding" };
-
-  const skip = new Set(["id", "created_at", "updated_at", "submitted_at", "name", "stage", "reject_reason"]);
-  const patch: Record<string, unknown> = {};
-  for (const [k, v] of Object.entries(dup)) {
-    if (skip.has(k) || v === null || v === "") continue;
-    const cur = (keep as Record<string, unknown>)[k];
-    if (cur === null || cur === undefined || cur === "") patch[k] = v;
-  }
-  const dupLater = !isTerminalStage(dup.stage) && stageIndex(dup.stage) > stageIndex(keep.stage);
-  if (dupLater) patch.stage = dup.stage;
-  patch.updated_at = new Date().toISOString();
-
-  const { error: upErr } = await admin.from("franchise_candidates").update(patch as TablesUpdate<"franchise_candidates">).eq("id", keepId);
-  if (upErr) return { error: upErr.message };
-
-  const moves = await Promise.all([
-    admin.from("franchise_candidate_comments").update({ candidate_id: keepId }).eq("candidate_id", dupId),
-    admin.from("franchise_stage_history").update({ candidate_id: keepId }).eq("candidate_id", dupId),
-    admin.from("franchise_payments").update({ candidate_id: keepId }).eq("candidate_id", dupId),
-    admin.from("integration_events").update({ candidate_id: keepId }).eq("candidate_id", dupId),
-    admin.from("tasks").update({ entity_id: keepId }).eq("entity_type", "franchise_candidate").eq("entity_id", dupId),
-  ]);
-  const moveErr = moves.find((m) => m.error)?.error;
-  if (moveErr) return { error: moveErr.message };
-  if ((dupOnb ?? []).length > 0) {
-    const { error } = await onb.from("onboardings").update({ candidate_id: keepId }).eq("candidate_id", dupId);
-    if (error) return { error: error.message };
-  }
-
-  const who = profile.full_name || "—";
-  await admin.from("franchise_candidate_comments").insert({
-    candidate_id: keepId,
-    author_id: null,
-    author_name: "CRM",
-    body: `Объединено с дублем «${dup.name}»${dup.email ? ` (${dup.email})` : ""}, источник: ${dup.source ?? "—"}. Объединила: ${who}.`,
-  });
-
-  const { error: delErr } = await admin.from("franchise_candidates").delete().eq("id", dupId);
-  if (delErr) return { error: delErr.message };
-
-  revalidatePath("/franchise");
-  revalidatePath("/franchise/payments");
-  revalidatePath("/contacts");
   return { error: null };
 }
