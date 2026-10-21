@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useLocale } from "@/components/i18n/LocaleProvider";
-import { saveMilestone, saveOnboarding, setItemStatus, setOnboardingStatus } from "../actions";
+import { createDriveFolder, saveMilestone, saveOnboarding, setItemStatus, setOnboardingStatus } from "../actions";
 import { OWNERS, progress, type OnboardingFull } from "../types";
 import MeetingsTab from "./MeetingsTab";
 import PlanTab, { isDoItem, type PlanFilter } from "./PlanTab";
@@ -19,12 +19,14 @@ export default function OnboardingPartner({
   canManage,
   isPartner,
   clubs,
+  driveReady = false,
 }: {
   data: OnboardingFull;
   canMark: boolean;
   canManage: boolean;
   isPartner: boolean;
   clubs: { id: string; name: string }[];
+  driveReady?: boolean;
 }) {
   const { t } = useLocale();
   const { onb, items, weeks, meetings, tasks, milestones } = data;
@@ -198,7 +200,7 @@ export default function OnboardingPartner({
         )}
       </div>
 
-      {settings && canManage && <Settings data={data} clubs={clubs} onDone={() => setSettings(false)} />}
+      {settings && canManage && <Settings data={data} clubs={clubs} driveReady={driveReady} onDone={() => setSettings(false)} />}
 
       <div className="mb-4 flex gap-1 overflow-x-auto border-b border-border">
         {order
@@ -416,7 +418,7 @@ function Rhythm({ data, canMark }: { data: OnboardingFull; canMark: boolean }) {
   );
 }
 
-function Settings({ data, clubs, onDone }: { data: OnboardingFull; clubs: { id: string; name: string }[]; onDone: () => void }) {
+function Settings({ data, clubs, driveReady, onDone }: { data: OnboardingFull; clubs: { id: string; name: string }[]; driveReady: boolean; onDone: () => void }) {
   const { t } = useLocale();
   const { pending, error, run } = useAct();
   const o = data.onb;
@@ -473,6 +475,7 @@ function Settings({ data, clubs, onDone }: { data: OnboardingFull; clubs: { id: 
             <input name="drive_folder_url" defaultValue={o.drive_folder_url ?? ""} placeholder="https://drive.google.com/..." className={inputCls} />
           </F>
         </div>
+        <DriveButton onboardingId={o.id} hasFolder={!!o.drive_folder_url} driveReady={driveReady} />
         {error && <p className="text-sm text-accent-strong sm:col-span-3">{t(error)}</p>}
         <div className="flex gap-2 sm:col-span-3">
           <button type="submit" className={btnPriCls} disabled={pending}>
@@ -494,5 +497,37 @@ function F({ label, children }: { label: string; children: React.ReactNode }) {
       <span className="mb-1 block text-xs text-muted">{label}</span>
       {children}
     </label>
+  );
+}
+
+/** Создать папку партнера на общем диске (подпапки 01–06, копии шаблонов, ссылки в план). */
+function DriveButton({ onboardingId, hasFolder, driveReady }: { onboardingId: string; hasFolder: boolean; driveReady: boolean }) {
+  const { t } = useLocale();
+  const { pending, error, run } = useAct();
+  const [msg, setMsg] = useState<string | null>(null);
+  return (
+    <div className="flex flex-col justify-end gap-1">
+      <button
+        type="button"
+        className={btnCls}
+        disabled={!driveReady || pending}
+        title={driveReady ? undefined : t("onbDriveNotReady")}
+        onClick={() => {
+          if (hasFolder && !window.confirm(t("onbDriveRefillConfirm"))) return;
+          run(
+            () => createDriveFolder(onboardingId),
+            (r) => {
+              const x = r as { copied?: number; failed?: string[] };
+              setMsg(t("onbDriveDone", { n: x.copied ?? 0 }) + (x.failed?.length ? ` · ${t("onbDriveFailedN", { n: x.failed.length })}` : ""));
+            }
+          );
+        }}
+      >
+        {pending ? "…" : hasFolder ? t("onbDriveRefill") : t("onbDriveCreate")}
+      </button>
+      {!driveReady && <span className="text-xs text-muted">{t("onbDriveNotReady")}</span>}
+      {msg && <span className="text-xs text-ink-2">{msg}</span>}
+      {error && <span className="text-xs text-accent-strong">{t(error)}</span>}
+    </div>
   );
 }

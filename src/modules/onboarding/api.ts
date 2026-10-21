@@ -9,4 +9,7 @@ export { canViewOnboarding, canMarkOnboarding, canManageOnboarding, showOnboardi
 export { loadOverview as loadOnboardingOverview, loadClubCandidates as loadOnboardingClubCandidates } from "./server/load";
 /** Для «+ Клуб»: создать онбординг уже привязанным к новому клубу. Только после проверки роли hq. */
 export { createOnboarding as startOnboardingForClub } from "./server/start";
+/** Для «+ Клуб»: папка партнера на Google Диске (если робот Google настроен). */
+export { createPartnerDriveFolder } from "./server/folder";
+export { isDriveConfigured as isOnboardingDriveConfigured } from "./server/drive";
 export type { OnboardingCard, OnbStatus, ClubCandidate as OnboardingClubCandidate } from "./types";

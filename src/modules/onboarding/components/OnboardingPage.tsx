@@ -12,6 +12,7 @@ import { requireOnboardingAccess } from "../server/guard";
 import { loadClubs, loadOnboarding, loadOverview, loadStartableCandidates, onboardingIdForPartner } from "../server/load";
 import OnboardingOverview from "./OnboardingOverview";
 import OnboardingPartner from "./OnboardingPartner";
+import { isDriveConfigured } from "../server/drive";
 
 async function shell(profile: Profile, body: ReactNode, opts: { subtitle?: ReactNode; back?: boolean } = {}) {
   const viewMode = await getViewMode(profile);
@@ -75,6 +76,7 @@ export async function OnboardingDetailPage({ id }: { id: string }) {
       data={data}
       canMark={canMarkOnboarding(profile.role)}
       canManage={manage}
+      driveReady={manage && isDriveConfigured()}
       isPartner={profile.role === "partner"}
       clubs={clubs}
     />,

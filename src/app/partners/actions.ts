@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getCurrentProfile } from "@/lib/auth";
 import { sendTelegramMessage, validChatId } from "@/lib/server/telegram";
-import { startOnboardingForClub } from "@/modules/onboarding/api";
+import { createPartnerDriveFolder, isOnboardingDriveConfigured, startOnboardingForClub } from "@/modules/onboarding/api";
 
 export type ActionResult = {
   error: string | null;
@@ -19,6 +19,9 @@ export type ActionResult = {
   onboardingId?: string;
   /** createClubPartner: клуб создан, но онбординг открыть не удалось (ключ перевода). */
   onboardingError?: string;
+  /** createClubPartner: папка партнера на Google Диске (если робот Google подключен). */
+  driveUrl?: string;
+  driveError?: string;
 };
 
 const PASSWORD_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789";
@@ -93,6 +96,8 @@ export async function createClubPartner(formData: FormData): Promise<ActionResul
   const candidateId = String(formData.get("candidate_id") || "").trim();
   let onboardingId: string | undefined;
   let onboardingError: string | undefined;
+  let driveUrl: string | undefined;
+  let driveError: string | undefined;
   if (candidateId && formData.get("start_onboarding") === "on") {
     try {
       const r = await startOnboardingForClub({
@@ -103,7 +108,15 @@ export async function createClubPartner(formData: FormData): Promise<ActionResul
         curator: profile.full_name,
       });
       if ("error" in r) onboardingError = r.error;
-      else onboardingId = r.id;
+      else {
+        onboardingId = r.id;
+        // папка партнера на общем диске: подпапки 01–06, копии шаблонов, доступ по логин-почте
+        if (isOnboardingDriveConfigured()) {
+          const d = await createPartnerDriveFolder(r.id, [email]);
+          if ("error" in d) driveError = d.error;
+          else driveUrl = d.url;
+        }
+      }
     } catch (e) {
       onboardingError = e instanceof Error ? e.message : "onbErrSave";
     }
@@ -111,7 +124,7 @@ export async function createClubPartner(formData: FormData): Promise<ActionResul
   }
 
   revalidatePath("/partners");
-  return { error: null, tempPassword, onboardingId, onboardingError };
+  return { error: null, tempPassword, onboardingId, onboardingError, driveUrl, driveError };
 }
 
 /**

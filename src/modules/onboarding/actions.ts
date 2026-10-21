@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { onboardingWriteDb } from "./server/db";
 import { ownsOnboarding, requireOnboardingAccess } from "./server/guard";
 import { createOnboarding } from "./server/start";
+import { createPartnerDriveFolder } from "./server/folder";
 import { ITEM_STATUSES, OWNERS, type ItemStatus, type Owner, type TemplateItem } from "./types";
 
 /**
@@ -384,5 +385,43 @@ export async function pushTemplateLinks(): Promise<OnbResult> {
     await db.from("plan_items").update({ template_url: t.template_url }).eq("template_item_id", t.id).is("template_url", null);
   }
   refresh();
+  return { error: null };
+}
+
+// ------------------------------------------------------------ Google Диск и перенос пунктов
+
+/** «Создать папку на Диске»: подпапки 01–06, копии шаблонов, ссылки в план, доступ партнеру. */
+export async function createDriveFolder(onboardingId: string): Promise<OnbResult & { url?: string; copied?: number; failed?: string[] }> {
+  const g = await requireOnboardingAccess("manage");
+  if ("error" in g) return { error: g.error };
+  const r = await createPartnerDriveFolder(onboardingId);
+  if ("error" in r) return { error: r.error };
+  refresh(onboardingId);
+  return { error: null, url: r.url, copied: r.copied, failed: r.failed };
+}
+
+/** Перетаскивание пункта плана в другую неделю (только hq). Встает в конец недели. */
+export async function moveItem(itemId: string, weekKey: string): Promise<OnbResult> {
+  const g = await requireOnboardingAccess("manage");
+  if ("error" in g) return { error: g.error };
+  const db = onboardingWriteDb();
+  const { data: wk } = await db.from("template_weeks").select("key").eq("key", weekKey).maybeSingle();
+  if (!wk) return { error: "onbErrSave" };
+  const onbId = await onboardingOfItem("plan_items", itemId);
+  if (!onbId) return { error: "onbErrSave" };
+  const { data: last } = await db
+    .from("plan_items")
+    .select("sort")
+    .eq("onboarding_id", onbId)
+    .eq("week_key", weekKey)
+    .order("sort", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  const { error } = await db
+    .from("plan_items")
+    .update({ week_key: weekKey, sort: ((last?.sort as number | undefined) ?? 0) + 1, updated_at: new Date().toISOString() })
+    .eq("id", itemId);
+  if (error) return { error: error.message };
+  refresh(onbId);
   return { error: null };
 }

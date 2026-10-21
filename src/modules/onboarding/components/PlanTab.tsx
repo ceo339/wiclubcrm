@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { useLocale } from "@/components/i18n/LocaleProvider";
-import { addItem, setItemHidden, setItemStatus, updateItem } from "../actions";
+import { addItem, moveItem, setItemHidden, setItemStatus, updateItem } from "../actions";
 import { OWNERS, type ItemStatus, type OnbStatus, type PlanItem, type TemplateWeek } from "../types";
 import { Card, Chip, OWNER_KEY, OwnerChip, STATUS_KEY, StatusDot, btnCls, btnPriCls, chipBtnCls, fmtDate, inputCls } from "./ui";
 import { useAct } from "./useAct";
@@ -49,6 +49,10 @@ export default function PlanTab({
   const opened = status === "opened";
   const searching = filter !== "all" || !!q || !!owner;
   const [toggled, setToggled] = useState<Record<string, boolean>>({});
+  // перетаскивание пунктов между неделями (только hq)
+  const [dragId, setDragId] = useState<string | null>(null);
+  const [overWeek, setOverWeek] = useState<string | null>(null);
+  const move = useAct();
 
   const matches = (i: PlanItem) => {
     if (i.hidden && !(canManage && showHidden)) return false;
@@ -114,7 +118,26 @@ export default function PlanTab({
         const defaultClosed = opened ? !searching : w.kind !== "week" || (!searching && (w.num ?? 0) < (currentWeek ?? 1) - 1);
         const closed = toggled[w.key] ?? defaultClosed;
         return (
-          <Card key={w.key} className={`mb-3 overflow-hidden ${isNow ? "outline outline-2 -outline-offset-1 outline-foreground" : ""}`}>
+          <div
+            key={w.key}
+            onDragOver={(e) => {
+              if (!dragId) return;
+              e.preventDefault();
+              if (overWeek !== w.key) setOverWeek(w.key);
+            }}
+            onDragLeave={(e) => {
+              if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setOverWeek((k) => (k === w.key ? null : k));
+            }}
+            onDrop={(e) => {
+              e.preventDefault();
+              const id = dragId;
+              setDragId(null);
+              setOverWeek(null);
+              const it = items.find((x) => x.id === id);
+              if (id && it && it.week_key !== w.key) move.run(() => moveItem(id, w.key));
+            }}
+          >
+          <Card className={`mb-3 overflow-hidden ${overWeek === w.key && dragId ? "outline outline-2 -outline-offset-1 outline-accent" : isNow ? "outline outline-2 -outline-offset-1 outline-foreground" : ""}`}>
             <button type="button" className="flex w-full items-center gap-3.5 px-5 py-3.5 text-left hover:bg-surface-2/40" onClick={() => setToggled({ ...toggled, [w.key]: !closed })}>
               <svg className={`shrink-0 text-muted transition ${closed ? "-rotate-90" : ""}`} width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <path d="m6 9 6 6 6-6" />
@@ -130,19 +153,35 @@ export default function PlanTab({
                 {done}/{counted.length}
               </span>
             </button>
+            {overWeek === w.key && dragId && closed && <div className="border-t border-dashed border-accent px-5 py-2 text-xs font-semibold text-accent-strong">{t("onbDropHere")}</div>}
             {!closed && (
               <div className="border-t border-border">
                 {vis.map((i) => (
-                  <ItemRow key={i.id} item={i} weeks={weeks} canMark={canMark} canManage={canManage} />
+                  <ItemRow
+                    key={i.id}
+                    item={i}
+                    weeks={weeks}
+                    canMark={canMark}
+                    canManage={canManage}
+                    dragging={dragId === i.id}
+                    onDragStart={() => setDragId(i.id)}
+                    onDragEnd={() => {
+                      setDragId(null);
+                      setOverWeek(null);
+                    }}
+                  />
                 ))}
                 {canManage && <AddItem onboardingId={onboardingId} weekKey={w.key} />}
               </div>
             )}
           </Card>
+          </div>
         );
       })}
 
+      {move.error && <p className="mb-2 text-sm text-accent-strong">{t(move.error)}</p>}
       <div className="mt-3.5 flex flex-wrap gap-4 text-xs text-muted">
+        {canManage && <span className="inline-flex items-center gap-1.5">⠿ {t("onbDragHint")}</span>}
         {(["todo", "progress", "done", "moved"] as ItemStatus[]).map((s) => (
           <span key={s} className="inline-flex items-center gap-1.5">
             <StatusDot status={s} size={16} />
@@ -162,7 +201,23 @@ export default function PlanTab({
   );
 }
 
-function ItemRow({ item: i, weeks, canMark, canManage }: { item: PlanItem; weeks: TemplateWeek[]; canMark: boolean; canManage: boolean }) {
+function ItemRow({
+  item: i,
+  weeks,
+  canMark,
+  canManage,
+  dragging = false,
+  onDragStart,
+  onDragEnd,
+}: {
+  item: PlanItem;
+  weeks: TemplateWeek[];
+  canMark: boolean;
+  canManage: boolean;
+  dragging?: boolean;
+  onDragStart?: () => void;
+  onDragEnd?: () => void;
+}) {
   const { t } = useLocale();
   const { pending, error, run } = useAct();
   const [edit, setEdit] = useState(false);
@@ -170,7 +225,16 @@ function ItemRow({ item: i, weeks, canMark, canManage }: { item: PlanItem; weeks
   const link = i.link_mode === "copy" ? i.file_url : i.file_url ?? i.template_url;
 
   return (
-    <div className={`border-t border-border first:border-t-0 ${i.hidden ? "opacity-50" : ""}`}>
+    <div
+      className={`border-t border-border first:border-t-0 ${i.hidden || dragging ? "opacity-50" : ""} ${canManage ? "cursor-grab active:cursor-grabbing" : ""}`}
+      draggable={canManage}
+      onDragStart={(e) => {
+        e.dataTransfer.effectAllowed = "move";
+        e.dataTransfer.setData("text/plain", i.id);
+        onDragStart?.();
+      }}
+      onDragEnd={onDragEnd}
+    >
       <div className="grid grid-cols-[30px_minmax(0,1fr)_34px] items-center gap-3.5 px-5 py-3 hover:bg-surface-2/40 md:grid-cols-[30px_minmax(0,1fr)_150px_104px_80px_118px_34px]">
         <button
           type="button"

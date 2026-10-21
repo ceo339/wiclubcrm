@@ -25,7 +25,7 @@ export default function NewPartnerModal({
   const [copied, setCopied] = useState(false);
   const [candidateId, setCandidateId] = useState("");
   const [startOnb, setStartOnb] = useState(true);
-  const [onb, setOnb] = useState<{ id?: string; error?: string } | null>(null);
+  const [onb, setOnb] = useState<{ id?: string; error?: string; driveUrl?: string; driveError?: string } | null>(null);
 
   // кандидат из воронки: подставляем город и почту из анкеты (их можно поправить)
   function handleCandidateChange(id: string) {
@@ -40,7 +40,7 @@ export default function NewPartnerModal({
       const result = await createClubPartner(formData);
       if (!result.error && result.tempPassword) {
         setCredentials({ email, password: result.tempPassword });
-        if (result.onboardingId || result.onboardingError) setOnb({ id: result.onboardingId, error: result.onboardingError });
+        if (result.onboardingId || result.onboardingError) setOnb({ id: result.onboardingId, error: result.onboardingError, driveUrl: result.driveUrl, driveError: result.driveError });
       }
       return result;
     },
@@ -102,6 +102,16 @@ export default function NewPartnerModal({
               >
                 {t("onbClubStarted")} →
               </a>
+            )}
+            {onb?.driveUrl && (
+              <a href={onb.driveUrl} target="_blank" rel="noreferrer" className="mt-2 block rounded-lg bg-surface-2 px-3 py-2 text-sm font-semibold text-ink-2 hover:underline">
+                {t("onbClubDriveCreated")} ↗
+              </a>
+            )}
+            {onb?.driveError && (
+              <p className="mt-2 rounded-lg bg-accent/10 px-3 py-2 text-sm text-accent-strong">
+                {t("onbClubDriveFailed")}: {t(onb.driveError)}
+              </p>
             )}
             {onb?.error && (
               <p className="mt-4 rounded-lg bg-accent/10 px-3 py-2 text-sm text-accent-strong">
