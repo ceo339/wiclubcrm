@@ -1,10 +1,12 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useEffect, useState, useTransition } from "react";
 import {
   addCandidateComment,
   addCandidateTask,
   getCandidateDetail,
+  mergeCandidates,
   setCandidateInterviewDate,
   setCandidateName,
   setCandidateTaskDone,
@@ -52,6 +54,22 @@ export default function CandidateDetailModal({
 }) {
   const { locale, t } = useLocale();
   const [detail, setDetail] = useState<FranchiseCandidateDetail | null>(null);
+  // Round 95: объединение дубля в эту карточку
+  const router = useRouter();
+  const [merging, setMerging] = useState(false);
+  const [mergeError, setMergeError] = useState<string | null>(null);
+  async function handleMerge(dupId: string, dupName: string) {
+    if (!confirm(t("fMergeConfirm", { name: dupName }))) return;
+    setMerging(true);
+    setMergeError(null);
+    const res = await mergeCandidates(candidate.id, dupId);
+    setMerging(false);
+    if (res.error) setMergeError(res.error);
+    else {
+      getCandidateDetail(candidate.id).then(setDetail);
+      router.refresh();
+    }
+  }
   const [application, setApplication] = useState<ApplicationFields>(() => applicationFieldsFromCandidate(candidate));
   const [editingApplication, setEditingApplication] = useState(false);
   const [stage, setStage] = useState<FranchiseCandidate["stage"]>(candidate.stage);
@@ -181,20 +199,33 @@ export default function CandidateDetailModal({
               <h3 className="text-xs font-semibold uppercase tracking-wide text-muted">{t("fHeadingOtherApplications")}</h3>
               <div className="mt-2 flex flex-col gap-2">
                 {detail.related.map((r) => (
-                  <Link
-                    key={r.id}
-                    href={`/franchise?open=${r.id}`}
-                    className="rounded-lg border border-border bg-background px-3 py-2 text-sm hover:border-accent"
-                  >
-                    <div className="font-medium text-foreground">
-                      {r.name} · {new Date(r.submitted_at).toLocaleDateString(locale === "bg" ? "bg-BG" : "ru-RU")}
-                    </div>
-                    <div className="text-xs text-muted">
-                      {franchiseStageLabel(r.stage, locale)}
-                      {r.reject_reason ? ` — ${r.reject_reason}` : ""}
-                    </div>
-                  </Link>
+                  <div key={r.id} className="flex items-stretch gap-2">
+                    <Link
+                      href={`/franchise?open=${r.id}`}
+                      className="min-w-0 flex-1 rounded-lg border border-border bg-background px-3 py-2 text-sm hover:border-accent"
+                    >
+                      <div className="font-medium text-foreground">
+                        {r.name} · {new Date(r.submitted_at).toLocaleDateString(locale === "bg" ? "bg-BG" : "ru-RU")}
+                      </div>
+                      <div className="text-xs text-muted">
+                        {franchiseStageLabel(r.stage, locale)}
+                        {r.reject_reason ? ` — ${r.reject_reason}` : ""}
+                      </div>
+                    </Link>
+                    {canEdit && (
+                      <button
+                        type="button"
+                        disabled={merging}
+                        onClick={() => handleMerge(r.id, r.name)}
+                        className="shrink-0 rounded-lg border border-border px-3 text-xs font-medium text-ink-2 hover:bg-surface-2 disabled:opacity-50"
+                        title={t("fMergeHint")}
+                      >
+                        {t("fMergeBtn")}
+                      </button>
+                    )}
+                  </div>
                 ))}
+                {mergeError && <p className="text-xs text-accent-strong">{t(mergeError)}</p>}
               </div>
             </div>
           )}
@@ -355,11 +386,11 @@ export default function CandidateDetailModal({
                 <dl className="mt-2 grid grid-cols-1 gap-x-4 gap-y-2 text-sm sm:grid-cols-2">
                   <Field label={t("fFieldEmail")} value={application.email} />
                   <Field label={t("fFieldPhone")} value={application.phone} />
-                  <Field label={t("fFieldTelegram")} value={application.telegram} />
+                  <Field label={t("fFieldTelegram")} value={application.telegram} href={telegramHref(application.telegram)} />
                   <Field label={t("fFieldCountry")} value={application.country} />
                   <Field label={t("fFieldTargetCity")} value={application.target_city} />
                   <Field label={t("fFieldBirthDate")} value={application.birth_date} />
-                  <Field label={t("fFieldInstagram")} value={application.instagram_url} />
+                  <Field label={t("fFieldInstagram")} value={application.instagram_url} href={instagramHref(application.instagram_url)} display={instagramShort(application.instagram_url)} />
                   <Field label={t("fFieldFollowers")} value={application.followers} />
                   <Field label={t("fFieldSource")} value={application.source} />
                   <Field label={t("fFieldKnowsMethod")} value={application.knows_method} />
@@ -538,14 +569,44 @@ function ApplicationEditForm({
   );
 }
 
-function Field({ label, value }: { label: string; value: string | null }) {
+function Field({ label, value, href, display }: { label: string; value: string | null; href?: string | null; display?: string | null }) {
   if (!value) return null;
   return (
-    <div>
+    <div className="min-w-0">
       <dt className="text-xs text-muted">{label}</dt>
-      <dd className="text-ink-2">{value}</dd>
+      <dd className="break-words text-ink-2">
+        {href ? (
+          <a href={href} target="_blank" rel="noopener noreferrer" className="break-all underline underline-offset-2 hover:text-accent-strong">
+            {display || value}
+          </a>
+        ) : (
+          value
+        )}
+      </dd>
     </div>
   );
+}
+
+/** Round 95: ссылка на Instagram кликабельная — из полной ссылки или @ника. */
+function instagramHref(v: string | null): string | null {
+  const s = (v ?? "").trim();
+  if (!s) return null;
+  if (/^https?:\/\//i.test(s)) return s;
+  const handle = s.replace(/^@/, "").replace(/^(www\.)?instagram\.com\//i, "").replace(/[/?].*$/, "");
+  return handle ? `https://instagram.com/${handle}` : null;
+}
+/** «instagram.com/ksenia_zabotna» без хвоста ?utm… */
+function instagramShort(v: string | null): string | null {
+  const h = instagramHref(v);
+  if (!h) return null;
+  return h.replace(/^https?:\/\/(www\.)?/i, "").replace(/[?#].*$/, "").replace(/\/$/, "");
+}
+function telegramHref(v: string | null): string | null {
+  const s = (v ?? "").trim();
+  if (!s) return null;
+  if (/^https?:\/\//i.test(s)) return s;
+  const handle = s.replace(/^@/, "").replace(/^(t\.me\/)/i, "").replace(/[/?].*$/, "");
+  return /^[A-Za-z0-9_]{3,}$/.test(handle) ? `https://t.me/${handle}` : null;
 }
 
 function LongField({ label, value }: { label: string; value: string | null }) {

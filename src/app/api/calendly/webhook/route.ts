@@ -4,6 +4,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import {
   addSystemComment,
   findCandidateByEmail,
+  findCandidateForBooking,
   formatMadrid,
   hmacHex,
   isTerminalStage,
@@ -143,7 +144,8 @@ export async function POST(request: Request) {
     };
     const when = startTime ? formatMadrid(startTime) : "—";
 
-    let candidate = await findCandidateByEmail(admin, email);
+    const found = await findCandidateForBooking(admin, email, p.text_reminder_number ?? null);
+    let candidate = found.candidate;
     let createdNow = false;
     if (!candidate) {
       const { data, error } = await admin
@@ -181,6 +183,7 @@ export async function POST(request: Request) {
         : `Записалась на интервью через Calendly: ${when}.`,
     ];
     if (joinUrl) lines.push(`Ссылка на Zoom: ${joinUrl}`);
+    if (found.fuzzy && email && email !== normalizeEmail(candidate.email)) lines.push(`Email в Calendly: ${email} (в анкете другой)`);
     for (const qa of p.questions_and_answers ?? []) {
       if (qa.question && qa.answer) lines.push(`${qa.question}: ${qa.answer}`);
     }

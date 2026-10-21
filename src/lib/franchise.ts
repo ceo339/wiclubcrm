@@ -204,6 +204,16 @@ function normEmail(v: string | null | undefined): string | null {
 /** Digits only; the last 8 are compared so "+373 76 045 180", "076045180"
  * (national format with a leading 0) and "+37376045180 WhatsApp" all match.
  * Fewer than 8 digits = not a phone. */
+/** Round 95: «Валерия» и «Валерія» записались с vvaganova@ и vvaganova86@gmail.com —
+ * ящик без цифр/точек/подчёркиваний + тот же домен. Короче 5 букв — не сравниваем. */
+export function emailBase(v: string | null | undefined): string | null {
+  const e = normEmail(v);
+  if (!e) return null;
+  const [local, domain] = e.split("@");
+  const base = local.replace(/\+.*$/, "").replace(/[\d._-]/g, "");
+  return base.length >= 5 ? `${base}@${domain}` : null;
+}
+
 function normPhone(v: string | null | undefined): string | null {
   const d = (v ?? "").replace(/\D/g, "");
   return d.length >= 8 ? d.slice(-8) : null;
@@ -224,6 +234,7 @@ export function findRelatedCandidates(
   others: ({ id: string; name: string; stage: string; reject_reason: string | null; submitted_at: string } & MatchFields)[]
 ): RelatedCandidate[] {
   const email = normEmail(self.email);
+  const base = emailBase(self.email);
   const phone = normPhone(self.phone);
   const tg = normTelegram(self.telegram);
   if (!email && !phone && !tg) return [];
@@ -232,6 +243,7 @@ export function findRelatedCandidates(
     .filter(
       (o) =>
         (email !== null && normEmail(o.email) === email) ||
+        (base !== null && emailBase(o.email) === base) ||
         (phone !== null && normPhone(o.phone) === phone) ||
         (tg !== null && normTelegram(o.telegram) === tg)
     )

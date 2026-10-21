@@ -1,6 +1,6 @@
 import { createHmac, timingSafeEqual } from "crypto";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { FRANCHISE_STAGES, type FranchiseStageId } from "@/lib/franchise";
+import { emailBase, FRANCHISE_STAGES, type FranchiseStageId } from "@/lib/franchise";
 import type { Json } from "@/types/database";
 
 /**
@@ -58,6 +58,37 @@ export async function findCandidateByEmail(admin: Admin, email: string | null) {
     .order("submitted_at", { ascending: false })
     .limit(1);
   return data?.[0] ?? null;
+}
+
+/**
+ * Round 95: кандидатка из Calendly — сначала точный email; если нет, тот же
+ * телефон или похожий ящик (vvaganova@ ↔ vvaganova86@ того же домена), чтобы
+ * запись на интервью не создавала дубль карточки.
+ */
+export async function findCandidateForBooking(admin: Admin, email: string | null, phone: string | null) {
+  const exact = await findCandidateByEmail(admin, email);
+  if (exact) return { candidate: exact, fuzzy: false };
+  const { data } = await admin
+    .from("franchise_candidates")
+    .select("*")
+    .order("submitted_at", { ascending: false })
+    .limit(2000);
+  const all = data ?? [];
+  const digits = (v: string | null | undefined) => {
+    const d = (v ?? "").replace(/\D/g, "");
+    return d.length >= 8 ? d.slice(-8) : null;
+  };
+  const ph = digits(phone);
+  if (ph) {
+    const byPhone = all.find((c) => digits(c.phone) === ph);
+    if (byPhone) return { candidate: byPhone, fuzzy: true };
+  }
+  const base = emailBase(email);
+  if (base) {
+    const byBase = all.find((c) => emailBase(c.email) === base);
+    if (byBase) return { candidate: byBase, fuzzy: true };
+  }
+  return { candidate: null, fuzzy: false };
 }
 
 /** Moves the candidate and logs the transition to franchise_stage_history. */
