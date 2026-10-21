@@ -119,7 +119,7 @@ function TplRow({ item: i, weeks }: { item: TemplateItem; weeks: TemplateWeek[] 
             </select>
           </label>
           <label className="flex items-center gap-2 text-sm sm:col-span-2">
-            <input type="checkbox" name="hw" defaultChecked={i.tags.includes("ДЗ")} className="h-4 w-4 accent-[var(--accent)]" />
+            <input type="checkbox" name="hw" defaultChecked={i.tags.includes("ДЗ")} className="h-4 w-4" />
             <span>{t("onbHwLabel")}</span>
           </label>
           <input name="template_url" defaultValue={i.template_url ?? ""} placeholder={t("onbFieldTemplateUrl")} className={`${inputCls} sm:col-span-2`} />
