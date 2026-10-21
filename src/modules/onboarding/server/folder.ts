@@ -2,8 +2,8 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { onboardingWriteDb } from "./db";
 import { copyFile, driveParentId, ensureFolder, folderUrl, getFile, isDriveConfigured, shareWriter } from "./drive";
 
-/** Подпапки в папке партнера: всегда в этом порядке, даже пустые. */
-export const PARTNER_SUBFOLDERS = ["01 Договор", "02 Финансы", "03 Маркетинг", "04 Продажи", "05 Залы и оборудование", "06 Школа мастеров"];
+import { PARTNER_SUBFOLDERS, driveFileIdFromUrl } from "../types";
+export { PARTNER_SUBFOLDERS };
 
 export type FolderResult = { url: string; copied: number; failed: string[]; shared: string[] } | { error: string };
 
@@ -45,12 +45,12 @@ export async function createPartnerDriveFolder(onboardingId: string, extraShare:
     // пункты плана, у которых в шаблоне есть оригинал для копии
     const { data: items } = await db
       .from("plan_items")
-      .select("id, file_url, template_item_id, template_items(drive_file_id, drive_folder, link_mode)")
+      .select("id, file_url, template_item_id, template_items(drive_file_id, drive_folder, link_mode, template_url)")
       .eq("onboarding_id", onboardingId)
       .not("template_item_id", "is", null);
-    type Row = { id: string; file_url: string | null; template_items: { drive_file_id: string | null; drive_folder: string | null; link_mode: string } | null };
+    type Row = { id: string; file_url: string | null; template_items: { drive_file_id: string | null; drive_folder: string | null; link_mode: string; template_url: string | null } | null };
     const todo = ((items ?? []) as unknown as Row[]).filter(
-      (r) => !r.file_url && r.template_items?.link_mode === "copy" && r.template_items.drive_file_id
+      (r) => !r.file_url && r.template_items?.link_mode === "copy" && (r.template_items.drive_file_id || driveFileIdFromUrl(r.template_items.template_url))
     );
 
     // один оригинал копируем один раз, даже если на него ссылаются несколько пунктов
@@ -58,7 +58,7 @@ export async function createPartnerDriveFolder(onboardingId: string, extraShare:
     const failed: string[] = [];
     for (const r of todo) {
       const t = r.template_items!;
-      const fileId = t.drive_file_id!;
+      const fileId = (t.drive_file_id || driveFileIdFromUrl(t.template_url))!;
       try {
         let url = done.get(fileId);
         if (!url) {

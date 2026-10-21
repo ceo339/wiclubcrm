@@ -5,7 +5,7 @@ import { onboardingWriteDb } from "./server/db";
 import { ownsOnboarding, requireOnboardingAccess } from "./server/guard";
 import { createOnboarding } from "./server/start";
 import { createPartnerDriveFolder } from "./server/folder";
-import { ITEM_STATUSES, OWNERS, type ItemStatus, type Owner, type TemplateItem } from "./types";
+import { ITEM_STATUSES, OWNERS, PARTNER_SUBFOLDERS, driveFileIdFromUrl, type ItemStatus, type Owner, type TemplateItem } from "./types";
 
 /**
  * Серверные действия модуля «Онбординг». Каждое начинается с проверки роли
@@ -365,6 +365,8 @@ export async function updateTemplateItem(itemId: string, fd: FormData): Promise<
       owner: asOwner(str(fd, "owner")),
       template_url: url,
       link_mode: mode === "copy" || mode === "none" ? mode : "template",
+      drive_file_id: driveFileIdFromUrl(url),
+      drive_folder: PARTNER_SUBFOLDERS.includes(str(fd, "drive_folder")) ? str(fd, "drive_folder") : null,
     })
     .eq("id", itemId);
   if (error) return { error: error.message };

@@ -35,7 +35,20 @@ export type TemplateItem = {
   template_url: string | null;
   sort: number;
   archived: boolean;
+  /** Подпапка в папке партнера, куда класть копию (01–06). */
+  drive_folder: string | null;
+  /** id оригинала на Диске для копии партнеру. */
+  drive_file_id: string | null;
 };
+
+/** Подпапки в папке партнера: всегда в этом порядке, даже пустые. */
+export const PARTNER_SUBFOLDERS = ["01 Договор", "02 Финансы", "03 Маркетинг", "04 Продажи", "05 Залы и оборудование", "06 Школа мастеров"];
+
+/** id файла из ссылки Google Диска (docs.google.com/.../d/ID или drive.google.com/file/d/ID, ?id=ID). */
+export function driveFileIdFromUrl(url: string | null | undefined): string | null {
+  if (!url) return null;
+  return url.match(/\/d\/([\w-]{20,})/)?.[1] ?? url.match(/[?&]id=([\w-]{20,})/)?.[1] ?? null;
+}
 
 export type Onboarding = {
   id: string;

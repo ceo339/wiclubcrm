@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useLocale } from "@/components/i18n/LocaleProvider";
 import { pushTemplateLinks, updateTemplateItem } from "../actions";
-import { OWNERS, type TemplateItem, type TemplateWeek } from "../types";
+import { OWNERS, PARTNER_SUBFOLDERS, type TemplateItem, type TemplateWeek } from "../types";
 import { weekLabel } from "./PlanTab";
 import { Card, Chip, OWNER_KEY, btnCls, btnPriCls, inputCls } from "./ui";
 import { useAct } from "./useAct";
@@ -108,6 +108,18 @@ function TplRow({ item: i }: { item: TemplateItem }) {
             ))}
           </select>
           <input name="template_url" defaultValue={i.template_url ?? ""} placeholder={t("onbFieldTemplateUrl")} className={`${inputCls} sm:col-span-2`} />
+          <label className="block sm:col-span-2">
+            <span className="mb-1 block text-xs text-muted">{t("onbFieldDriveFolder")}</span>
+            <select name="drive_folder" defaultValue={i.drive_folder ?? ""} className={inputCls}>
+              <option value="">{t("onbDriveFolderRoot")}</option>
+              {PARTNER_SUBFOLDERS.map((f) => (
+                <option key={f} value={f}>
+                  {f}
+                </option>
+              ))}
+            </select>
+          </label>
+          <p className="text-xs text-muted sm:col-span-2">{t("onbCopyHint")}</p>
           {error && <p className="text-sm text-accent-strong sm:col-span-2">{t(error)}</p>}
           <div className="flex gap-2 sm:col-span-2">
             <button type="submit" className={btnPriCls} disabled={pending}>
