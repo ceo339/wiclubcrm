@@ -203,6 +203,7 @@ const COUNTRY_TIME_ZONE: Record<string, string> = {
   Bulgaria: "Europe/Sofia",
   Georgia: "Asia/Tbilisi",
   Ukraine: "Europe/Kyiv",
+  Kazakhstan: "Asia/Almaty",
 };
 
 export function clubTimeZone(country: string | null | undefined): string {
