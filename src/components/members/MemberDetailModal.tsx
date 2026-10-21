@@ -382,8 +382,18 @@ function EnrollmentCard({
 
   function handleDelete() {
     setError(null);
+    const name = enrollment.product_name ?? t("optionCourseNotChosen");
+    if (!confirm(t("confirmDeleteEnrollment", { name }))) return;
+    // Round 91: оплаты курса (не доли пакета) — спросить, удалять ли их тоже
+    const cash = (enrollment.payments ?? []).filter((p) => !p.package_sale_id);
+    let withPayments = false;
+    if (cash.length > 0) {
+      const sumLoc = sumLocal(cash.map((p) => localOf(p.amount_local, p.local_currency)));
+      const sum = sumLoc ? `${sumLoc.amount} ${currencySymbol(sumLoc.currency as Parameters<typeof currencySymbol>[0])}` : `${Math.round(cash.reduce((a, p) => a + Number(p.amount), 0) * 100) / 100} €`;
+      withPayments = confirm(t("confirmDeleteEnrollmentPayments", { n: cash.length, sum }));
+    }
     startTransition(async () => {
-      const res = await deleteEnrollment(enrollment.id);
+      const res = await deleteEnrollment(enrollment.id, withPayments);
       if (res.error) setError(res.error);
       else onChanged();
     });

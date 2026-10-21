@@ -521,12 +521,44 @@ export async function updateEnrollment(enrollmentId: string, formData: FormData)
  * start_date all null — the same shape it had before a поток was ever
  * assigned) before the delete both satisfies the FK and puts the package
  * item back where "Назначить поток" can pick it up again. */
-export async function deleteEnrollment(enrollmentId: string): Promise<ActionResult> {
+/**
+ * Round 91: «удалила курс в карточке, а в Оплатах оплата осталась» — раньше
+ * оплаты удалённого курса оставались в «Оплатах» как «Не привязана». Теперь:
+ * доли пакета (payments.package_sale_id) удаляются всегда — это не деньги, а
+ * выручка этого потока; обычные оплаты — только если она подтвердила
+ * (`deletePayments`), иначе остаются непривязанными (деньги реальные).
+ */
+export async function deleteEnrollment(enrollmentId: string, deletePayments = false): Promise<ActionResult> {
   const profile = await getCurrentProfile();
   if (!profile) return { error: "errNotAuthorized" };
   if (!profile.partner_id) return { error: "errHqNoClubGeneric" };
 
   const supabase = await createClient();
+
+  const { data: own } = await supabase
+    .from("member_enrollments")
+    .select("id")
+    .eq("id", enrollmentId)
+    .eq("partner_id", profile.partner_id)
+    .maybeSingle();
+  if (!own) return { error: "errGeneric" };
+
+  const { error: shareError } = await supabase
+    .from("payments")
+    .delete()
+    .eq("enrollment_id", enrollmentId)
+    .eq("partner_id", profile.partner_id)
+    .not("package_sale_id", "is", null);
+  if (shareError) return { error: shareError.message };
+
+  if (deletePayments) {
+    const { error: payError } = await supabase
+      .from("payments")
+      .delete()
+      .eq("enrollment_id", enrollmentId)
+      .eq("partner_id", profile.partner_id);
+    if (payError) return { error: payError.message };
+  }
 
   const { error: unlinkError } = await supabase
     .from("package_sale_items")
@@ -662,7 +694,7 @@ export type EnrollmentDetail = Tables<"member_enrollments"> & {
   product_price: number | null;
   product_sessions: number | null;
   /** Round 53 — payments linked to this поток (any status), oldest first. */
-  payments: { id: string; amount: number; status: string; paid_date: string | null; is_partial?: boolean; amount_local?: number | null; local_currency?: string | null }[];
+  payments: { id: string; amount: number; status: string; paid_date: string | null; is_partial?: boolean; amount_local?: number | null; local_currency?: string | null; package_sale_id?: string | null }[];
   /** Sum of the «paid» ones. */
   paid_sum: number;
 };
@@ -703,7 +735,7 @@ export async function getMemberDetail(memberId: string): Promise<MemberDetail> {
       .order("due_date", { ascending: true }),
     supabase
       .from("member_enrollments")
-      .select("*, products(name, price, sessions), payments(id, amount, status, paid_date, is_partial, amount_local, local_currency)")
+      .select("*, products(name, price, sessions), payments(id, amount, status, paid_date, is_partial, amount_local, local_currency, package_sale_id)")
       .eq("member_id", memberId)
       .order("created_at", { ascending: true }),
     loadContactHistory(supabase, memberRow?.contact_id ?? null),
