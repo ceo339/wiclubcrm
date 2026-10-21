@@ -1,7 +1,7 @@
 "use client";
 
 import Money from "@/components/currency/Money";
-import { localOf } from "@/lib/currency";
+import { localOf, sumLocal } from "@/lib/currency";
 import { useLocale } from "@/components/i18n/LocaleProvider";
 import type { PackageSaleRow } from "@/app/packages/actions";
 
@@ -35,6 +35,26 @@ export default function PackageSaleDetailModal({
             <Money amountEur={pkg.total_price} local={localOf(pkg.total_price_local, pkg.local_currency)} />
           </span>
         </div>
+
+        {/* Round 89: рассрочка — оплачено / осталось и взносы */}
+        {(() => {
+          const paid = pkg.payments.reduce((s, p) => s + Number(p.amount), 0);
+          const paidLocal = sumLocal(pkg.payments.map((p) => localOf(p.amount_local, p.local_currency)));
+          const totalLocal = localOf(pkg.total_price_local, pkg.local_currency);
+          const restLocal = totalLocal && paidLocal && totalLocal.currency === paidLocal.currency
+            ? { amount: Math.round((Number(totalLocal.amount) - Number(paidLocal.amount)) * 100) / 100, currency: totalLocal.currency }
+            : null;
+          const rest = restLocal ? Number(restLocal.amount) : Number(pkg.total_price) - paid;
+          return (
+            <div className="mt-2 rounded-lg border border-border px-3 py-2 text-sm">
+              <div className="flex justify-between"><span className="text-muted">{t("packagePaidLabel")}</span><span className="font-medium"><Money amountEur={paid} local={paidLocal} /></span></div>
+              <div className="flex justify-between"><span className="text-muted">{t("packageRestLabel")}</span><span className={rest > 0.009 ? "font-semibold text-accent-strong" : "text-muted"}>{rest > 0.009 ? <Money amountEur={Math.max(0, Number(pkg.total_price) - paid)} local={restLocal} /> : t("packageFullyPaid")}</span></div>
+              {pkg.payments.map((p, i) => (
+                <div key={p.id} className="mt-1 flex justify-between text-xs text-muted"><span>{t("packageInstallmentN", { n: i + 1 })} · {p.paid_date}</span><Money amountEur={p.amount} local={localOf(p.amount_local, p.local_currency)} /></div>
+              ))}
+            </div>
+          );
+        })()}
 
         <div className="mt-3 flex flex-col gap-1.5">
           {pkg.items.map((item) => (

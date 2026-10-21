@@ -1264,6 +1264,47 @@ export type Database = {
           },
         ]
       }
+      package_sale_payments: {
+        Row: {
+          amount: number
+          amount_local: number | null
+          created_at: string
+          id: string
+          local_currency: string | null
+          package_sale_id: string
+          paid_date: string
+          partner_id: string
+        }
+        Insert: {
+          amount?: number
+          amount_local?: number | null
+          created_at?: string
+          id?: string
+          local_currency?: string | null
+          package_sale_id: string
+          paid_date?: string
+          partner_id: string
+        }
+        Update: {
+          amount?: number
+          amount_local?: number | null
+          created_at?: string
+          id?: string
+          local_currency?: string | null
+          package_sale_id?: string
+          paid_date?: string
+          partner_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "package_sale_payments_package_sale_id_fkey"
+            columns: ["package_sale_id"]
+            isOneToOne: false
+            referencedRelation: "package_sales"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       package_sales: {
         Row: {
           local_currency: string | null

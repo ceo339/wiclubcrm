@@ -17,8 +17,10 @@ import {
   type MemberDetail,
 } from "@/app/members/actions";
 import {
+  addPackagePayment,
   assignPackageItem,
   createPackageSale,
+  deletePackagePayment,
   deletePackageSale,
   updatePackageItem,
   updatePackageSale,
@@ -1189,9 +1191,6 @@ function PackageSaleCard({
               {t("packageBadgeLabel")}
             </span>
             <span>{pkg.paid_date}</span>
-            <span className="text-ink-2">
-              <Money amountEur={pkg.total_price} local={localOf(pkg.total_price_local, pkg.local_currency)} />
-            </span>
           </div>
         </div>
         {canEdit && (
@@ -1217,6 +1216,8 @@ function PackageSaleCard({
         )}
       </div>
       {error && <p className="mt-1 text-xs text-accent-strong">{t(error)}</p>}
+
+      <PackagePaymentsBlock pkg={pkg} canEdit={canEdit} onChanged={onChanged} />
 
       <div className="mt-2 flex flex-col gap-1.5">
         {pkg.items.map((item) => (
@@ -1393,6 +1394,113 @@ function AssignPackageItemForm({
   );
 }
 
+/**
+ * Round 89 — рассрочка по пакету: «общая сумма пакета и отдельно сколько оплатил,
+ * чтоб было понятно». Сумма пакета, оплачено (сумма взносов), остаток; список
+ * взносов с датами; «+ Доплата» добавляет взнос.
+ */
+function PackagePaymentsBlock({ pkg, canEdit, onChanged }: { pkg: PackageSaleDetail; canEdit: boolean; onChanged: () => void }) {
+  const t = useT();
+  const { currency, rates } = useCurrency();
+  const [adding, setAdding] = useState(false);
+  const [amount, setAmount] = useState("");
+  const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [pending, startTransition] = useTransition();
+  const [error, setError] = useState<string | null>(null);
+
+  const total = Number(pkg.total_price) || 0;
+  const paid = pkg.payments.reduce((sum, p) => sum + Number(p.amount), 0);
+  const totalLocal = localOf(pkg.total_price_local, pkg.local_currency);
+  const paidLocal = pkg.payments.length ? sumLocal(pkg.payments.map((p) => localOf(p.amount_local, p.local_currency))) : totalLocal ? { amount: 0, currency: totalLocal.currency } : null;
+  const restLocal = totalLocal && paidLocal && totalLocal.currency === paidLocal.currency
+    ? { amount: Math.round((Number(totalLocal.amount) - Number(paidLocal.amount)) * 100) / 100, currency: totalLocal.currency }
+    : null;
+  const rest = restLocal ? Number(restLocal.amount) : total - paid;
+  const hasRest = rest > 0.009;
+  const restEur = Math.max(0, total - paid);
+
+  function startAdd() {
+    setError(null);
+    // подставляем остаток в валюте экрана
+    const v = restLocal && restLocal.currency === currency ? Number(restLocal.amount) : roundMoney(convertFromEur(restEur, currency, rates), currency);
+    setAmount(v > 0 ? String(v) : "");
+    setAdding(true);
+  }
+  function save(formData: FormData) {
+    setError(null);
+    startTransition(async () => {
+      const res = await addPackagePayment(pkg.id, formData);
+      if (res.error) setError(res.error);
+      else { setAdding(false); onChanged(); }
+    });
+  }
+  function remove(id: string) {
+    if (!confirm(t("packagePaymentDeleteConfirm"))) return;
+    startTransition(async () => {
+      const res = await deletePackagePayment(id);
+      if (res.error) setError(res.error);
+      else onChanged();
+    });
+  }
+
+  return (
+    <div className="mt-2 rounded-md border border-border px-2.5 py-2 text-xs">
+      <div className="grid grid-cols-3 gap-2">
+        <div><div className="text-muted">{t("packageTotalLabel")}</div><div className="text-sm font-semibold text-foreground"><Money amountEur={total} local={totalLocal} /></div></div>
+        <div><div className="text-muted">{t("packagePaidLabel")}</div><div className="text-sm font-semibold text-foreground"><Money amountEur={paid} local={paidLocal} /></div></div>
+        <div>
+          <div className="text-muted">{t("packageRestLabel")}</div>
+          <div className={`text-sm font-semibold ${hasRest ? "text-accent-strong" : "text-muted"}`}>
+            {hasRest ? <Money amountEur={restEur} local={restLocal} /> : t("packageFullyPaid")}
+          </div>
+        </div>
+      </div>
+      {total > 0 && (
+        <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-surface-3">
+          <div className="h-full bg-foreground" style={{ width: `${Math.min(100, Math.round((paid / total) * 100))}%` }} />
+        </div>
+      )}
+      {pkg.payments.length > 0 && (
+        <div className="mt-2 flex flex-col gap-0.5">
+          {pkg.payments.map((p, i) => (
+            <div key={p.id} className="flex items-center justify-between gap-2 text-ink-2">
+              <span className="text-muted">{t("packageInstallmentN", { n: i + 1 })} · {p.paid_date}</span>
+              <span className="flex items-center gap-2">
+                <Money amountEur={p.amount} local={localOf(p.amount_local, p.local_currency)} />
+                {canEdit && (
+                  <button type="button" disabled={pending} onClick={() => remove(p.id)} className="text-muted hover:text-accent-strong" aria-label={t("delete")}>×</button>
+                )}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+      {canEdit && !adding && (
+        <button type="button" onClick={startAdd} className="mt-2 rounded-md border border-border px-2 py-1 font-medium text-ink-2 hover:bg-surface-2">
+          {t("btnTopUp")}
+        </button>
+      )}
+      {adding && (
+        <form action={save} className="mt-2 flex flex-wrap items-end gap-2">
+          <label className="flex flex-col gap-1">
+            <span className="text-muted">{t("fieldAmount")} ({currencySymbol(currency)})</span>
+            <input type="number" min="0" step="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} required className="w-28 rounded-md border border-border bg-background px-2 py-1 text-sm" />
+            <input type="hidden" name="amount" value={String(convertToEur(parseFloat(amount) || 0, currency, rates))} />
+            <LocalAmountInputs name="amount" value={amount} />
+          </label>
+          <label className="flex flex-col gap-1">
+            <span className="text-muted">{t("fieldPaidDate")}</span>
+            <input type="date" name="paid_date" value={date} onChange={(e) => setDate(e.target.value)} className="rounded-md border border-border bg-background px-2 py-1 text-sm" />
+          </label>
+          <button type="submit" disabled={pending} className="rounded-md bg-foreground px-3 py-1.5 font-medium text-background disabled:opacity-50">{pending ? "..." : t("save")}</button>
+          <button type="button" onClick={() => setAdding(false)} className="rounded-md border border-border px-3 py-1.5 font-medium text-ink-2">{t("cancel")}</button>
+        </form>
+      )}
+      {error && <p className="mt-1 text-accent-strong">{t(error)}</p>}
+    </div>
+  );
+}
+
 function NewPackageSaleForm({
   memberId,
   products,
@@ -1426,6 +1534,10 @@ function NewPackageSaleForm({
     return String(roundMoney(convertFromEur(pkg.total_price, currency, rates), currency));
   });
   const [paidDate, setPaidDate] = useState(() => pkg?.paid_date ?? new Date().toISOString().slice(0, 10));
+  // Round 89: рассрочка — пусто = оплачено полностью
+  const [paidNow, setPaidNow] = useState("");
+  const effPaidNow = paidNow === "" ? totalPrice : paidNow;
+  const restNow = Math.max(0, (parseFloat(totalPrice) || 0) - (parseFloat(effPaidNow) || 0));
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
@@ -1515,8 +1627,26 @@ function NewPackageSaleForm({
             />
             <LocalAmountInputs name="total_price" value={totalPrice} />
           </label>
+          {!pkg && (
+            <label className="flex flex-col gap-1.5 text-sm">
+              <span className="font-medium text-ink-2">
+                {t("fieldPackagePaidNow")} ({currencySymbol(currency)})
+              </span>
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                value={paidNow}
+                placeholder={totalPrice || "0"}
+                onChange={(e) => setPaidNow(e.target.value)}
+                className="rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-accent focus:ring-1 focus:ring-accent"
+              />
+              <input type="hidden" name="paid_now" value={String(convertToEur(parseFloat(effPaidNow) || 0, currency, rates))} />
+              <LocalAmountInputs name="paid_now" value={effPaidNow} />
+            </label>
+          )}
           <label className="flex flex-col gap-1.5 text-sm">
-            <span className="font-medium text-ink-2">{t("fieldPaidDate")}</span>
+            <span className="font-medium text-ink-2">{pkg ? t("fieldPackageSoldDate") : t("fieldPaidDate")}</span>
             <input
               name="paid_date"
               type="date"
@@ -1525,6 +1655,20 @@ function NewPackageSaleForm({
               className="rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-accent focus:ring-1 focus:ring-accent"
             />
           </label>
+          {!pkg && (
+            <div className="flex flex-col justify-end gap-0.5 pb-2 text-xs">
+              {restNow > 0.005 ? (
+                <>
+                  <span className="text-muted">{t("packageRestLabel")}</span>
+                  <span className="text-sm font-semibold text-accent-strong">
+                    {restNow.toLocaleString("ru-RU", { maximumFractionDigits: 2 })} {currencySymbol(currency)} · {t("packageInstallmentHint")}
+                  </span>
+                </>
+              ) : (
+                <span className="text-muted">{t("packagePaidNowHint")}</span>
+              )}
+            </div>
+          )}
         </div>
       </div>
 

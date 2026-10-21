@@ -39,6 +39,11 @@ export async function createPackageSale(memberId: string, formData: FormData): P
   const totalLocal = readLocal(formData, "total_price");
   const paidDate = String(formData.get("paid_date") || "").trim() || todayIso();
   const productIds = formData.getAll("product_id").map(String).filter(Boolean);
+  // Round 89: рассрочка — сколько клиентка заплатила сейчас (по умолчанию вся сумма пакета)
+  const hasPaidNow = formData.get("paid_now") !== null;
+  const paidNow = hasPaidNow ? parseAmount(formData.get("paid_now")) : totalPrice;
+  const paidNowLocal = hasPaidNow ? readLocal(formData, "paid_now") : totalLocal;
+  if (paidNow < 0 || paidNow > totalPrice + 0.01) return { error: "errPackagePaidExceedsTotal" };
   if (productIds.length === 0) return { error: "errSelectPackageCourses" };
 
   const supabase = await createClient();
@@ -84,6 +89,18 @@ export async function createPackageSale(memberId: string, formData: FormData): P
     }))
   );
   if (itemsError) return { error: itemsError.message };
+
+  if (paidNow > 0) {
+    const { error: payError } = await supabase.from("package_sale_payments").insert({
+      package_sale_id: sale.id,
+      partner_id: profile.partner_id,
+      amount: paidNow,
+      amount_local: paidNowLocal.local,
+      local_currency: paidNowLocal.currency,
+      paid_date: paidDate,
+    });
+    if (payError) return { error: payError.message };
+  }
 
   // Round 72: оплата пакета двигает открытый лид участницы в «Оплата».
   await advanceMemberLeadsToPaid(supabase, profile.partner_id, memberId, verifiedIds);
@@ -419,6 +436,60 @@ export async function updatePackageItem(itemId: string, formData: FormData): Pro
   return { error: null };
 }
 
+/** Round 89: доплата по пакету (рассрочка) — ещё один взнос с датой. */
+export async function addPackagePayment(saleId: string, formData: FormData): Promise<ActionResult> {
+  const profile = await getCurrentProfile();
+  if (!profile) return { error: "errNotAuthorized" };
+  if (!profile.partner_id) return { error: "errHqNoClubGeneric" };
+  const amount = parseAmount(formData.get("amount"));
+  if (!(amount > 0)) return { error: "errEnterAmount" };
+  const local = readLocal(formData, "amount");
+  const paidDate = String(formData.get("paid_date") || "").trim() || todayIso();
+
+  const supabase = await createClient();
+  const { data: sale } = await supabase
+    .from("package_sales")
+    .select("id")
+    .eq("id", saleId)
+    .eq("partner_id", profile.partner_id)
+    .maybeSingle();
+  if (!sale) return { error: "errGeneric" };
+
+  const { error } = await supabase.from("package_sale_payments").insert({
+    package_sale_id: saleId,
+    partner_id: profile.partner_id,
+    amount,
+    amount_local: local.local,
+    local_currency: local.currency,
+    paid_date: paidDate,
+  });
+  if (error) return { error: error.message };
+  revalidatePath("/members");
+  revalidatePath("/payments");
+  return { error: null };
+}
+
+/** Round 89: убрать ошибочно внесённый взнос по пакету. */
+export async function deletePackagePayment(paymentId: string): Promise<ActionResult> {
+  const profile = await getCurrentProfile();
+  if (!profile) return { error: "errNotAuthorized" };
+  if (!profile.partner_id) return { error: "errHqNoClubGeneric" };
+  const supabase = await createClient();
+  const { error } = await supabase.from("package_sale_payments").delete().eq("id", paymentId).eq("partner_id", profile.partner_id);
+  if (error) return { error: error.message };
+  revalidatePath("/members");
+  revalidatePath("/payments");
+  return { error: null };
+}
+
+export type PackagePayment = {
+  id: string;
+  amount: number;
+  amount_local: number | null;
+  local_currency: string | null;
+  paid_date: string;
+};
+
 export type PackageSaleItemDetail = {
   id: string;
   product_id: string | null;
@@ -438,6 +509,8 @@ export type PackageSaleDetail = {
   local_currency: string | null;
   paid_date: string;
   items: PackageSaleItemDetail[];
+  /** Round 89: взносы (рассрочка), по дате. Сумма = сколько уже оплачено. */
+  payments: PackagePayment[];
 };
 
 /** Loaded alongside the rest of a member's card (MemberDetailModal) — same
@@ -449,7 +522,7 @@ export async function getPackageSalesForMember(memberId: string): Promise<Packag
   const supabase = await createClient();
   const { data } = await supabase
     .from("package_sales")
-    .select("id, label, total_price, total_price_local, local_currency, paid_date, package_sale_items(id, product_id, allocated_price, allocated_price_local, local_currency, start_date, enrollment_id, products(name))")
+    .select("id, label, total_price, total_price_local, local_currency, paid_date, package_sale_items(id, product_id, allocated_price, allocated_price_local, local_currency, start_date, enrollment_id, products(name)), package_sale_payments(id, amount, amount_local, local_currency, paid_date)")
     .eq("member_id", memberId)
     .order("created_at", { ascending: false });
 
@@ -460,6 +533,9 @@ export async function getPackageSalesForMember(memberId: string): Promise<Packag
     total_price_local: sale.total_price_local,
     local_currency: sale.local_currency,
     paid_date: sale.paid_date,
+    payments: (((sale as unknown as { package_sale_payments?: PackagePayment[] }).package_sale_payments) ?? [])
+      .map((p) => ({ id: p.id, amount: Number(p.amount), amount_local: p.amount_local === null ? null : Number(p.amount_local), local_currency: p.local_currency, paid_date: p.paid_date }))
+      .sort((a, b) => a.paid_date.localeCompare(b.paid_date)),
     items: (
       (sale as unknown as {
         package_sale_items: {
@@ -506,7 +582,7 @@ export async function getPackageSalesForPayments(scopePartnerId: string | null):
   let query = supabase
     .from("package_sales")
     .select(
-      "id, label, total_price, total_price_local, local_currency, paid_date, members(name), partners(name), package_sale_items(id, product_id, allocated_price, allocated_price_local, local_currency, start_date, enrollment_id, products(name))"
+      "id, label, total_price, total_price_local, local_currency, paid_date, members(name), partners(name), package_sale_items(id, product_id, allocated_price, allocated_price_local, local_currency, start_date, enrollment_id, products(name)), package_sale_payments(id, amount, amount_local, local_currency, paid_date)"
     )
     .order("paid_date", { ascending: false });
   if (scopePartnerId) query = query.eq("partner_id", scopePartnerId);
@@ -521,6 +597,9 @@ export async function getPackageSalesForPayments(scopePartnerId: string | null):
     paid_date: sale.paid_date,
     member_name: (sale as { members?: { name: string } | null }).members?.name ?? null,
     partner_name: (sale as { partners?: { name: string } | null }).partners?.name ?? null,
+    payments: (((sale as unknown as { package_sale_payments?: PackagePayment[] }).package_sale_payments) ?? [])
+      .map((p) => ({ id: p.id, amount: Number(p.amount), amount_local: p.amount_local === null ? null : Number(p.amount_local), local_currency: p.local_currency, paid_date: p.paid_date }))
+      .sort((a, b) => a.paid_date.localeCompare(b.paid_date)),
     items: (
       (sale as unknown as {
         package_sale_items: {

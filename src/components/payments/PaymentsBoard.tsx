@@ -140,14 +140,19 @@ export default function PaymentsBoard({
   // потоки when one is assigned (payments.package_sale_id) are revenue
   // records for Главная only — they're not listed here again.
   const cashPayments = useMemo(() => initialPayments.filter((p) => !p.package_sale_id), [initialPayments]);
+  // Round 89: деньги по пакету — это его взносы (рассрочка), каждый со своей датой.
+  const packageInstallments = useMemo(
+    () => packageSales.flatMap((pkg) => pkg.payments.map((pay, i) => ({ pkg, pay, n: i + 1 }))),
+    [packageSales]
+  );
 
   const monthOptions = useMemo(
-    () => paymentMonthOptions([...cashPayments, ...packageSales.map((k) => ({ paid_date: k.paid_date }) as Payment)]),
-    [cashPayments, packageSales]
+    () => paymentMonthOptions([...cashPayments, ...packageInstallments.map((k) => ({ paid_date: k.pay.paid_date }) as Payment)]),
+    [cashPayments, packageInstallments]
   );
   const yearOptions = useMemo(
-    () => paymentYearOptions([...cashPayments, ...packageSales.map((k) => ({ paid_date: k.paid_date }) as Payment)]),
-    [cashPayments, packageSales]
+    () => paymentYearOptions([...cashPayments, ...packageInstallments.map((k) => ({ paid_date: k.pay.paid_date }) as Payment)]),
+    [cashPayments, packageInstallments]
   );
 
   // «Предоплата» = paid before her поток started; «Частичная» = marked as a
@@ -178,8 +183,8 @@ export default function PaymentsBoard({
     if (unlinkedOnly) return [];
     if (status !== "all" && status !== "paid") return [];
     if (kind === "partial") return [];
-    return packageSales.filter((pkg) => inPeriod(period, pkg.paid_date));
-  }, [packageSales, status, period, kind, unlinkedOnly]);
+    return packageInstallments.filter((x) => inPeriod(period, x.pay.paid_date));
+  }, [packageInstallments, status, period, kind, unlinkedOnly]);
 
   const selectedPackage = packageSales.find((p) => p.id === selectedPackageId) ?? null;
 
@@ -196,13 +201,13 @@ export default function PaymentsBoard({
       ...cashPayments
         .filter((p) => p.status === "paid")
         .map((p) => ({ date: p.paid_date, amount: Number(p.amount), local: localOf(p.amount_local, p.local_currency) })),
-      ...packageSales.map((k) => ({
-        date: k.paid_date,
-        amount: Number(k.total_price),
-        local: localOf(k.total_price_local, k.local_currency),
+      ...packageInstallments.map((k) => ({
+        date: k.pay.paid_date,
+        amount: Number(k.pay.amount),
+        local: localOf(k.pay.amount_local, k.pay.local_currency),
       })),
     ],
-    [cashPayments, packageSales]
+    [cashPayments, packageInstallments]
   );
   const pendingPayments = useMemo(() => cashPayments.filter((p) => p.status === "pending"), [cashPayments]);
   const collectedInPeriod = useMemo(
@@ -371,13 +376,13 @@ export default function PaymentsBoard({
                   counted independently. */}
               {[
                 ...filtered.map((p) => ({ kind: "payment" as const, date: p.paid_date, payment: p })),
-                ...filteredPackages.map((pkg) => ({ kind: "package" as const, date: pkg.paid_date, pkg })),
+                ...filteredPackages.map((x) => ({ kind: "package" as const, date: x.pay.paid_date, pkg: x.pkg, pay: x.pay, n: x.n })),
               ]
                 .sort((a, b) => b.date.localeCompare(a.date))
                 .map((row) =>
                   row.kind === "package" ? (
                     <tr
-                      key={`pkg-${row.pkg.id}`}
+                      key={`pkg-${row.pay.id}`}
                       onClick={() => setSelectedPackageId(row.pkg.id)}
                       className="cursor-pointer border-b border-border last:border-0 hover:bg-surface-2"
                     >
@@ -390,15 +395,18 @@ export default function PaymentsBoard({
                         </div>
                       </td>
                       {isHq && <td className="px-4 py-3 text-muted">{row.pkg.partner_name ?? "—"}</td>}
-                      <td className="px-4 py-3 text-muted">{row.pkg.label}</td>
+                      <td className="px-4 py-3 text-muted">
+                        {row.pkg.label}
+                        {row.pkg.payments.length > 1 && <span className="ml-1 text-xs">· {t("packageInstallmentN", { n: row.n })}</span>}
+                      </td>
                       <td className="px-4 py-3">
                         <span className="rounded-full bg-surface-3 px-2 py-0.5 text-xs font-medium text-ink-2">
                           {t("packageBadgeLabel")}
                         </span>
                       </td>
-                      <td className="px-4 py-3 text-muted">{row.pkg.paid_date}</td>
+                      <td className="px-4 py-3 text-muted">{row.pay.paid_date}</td>
                       <td className="px-4 py-3 text-right font-medium text-foreground">
-                        <Money amountEur={row.pkg.total_price} local={localOf(row.pkg.total_price_local, row.pkg.local_currency)} />
+                        <Money amountEur={row.pay.amount} local={localOf(row.pay.amount_local, row.pay.local_currency)} />
                       </td>
                     </tr>
                   ) : (
