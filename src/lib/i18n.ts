@@ -1772,6 +1772,7 @@ export const DICT: Record<string, Entry> = {
   onbFieldBlock: { ru: "Блок", bg: "Блок" },
   onbFieldOwner: { ru: "Кто доносит", bg: "Кой предава" },
   onbFieldWeek: { ru: "Неделя", bg: "Седмица" },
+  onbHwLabel: { ru: "ДЗ: домашнее задание партнёру (видно в фильтре «ДЗ»)", bg: "ДЗ: домашна задача за партньора" },
   onbFieldFileUrl: { ru: "Ссылка на файл партнёра", bg: "Линк към файла на партньора" },
   onbFieldTemplateUrl: { ru: "Ссылка на оригинал УК", bg: "Линк към оригинала" },
   onbFieldDriveFolder: { ru: "Куда класть копию в папке партнёра", bg: "Къде да е копието в папката на партньора" },

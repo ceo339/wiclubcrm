@@ -125,6 +125,12 @@ export async function setItemStatus(itemId: string, status: ItemStatus): Promise
   return { error: null };
 }
 
+/** Метка «ДЗ» (домашнее задание партнеру): добавить или убрать, остальные теги не трогаем. */
+function withHw(tags: string[], on: boolean): string[] {
+  const rest = tags.filter((x) => x !== "ДЗ");
+  return on ? [...rest, "ДЗ"] : rest;
+}
+
 export async function updateItem(itemId: string, fd: FormData): Promise<OnbResult> {
   const g = await requireOnboardingAccess("manage");
   if ("error" in g) return { error: g.error };
@@ -137,9 +143,11 @@ export async function updateItem(itemId: string, fd: FormData): Promise<OnbResul
   if (!isUrl(fileUrl) || !isUrl(tplUrl)) return { error: "onbErrUrl" };
   const doneDate = str(fd, "done_date");
   if (doneDate && !isDate(doneDate)) return { error: "onbErrDate" };
+  const { data: cur } = await onboardingWriteDb().from("plan_items").select("tags").eq("id", itemId).maybeSingle();
   const { error } = await onboardingWriteDb()
     .from("plan_items")
     .update({
+      tags: withHw((cur?.tags as string[] | null) ?? [], fd.get("hw") === "on"),
       title,
       action: str(fd, "action"),
       block: str(fd, "block"),
@@ -356,9 +364,12 @@ export async function updateTemplateItem(itemId: string, fd: FormData): Promise<
   const url = opt(fd, "template_url");
   if (!isUrl(url)) return { error: "onbErrUrl" };
   const mode = str(fd, "link_mode");
+  const { data: cur } = await onboardingWriteDb().from("template_items").select("tags").eq("id", itemId).maybeSingle();
   const { error } = await onboardingWriteDb()
     .from("template_items")
     .update({
+      tags: withHw((cur?.tags as string[] | null) ?? [], fd.get("hw") === "on"),
+      week_key: str(fd, "week_key") || undefined,
       title,
       action: str(fd, "action"),
       block: str(fd, "block"),

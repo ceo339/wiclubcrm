@@ -35,7 +35,7 @@ export default function TemplateTab({ weeks, template }: { weeks: TemplateWeek[]
                 </span>
                 <span className="text-sm text-muted">{t("onbNItems", { n: list.length })}</span>
               </button>
-              {isOpen && list.map((i) => <TplRow key={i.id} item={i} />)}
+              {isOpen && list.map((i) => <TplRow key={i.id} item={i} weeks={weeks} />)}
             </div>
           );
         })}
@@ -62,7 +62,7 @@ export default function TemplateTab({ weeks, template }: { weeks: TemplateWeek[]
   );
 }
 
-function TplRow({ item: i }: { item: TemplateItem }) {
+function TplRow({ item: i, weeks }: { item: TemplateItem; weeks: TemplateWeek[] }) {
   const { t } = useLocale();
   const { pending, error, run } = useAct();
   const [edit, setEdit] = useState(false);
@@ -75,6 +75,7 @@ function TplRow({ item: i }: { item: TemplateItem }) {
             {i.block && <Chip>{i.block}</Chip>}
             <Chip tone="line">{t(OWNER_KEY[i.owner])}</Chip>
             <Chip tone={i.link_mode === "copy" ? "dark" : "line"}>{t(`onbLink_${i.link_mode}`)}</Chip>
+            {i.tags.includes("ДЗ") && <Chip tone="red">ДЗ</Chip>}
             {i.template_url ? (
               <a href={i.template_url} target="_blank" rel="noreferrer" className="text-xs font-semibold underline">
                 {t("onbOpen")} ↗
@@ -107,6 +108,20 @@ function TplRow({ item: i }: { item: TemplateItem }) {
               </option>
             ))}
           </select>
+          <label className="block sm:col-span-2">
+            <span className="mb-1 block text-xs text-muted">{t("onbFieldWeek")}</span>
+            <select name="week_key" defaultValue={i.week_key} className={inputCls}>
+              {weeks.map((w) => (
+                <option key={w.key} value={w.key}>
+                  {weekLabel(w, t)} · {w.title}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="flex items-center gap-2 text-sm sm:col-span-2">
+            <input type="checkbox" name="hw" defaultChecked={i.tags.includes("ДЗ")} className="h-4 w-4 accent-[var(--accent)]" />
+            <span>{t("onbHwLabel")}</span>
+          </label>
           <input name="template_url" defaultValue={i.template_url ?? ""} placeholder={t("onbFieldTemplateUrl")} className={`${inputCls} sm:col-span-2`} />
           <label className="block sm:col-span-2">
             <span className="mb-1 block text-xs text-muted">{t("onbFieldDriveFolder")}</span>

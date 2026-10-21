@@ -352,6 +352,10 @@ function EditItem({ item: i, weeks, onDone }: { item: PlanItem; weeks: TemplateW
         <span className="mb-1 block text-xs text-muted">{t("onbFieldDate")}</span>
         <input type="date" name="done_date" defaultValue={i.done_date ?? ""} className={inputCls} />
       </label>
+      <label className="flex items-center gap-2 self-end pb-2 text-sm sm:col-span-2">
+        <input type="checkbox" name="hw" defaultChecked={i.tags.includes("ДЗ")} className="h-4 w-4 accent-[var(--accent)]" />
+        <span>{t("onbHwLabel")}</span>
+      </label>
       {error && <p className="text-sm text-accent-strong sm:col-span-2">{t(error)}</p>}
       <div className="flex flex-wrap gap-2 sm:col-span-2">
         <button type="submit" className={btnPriCls} disabled={pending}>
