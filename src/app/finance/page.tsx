@@ -129,7 +129,9 @@ export default async function FinancePage({
   const monthHasOwnPartnerPlan = data.plan.some((p) => p.plan_type === "partner" && p.month.slice(0, 7) === period);
   if (tab === "pf") {
     const pl = computeProfitLoss(data, period, now, "partner");
-    const plUk = computeProfitLoss(data, period, now, "uk");
+    // Round 92: план/факт партнёра считается только от плана партнёра (без колонок и подсказок УК);
+    // сравнение с планом УК — только у головного офиса и финдиректора. План УК партнёр видит во вкладке «План».
+    const plUk = networkView ? computeProfitLoss(data, period, now, "uk") : undefined;
     content = (
       <PlanFactTab
         pl={pl}
