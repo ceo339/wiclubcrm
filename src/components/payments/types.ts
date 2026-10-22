@@ -30,4 +30,7 @@ export type MemberOption = {
   /** Round 53 — for a поток: still to pay (price − paid so far), shown as
    * the default amount so a «доплата» pre-fills with the remainder. */
   remaining?: number | null;
+  /** Round 102 — курс и поток этой записи, чтобы выбрать поток в «Оплатах». */
+  productId?: string | null;
+  startDate?: string | null;
 };

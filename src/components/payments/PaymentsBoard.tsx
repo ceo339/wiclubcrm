@@ -493,6 +493,7 @@ export default function PaymentsBoard({
           enrollmentOptions={memberOptions.filter(
             (m) => m.enrollmentId && (!selected.member_id || m.memberId === selected.member_id)
           )}
+          cohorts={cohorts}
           canEdit={canEdit}
           onClose={() => setSelectedId(null)}
         />

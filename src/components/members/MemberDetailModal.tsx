@@ -10,6 +10,7 @@ import {
   deleteEnrollment,
   getMemberDetail,
   setAttendance,
+  setEnrollmentCohort,
   setMemberTaskDone,
   updateEnrollment,
   updateMember,
@@ -378,6 +379,14 @@ function EnrollmentCard({
       : null;
   const isOpenForMoney = ["sAwaiting", "sPartial", "sPaid"].includes(enrollment.status);
   const [pending, startTransition] = useTransition();
+  const [pickingCohort, setPickingCohort] = useState(false);
+  const productCohorts = useMemo(
+    () =>
+      cohorts
+        .filter((c) => c.product_id === enrollment.product_id)
+        .sort((a, b) => a.start_date.localeCompare(b.start_date)),
+    [cohorts, enrollment.product_id]
+  );
   const [error, setError] = useState<string | null>(null);
 
   function handleDelete() {
@@ -403,6 +412,7 @@ function EnrollmentCard({
     return (
       <EditEnrollmentForm
         enrollment={enrollment}
+        cohorts={productCohorts}
         onCancel={() => setEditing(false)}
         onSaved={() => {
           setEditing(false);
@@ -427,8 +437,23 @@ function EnrollmentCard({
               <span className="rounded-full bg-warn-soft px-2 py-0.5 font-medium text-warn">{t("tagPartial")}</span>
             )}
             {/* Round 58 — paid through the bank with no поток picked yet. */}
-            {enrollmentNeedsCohort(enrollment, new Set(cohorts.map((c) => c.product_id))) && (
-              <span className="rounded-full bg-warn-soft px-2 py-0.5 font-medium text-warn">{t("badgeChooseCohort")}</span>
+            {enrollmentNeedsCohort(enrollment, new Set(cohorts.map((c) => c.product_id))) &&
+              (canEdit ? (
+                <button
+                  type="button"
+                  onClick={() => setPickingCohort(true)}
+                  className="rounded-full bg-warn-soft px-2 py-0.5 font-medium text-warn hover:underline"
+                >
+                  {t("badgeChooseCohort")}
+                </button>
+              ) : (
+                <span className="rounded-full bg-warn-soft px-2 py-0.5 font-medium text-warn">{t("badgeChooseCohort")}</span>
+              ))}
+            {/* Round 102 — поток можно сменить из списка потоков курса. */}
+            {canEdit && enrollment.start_date && productCohorts.length > 0 && !pickingCohort && (
+              <button type="button" onClick={() => setPickingCohort(true)} className="text-ink-2 hover:underline">
+                {t("btnChangeCohort")}
+              </button>
             )}
             {enrollment.start_date && <span>{enrollment.start_date}</span>}
             <span className="text-ink-2">
@@ -484,6 +509,19 @@ function EnrollmentCard({
         )}
       </div>
       {error && <p className="mt-1 text-xs text-accent-strong">{t(error)}</p>}
+
+      {pickingCohort && (
+        <CohortPicker
+          enrollmentId={enrollment.id}
+          current={enrollment.start_date}
+          cohorts={productCohorts}
+          onCancel={() => setPickingCohort(false)}
+          onSaved={() => {
+            setPickingCohort(false);
+            onChanged();
+          }}
+        />
+      )}
 
       {canEdit && enrollment.status !== "sNoShow" && panel === "none" && (
         <div className="mt-2 flex flex-wrap gap-2">
@@ -883,12 +921,84 @@ function EnrollmentFieldset({
   );
 }
 
+/** Round 102 — выбрать поток курса из списка прямо в карточке участницы. */
+function CohortPicker({
+  enrollmentId,
+  current,
+  cohorts,
+  onCancel,
+  onSaved,
+}: {
+  enrollmentId: string;
+  current: string | null;
+  cohorts: Tables<"product_cohorts">[];
+  onCancel: () => void;
+  onSaved: () => void;
+}) {
+  const t = useT();
+  const [value, setValue] = useState(current ?? "");
+  const [pending, startTransition] = useTransition();
+  const [error, setError] = useState<string | null>(null);
+
+  function save() {
+    if (!value) return;
+    setError(null);
+    startTransition(async () => {
+      const res = await setEnrollmentCohort(enrollmentId, value);
+      if (res.error) setError(res.error);
+      else onSaved();
+    });
+  }
+
+  return (
+    <div className="mt-2 rounded-md bg-surface-2 p-2.5">
+      {cohorts.length === 0 ? (
+        <p className="text-xs text-muted">{t("emptyNoCohortsForCourse")}</p>
+      ) : (
+        <div className="flex flex-wrap items-center gap-2">
+          <select
+            value={value}
+            onChange={(e) => setValue(e.target.value)}
+            className="min-w-0 flex-1 rounded-lg border border-border bg-background px-3 py-1.5 text-sm outline-none focus:border-accent focus:ring-1 focus:ring-accent"
+          >
+            <option value="">{t("optionChooseCohort")}</option>
+            {cohorts.map((c) => (
+              <option key={c.id} value={c.start_date}>
+                {c.start_date.split("-").reverse().join(".")}
+              </option>
+            ))}
+          </select>
+          <button
+            type="button"
+            onClick={onCancel}
+            className="rounded-lg border border-border px-3 py-1.5 text-xs font-medium text-ink-2 hover:bg-surface-2"
+          >
+            {t("cancel")}
+          </button>
+          <button
+            type="button"
+            disabled={pending || !value}
+            onClick={save}
+            className="rounded-lg bg-foreground px-3 py-1.5 text-xs font-medium text-background disabled:opacity-50"
+          >
+            {pending ? "..." : t("save")}
+          </button>
+        </div>
+      )}
+      {error && <p className="mt-1 text-xs text-accent-strong">{t(error)}</p>}
+    </div>
+  );
+}
+
 function EditEnrollmentForm({
   enrollment,
+  cohorts,
   onCancel,
   onSaved,
 }: {
   enrollment: EnrollmentDetail;
+  /** Round 102 — потоки этого курса, чтобы выбрать поток из списка. */
+  cohorts: Tables<"product_cohorts">[];
   onCancel: () => void;
   onSaved: () => void;
 }) {
@@ -919,6 +1029,23 @@ function EditEnrollmentForm({
         {enrollment.product_name ?? t("optionCourseNotChosen")}
       </div>
       <div className="mt-2 flex flex-col gap-3">
+        {cohorts.length > 0 && (
+          <label className="flex flex-col gap-1.5 text-sm">
+            <span className="font-medium text-ink-2">{t("fieldPaymentCohort")}</span>
+            <select
+              value={cohorts.some((c) => c.start_date === startDate) ? startDate : ""}
+              onChange={(e) => setStartDate(e.target.value)}
+              className="rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-accent focus:ring-1 focus:ring-accent"
+            >
+              <option value="">{t("optionNotChosen")}</option>
+              {cohorts.map((c) => (
+                <option key={c.id} value={c.start_date}>
+                  {c.start_date.split("-").reverse().join(".")}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
         <EnrollmentFieldset
           status={status}
           startDate={startDate}

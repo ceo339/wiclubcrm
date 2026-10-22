@@ -14,18 +14,29 @@ const initialState: ActionResult = { error: null };
 export default function EditPaymentModal({
   payment,
   enrollmentOptions = [],
+  cohorts = [],
   canEdit,
   onClose,
 }: {
   payment: Payment;
   /** Round 53 — this member's потоки, to (re)link the payment. */
   enrollmentOptions?: MemberOption[];
+  /** Round 102 — потоки курсов клуба, чтобы выбрать поток курса здесь же. */
+  cohorts?: { product_id: string; start_date: string }[];
   canEdit: boolean;
   onClose: () => void;
 }) {
   const { locale, t } = useLocale();
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [enrollmentId, setEnrollmentId] = useState(payment.enrollment_id ?? "");
+  const chosen = enrollmentOptions.find((o) => o.enrollmentId === enrollmentId) ?? null;
+  const courseCohorts = chosen?.productId ? cohorts.filter((c) => c.product_id === chosen.productId) : [];
+  const [cohortStart, setCohortStart] = useState(chosen?.startDate ?? "");
+  function pickEnrollment(id: string) {
+    setEnrollmentId(id);
+    setCohortStart(enrollmentOptions.find((o) => o.enrollmentId === id)?.startDate ?? "");
+  }
 
   const [state, formAction, pending] = useActionState(async (_prev: ActionResult, formData: FormData) => {
     const result = await updatePayment(payment.id, formData);
@@ -71,16 +82,36 @@ export default function EditPaymentModal({
 
               {enrollmentOptions.length > 0 && (
                 <label className="flex flex-col gap-1.5 text-sm">
-                  <span className="font-medium text-ink-2">{t("fieldPaymentCohort")}</span>
+                  <span className="font-medium text-ink-2">{t("fieldCourse")}</span>
                   <select
                     name="enrollment_id"
-                    defaultValue={payment.enrollment_id ?? ""}
+                    value={enrollmentId}
+                    onChange={(e) => pickEnrollment(e.target.value)}
                     className="rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-accent focus:ring-1 focus:ring-accent"
                   >
                     <option value="">{t("optionNoCohortLinked")}</option>
                     {enrollmentOptions.map((o) => (
                       <option key={o.key} value={o.enrollmentId!}>
                         {payment.member_id ? o.label.split(" — ").slice(1).join(" — ") || o.label : o.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              )}
+
+              {enrollmentId && courseCohorts.length > 0 && (
+                <label className="flex flex-col gap-1.5 text-sm">
+                  <span className="font-medium text-ink-2">{t("fieldCohortOfCourse")}</span>
+                  <select
+                    name="cohort_start"
+                    value={cohortStart}
+                    onChange={(e) => setCohortStart(e.target.value)}
+                    className={`rounded-lg border bg-background px-3 py-2 text-sm outline-none focus:border-accent focus:ring-1 focus:ring-accent ${cohortStart ? "border-border" : "border-warn"}`}
+                  >
+                    <option value="">{t("optionChooseCohort")}</option>
+                    {courseCohorts.map((c) => (
+                      <option key={c.start_date} value={c.start_date}>
+                        {c.start_date.split("-").reverse().join(".")}
                       </option>
                     ))}
                   </select>

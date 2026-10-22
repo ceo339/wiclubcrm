@@ -855,6 +855,10 @@ export const DICT: Record<string, Entry> = {
   // Round 58 — DSK payments that arrive without a course / поток
   badgePaymentUnlinked: { ru: "Не привязана", bg: "Не е свързано" },
   badgeChooseCohort: { ru: "Выберите поток", bg: "Изберете поток" },
+  // Round 102 — выбор потока из списка (карточка участницы, «Оплаты»)
+  btnChangeCohort: { ru: "сменить поток", bg: "смени потока" },
+  optionChooseCohort: { ru: "— выберите поток —", bg: "— изберете поток —" },
+  fieldCohortOfCourse: { ru: "Поток курса", bg: "Поток на курса" },
   headingNeedsAttention: { ru: "Требует внимания", bg: "Изисква внимание" },
   attnUnlinkedPayments: { ru: "Оплаты без привязки к записи на курс", bg: "Плащания без свързване със запис за курс" },
   paymentNoCourseUnlinked: { ru: "не привязана к записи на курс — в выручку не входит", bg: "не е свързано със запис за курс — не влиза в приходите" },

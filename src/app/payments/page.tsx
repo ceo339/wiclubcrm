@@ -56,7 +56,7 @@ export default async function PaymentsPage({
   const { data: members } = canEdit
     ? await supabase
         .from("members")
-        .select("id, name, member_enrollments(id, price, start_date, status, products(name), payments(amount, status))")
+        .select("id, name, member_enrollments(id, product_id, price, start_date, status, products(name), payments(amount, status))")
         .order("name")
     : { data: [] };
   const [{ data: products }, { data: cohorts }] = canEdit
@@ -73,6 +73,7 @@ export default async function PaymentsPage({
   // member so a payment for a NEW поток can be started from her name.
   type EnrollmentRow = {
     id: string;
+    product_id: string | null;
     price: number;
     start_date: string | null;
     status: string;
@@ -96,6 +97,8 @@ export default async function PaymentsPage({
         label: parts.length ? `${m.name} — ${parts.join(" · ")}` : m.name,
         defaultAmount: remaining > 0 ? remaining : e.price,
         remaining,
+        productId: e.product_id,
+        startDate: e.start_date,
       };
     });
     return [...rows, { key: `member:${m.id}`, memberId: m.id, enrollmentId: null, label: m.name, defaultAmount: null }];

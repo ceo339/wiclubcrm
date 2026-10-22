@@ -47,6 +47,10 @@ export default function NewPaymentModal({
   const potoki = members.filter((m) => m.enrollmentId && m.memberId === memberId);
   const isNew = targetKey === "new";
   const productCohorts = cohorts.filter((c) => c.product_id === newProductId);
+  // Round 102 — у уже существующей записи на курс тоже можно выбрать поток.
+  const targetOpt = !isNew ? members.find((m) => m.key === targetKey && m.enrollmentId) ?? null : null;
+  const targetCohorts = targetOpt?.productId ? cohorts.filter((c) => c.product_id === targetOpt.productId) : [];
+  const [cohortStart, setCohortStart] = useState("");
 
   const [state, formAction, pending] = useActionState(async (_prev: ActionResult, formData: FormData) => {
     const result = await createPayment(formData);
@@ -65,6 +69,7 @@ export default function NewPaymentModal({
   }
   function pickTarget(key: string) {
     setTargetKey(key);
+    setCohortStart(members.find((m) => m.key === key)?.startDate ?? "");
     if (key === "new") return;
     setAmountEur(members.find((m) => m.key === key)?.defaultAmount);
   }
@@ -113,6 +118,20 @@ export default function NewPaymentModal({
                     </option>
                   ))}
                   <option value="new">+ {t("optionNewCohort")}</option>
+                </select>
+              </label>
+            )}
+
+            {memberId && targetOpt && targetCohorts.length > 0 && (
+              <label className="flex flex-col gap-1.5 text-sm">
+                <span className="font-medium text-ink-2">{t("fieldCohortOfCourse")}</span>
+                <select name="cohort_start" value={cohortStart} onChange={(e) => setCohortStart(e.target.value)} className={inputCls}>
+                  <option value="">{t("optionChooseCohort")}</option>
+                  {targetCohorts.map((c) => (
+                    <option key={c.start_date} value={c.start_date}>
+                      {c.start_date.split("-").reverse().join(".")}
+                    </option>
+                  ))}
                 </select>
               </label>
             )}

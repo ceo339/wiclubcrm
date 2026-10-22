@@ -9,6 +9,7 @@ import { STATUSES, todayIso } from "@/lib/payments";
 import { findOrCreateContact } from "@/lib/server/contacts";
 import { recomputeEnrollmentStatus } from "@/lib/server/enrollmentPayments";
 import { readLocal } from "@/lib/server/localMoney";
+import { setEnrollmentCohort } from "@/app/members/actions";
 
 export type ActionResult = { error: string | null };
 export type PaymentLinkResult = { error: string | null; url?: string };
@@ -203,6 +204,12 @@ export async function createPayment(formData: FormData): Promise<ActionResult> {
   if (error) return { error: error.message };
   if (resolved.enrollmentId) {
     await recomputeEnrollmentStatus(supabase, resolved.enrollmentId, { fullPayment: !isPartial && status === "paid" });
+    // Round 102 — поток курса выбран прямо в форме оплаты.
+    const cohortStart = String(formData.get("cohort_start") || "").trim();
+    if (cohortStart) {
+      const r = await setEnrollmentCohort(resolved.enrollmentId, cohortStart);
+      if (r.error) return r;
+    }
   }
 
   revalidatePath("/payments");
@@ -278,6 +285,15 @@ export async function updatePayment(paymentId: string, formData: FormData): Prom
 
   const touched = new Set([before.enrollment_id, patch.enrollment_id].filter(Boolean) as string[]);
   for (const id of touched) await recomputeEnrollmentStatus(supabase, id);
+
+  // Round 102 — «в оплатах добавить привязку потока к курсу»: поток
+  // (дата старта) выбранного курса меняется прямо отсюда.
+  const linkedEnrollment = patch.enrollment_id !== undefined ? patch.enrollment_id : before.enrollment_id;
+  const cohortStart = String(formData.get("cohort_start") || "").trim();
+  if (linkedEnrollment && cohortStart) {
+    const r = await setEnrollmentCohort(linkedEnrollment, cohortStart);
+    if (r.error) return r;
+  }
 
   revalidatePath("/payments");
   revalidatePath("/members");

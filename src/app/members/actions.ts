@@ -528,6 +528,54 @@ export async function updateEnrollment(enrollmentId: string, formData: FormData)
  * выручка этого потока; обычные оплаты — только если она подтвердила
  * (`deletePayments`), иначе остаются непривязанными (деньги реальные).
  */
+/**
+ * Round 102 — «в участницах выбирать поток»: set only the поток (start date)
+ * of an enrollment, picked from the course's real потоки — from the
+ * «Выберите поток» badge on her card or from «Оплаты». Status, price and
+ * payments stay as they are; revenue moves to that поток's month.
+ */
+export async function setEnrollmentCohort(enrollmentId: string, startDate: string | null): Promise<ActionResult> {
+  const profile = await getCurrentProfile();
+  if (!profile) return { error: "errNotAuthorized" };
+  if (!profile.partner_id) return { error: "errHqNoClubEdit" };
+
+  const supabase = await createClient();
+  const { data: e } = await supabase
+    .from("member_enrollments")
+    .select("id, member_id, product_id, start_date")
+    .eq("id", enrollmentId)
+    .eq("partner_id", profile.partner_id)
+    .maybeSingle();
+  if (!e) return { error: "errGeneric" };
+
+  const date = (startDate ?? "").trim() || null;
+  if (date && e.product_id) {
+    const { data: c } = await supabase
+      .from("product_cohorts")
+      .select("id")
+      .eq("product_id", e.product_id)
+      .eq("start_date", date)
+      .limit(1);
+    if (!c || c.length === 0) return { error: "errGeneric" };
+  }
+  if ((e.start_date ?? null) === date) return { error: null };
+
+  const { error } = await supabase.from("member_enrollments").update({ start_date: date }).eq("id", enrollmentId);
+  if (error) return { error: error.message };
+
+  if (date && e.product_id) {
+    const { data: course } = await supabase.from("products").select("name").eq("id", e.product_id).maybeSingle();
+    await closeChooseCohortTasks(supabase, e.member_id, course?.name ?? null);
+  }
+
+  revalidatePath("/members");
+  revalidatePath("/attendance", "layout");
+  revalidatePath("/payments");
+  revalidatePath("/contacts");
+  revalidatePath("/");
+  return { error: null };
+}
+
 export async function deleteEnrollment(enrollmentId: string, deletePayments = false): Promise<ActionResult> {
   const profile = await getCurrentProfile();
   if (!profile) return { error: "errNotAuthorized" };
