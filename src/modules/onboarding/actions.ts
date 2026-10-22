@@ -674,7 +674,7 @@ export async function archiveTemplateItem(itemId: string, alsoCurrent: boolean):
 
 /**
  * Перетаскивание пункта шаблона: в другую неделю (в конец) или перед другим пунктом.
- * Смена недели доходит и до идущих онбордингов, где пункт не сделан и неделю у партнера не меняли.
+ * Порядок и неделя сразу меняются у всех идущих онбордингов (свои задачи партнера остаются на местах).
  */
 export async function moveTemplateItem(itemId: string, weekKey: string, beforeId: string | null = null): Promise<OnbResult> {
   const g = await requireOnboardingAccess("manage");
@@ -704,17 +704,35 @@ export async function moveTemplateItem(itemId: string, weekKey: string, beforeId
       await db.from("template_items").update({ sort: k }).eq("id", id);
     }
   }
-  if (cur.week_key !== weekKey) {
-    const { data: active } = await db.from("onboardings").select("id").eq("status", "onboarding");
-    const ids = (active ?? []).map((o) => o.id as string);
-    if (ids.length)
+  const { data: active } = await db.from("onboardings").select("id").eq("status", "onboarding");
+  const ids = (active ?? []).map((o) => o.id as string);
+  if (ids.length) {
+    if (cur.week_key !== weekKey)
       await db
         .from("plan_items")
         .update({ week_key: weekKey, updated_at: new Date().toISOString() })
         .eq("template_item_id", itemId)
         .eq("week_key", cur.week_key as string)
-        .in("onboarding_id", ids)
-        .neq("status", "done");
+        .in("onboarding_id", ids);
+    // Порядок как в шаблоне: пункты из шаблона встают в его порядке,
+    // свои задачи партнера остаются на своих местах.
+    const rank = new Map(list.map((id, k) => [id, k]));
+    const { data: pis } = await db
+      .from("plan_items")
+      .select("id, onboarding_id, template_item_id, sort")
+      .eq("week_key", weekKey)
+      .in("onboarding_id", ids)
+      .order("sort");
+    const byOnb = new Map<string, { id: string; template_item_id: string | null; sort: number }[]>();
+    for (const r of (pis ?? []) as { id: string; onboarding_id: string; template_item_id: string | null; sort: number }[])
+      byOnb.set(r.onboarding_id, [...(byOnb.get(r.onboarding_id) ?? []), r]);
+    for (const rows of byOnb.values()) {
+      const slots = rows.map((r, k) => (r.template_item_id && rank.has(r.template_item_id) ? k : -1)).filter((k) => k >= 0);
+      const tpl = slots.map((k) => rows[k]).sort((a, b) => rank.get(a.template_item_id!)! - rank.get(b.template_item_id!)!);
+      const next = [...rows];
+      slots.forEach((k, n) => (next[k] = tpl[n]));
+      for (let k = 0; k < next.length; k++) if (next[k].sort !== k) await db.from("plan_items").update({ sort: k }).eq("id", next[k].id);
+    }
   }
   revalidatePath("/onboarding", "layout");
   return { error: null };
