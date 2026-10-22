@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useLocale } from "@/components/i18n/LocaleProvider";
-import { addTemplateItem, archiveTemplateItem, pushTemplateLinks, updateTemplateItem } from "../actions";
+import { addTemplateItem, archiveTemplateItem, moveTemplateItem, pushTemplateLinks, updateTemplateItem } from "../actions";
 import { OWNERS, PARTNER_SUBFOLDERS, type TemplateItem, type TemplateWeek } from "../types";
 import { weekLabel } from "./PlanTab";
 import { Card, Chip, OWNER_KEY, btnCls, btnPriCls, inputCls } from "./ui";
@@ -13,6 +13,15 @@ export default function TemplateTab({ weeks, template }: { weeks: TemplateWeek[]
   const { t } = useLocale();
   const { pending, run } = useAct();
   const [open, setOpen] = useState<string | null>(null);
+  const [dragId, setDragId] = useState<string | null>(null);
+  const [overItem, setOverItem] = useState<string | null>(null);
+  const [overWeek, setOverWeek] = useState<string | null>(null);
+  const move = useAct();
+  const endDrag = () => {
+    setDragId(null);
+    setOverItem(null);
+    setOverWeek(null);
+  };
   const copies = template.filter((i) => i.link_mode === "copy");
 
   return (
@@ -29,13 +38,59 @@ export default function TemplateTab({ weeks, template }: { weeks: TemplateWeek[]
           const isOpen = open === w.key;
           return (
             <div key={w.key} className="border-t border-border first:border-t-0">
-              <button type="button" className="flex w-full justify-between px-4 py-3 text-left hover:bg-surface-2/50" onClick={() => setOpen(isOpen ? null : w.key)}>
+              <button
+                type="button"
+                className={`flex w-full justify-between px-4 py-3 text-left hover:bg-surface-2/50 ${dragId && overWeek === w.key && !overItem ? "bg-accent-soft" : ""}`}
+                onClick={() => setOpen(isOpen ? null : w.key)}
+                onDragOver={(e) => {
+                  if (!dragId) return;
+                  e.preventDefault();
+                  setOverWeek(w.key);
+                  setOverItem(null);
+                }}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  const id = dragId;
+                  endDrag();
+                  if (id) move.run(() => moveTemplateItem(id, w.key));
+                }}
+              >
                 <span>
                   <b>{weekLabel(w, t)}</b> · {w.title}
                 </span>
                 <span className="text-sm text-muted">{t("onbNItems", { n: list.length })}</span>
               </button>
-              {isOpen && list.map((i) => <TplRow key={i.id} item={i} weeks={weeks} />)}
+              {isOpen &&
+                list.map((i) => (
+                  <div
+                    key={i.id}
+                    draggable
+                    className={`cursor-grab active:cursor-grabbing ${dragId === i.id ? "opacity-50" : ""}`}
+                    style={dragId && dragId !== i.id && overItem === i.id ? { boxShadow: "inset 0 3px 0 0 var(--accent)" } : undefined}
+                    onDragStart={(e) => {
+                      e.dataTransfer.effectAllowed = "move";
+                      e.dataTransfer.setData("text/plain", i.id);
+                      setDragId(i.id);
+                    }}
+                    onDragEnd={endDrag}
+                    onDragOver={(e) => {
+                      if (!dragId || dragId === i.id) return;
+                      e.preventDefault();
+                      setOverItem(i.id);
+                      setOverWeek(w.key);
+                    }}
+                    onDrop={(e) => {
+                      if (!dragId || dragId === i.id) return;
+                      e.preventDefault();
+                      const id = dragId;
+                      endDrag();
+                      move.run(() => moveTemplateItem(id, w.key, i.id));
+                    }}
+                  >
+                    <TplRow item={i} weeks={weeks} />
+                  </div>
+                ))}
+              {isOpen && move.error && <p className="px-4 pb-2 text-sm text-accent-strong">{t(move.error)}</p>}
               {isOpen && <AddTplItem weekKey={w.key} />}
             </div>
           );

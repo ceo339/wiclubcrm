@@ -671,3 +671,51 @@ export async function archiveTemplateItem(itemId: string, alsoCurrent: boolean):
   revalidatePath("/onboarding", "layout");
   return { error: null };
 }
+
+/**
+ * Перетаскивание пункта шаблона: в другую неделю (в конец) или перед другим пунктом.
+ * Смена недели доходит и до идущих онбордингов, где пункт не сделан и неделю у партнера не меняли.
+ */
+export async function moveTemplateItem(itemId: string, weekKey: string, beforeId: string | null = null): Promise<OnbResult> {
+  const g = await requireOnboardingAccess("manage");
+  if ("error" in g) return { error: g.error };
+  const db = onboardingWriteDb();
+  const { data: wk } = await db.from("template_weeks").select("key").eq("key", weekKey).maybeSingle();
+  if (!wk) return { error: "onbErrSave" };
+  const { data: cur } = await db.from("template_items").select("week_key").eq("id", itemId).maybeSingle();
+  if (!cur) return { error: "onbErrSave" };
+  const { data: rows } = await db
+    .from("template_items")
+    .select("id, sort")
+    .eq("week_key", weekKey)
+    .eq("archived", false)
+    .neq("id", itemId)
+    .order("sort");
+  const list = ((rows ?? []) as { id: string; sort: number }[]).map((r) => r.id);
+  const at = beforeId ? list.indexOf(beforeId) : -1;
+  list.splice(at < 0 ? list.length : at, 0, itemId);
+  const old = new Map(((rows ?? []) as { id: string; sort: number }[]).map((r) => [r.id, r.sort]));
+  for (let k = 0; k < list.length; k++) {
+    const id = list[k];
+    if (id === itemId) {
+      const { error } = await db.from("template_items").update({ week_key: weekKey, sort: k }).eq("id", id);
+      if (error) return { error: error.message };
+    } else if (old.get(id) !== k) {
+      await db.from("template_items").update({ sort: k }).eq("id", id);
+    }
+  }
+  if (cur.week_key !== weekKey) {
+    const { data: active } = await db.from("onboardings").select("id").eq("status", "onboarding");
+    const ids = (active ?? []).map((o) => o.id as string);
+    if (ids.length)
+      await db
+        .from("plan_items")
+        .update({ week_key: weekKey, updated_at: new Date().toISOString() })
+        .eq("template_item_id", itemId)
+        .eq("week_key", cur.week_key as string)
+        .in("onboarding_id", ids)
+        .neq("status", "done");
+  }
+  revalidatePath("/onboarding", "layout");
+  return { error: null };
+}
