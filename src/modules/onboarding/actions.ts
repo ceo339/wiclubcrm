@@ -6,7 +6,7 @@ import { ownsOnboarding, requireOnboardingAccess } from "./server/guard";
 import { createOnboarding } from "./server/start";
 import { createPartnerDriveFolder } from "./server/folder";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { ITEM_STATUSES, OWNERS, PARTNER_SUBFOLDERS, driveFileIdFromUrl, quizPassMark, type ItemStatus, type QuizQuestion, type QuizQuestionPublic, type QuizReview, type Owner, type PlanItem, type TemplateItem } from "./types";
+import { ITEM_STATUSES, TIMEZONES, OWNERS, PARTNER_SUBFOLDERS, driveFileIdFromUrl, quizPassMark, type ItemStatus, type QuizQuestion, type QuizQuestionPublic, type QuizReview, type Owner, type PlanItem, type TemplateItem } from "./types";
 
 /**
  * Серверные действия модуля «Онбординг». Каждое начинается с проверки роли
@@ -27,6 +27,8 @@ const lines = (v: string) =>
     .filter(Boolean);
 const asOwner = (v: string): Owner => ((OWNERS as string[]).includes(v) ? (v as Owner) : "curator");
 const isUrl = (v: string | null) => !v || /^https?:\/\//i.test(v);
+
+const WEEKDAY_RU = ["по понедельникам", "по вторникам", "по средам", "по четвергам", "по пятницам", "по субботам", "по воскресеньям"];
 
 function refresh(id?: string) {
   revalidatePath("/onboarding");
@@ -71,6 +73,9 @@ export async function saveOnboarding(id: string, fd: FormData): Promise<OnbResul
   const zoom = opt(fd, "zoom_url");
   if (!isUrl(drive) || !isUrl(zoom)) return { error: "onbErrUrl" };
   const nextCall = opt(fd, "next_call_at");
+  const wd = Number(str(fd, "call_weekday"));
+  const weekday = Number.isInteger(wd) && wd >= 1 && wd <= 7 ? wd : null;
+  const callTime = /^\d{2}:\d{2}$/.test(str(fd, "call_time")) ? str(fd, "call_time") : null;
   const partnerName = str(fd, "partner_name");
   if (partnerName) {
     const { data: o } = await onboardingWriteDb().from("onboardings").select("candidate_id").eq("id", id).maybeSingle();
@@ -83,7 +88,11 @@ export async function saveOnboarding(id: string, fd: FormData): Promise<OnbResul
       city: opt(fd, "city"),
       start_date: start || null,
       curator: opt(fd, "curator"),
-      call_day: opt(fd, "call_day"),
+      call_weekday: weekday,
+      call_time: callTime,
+      call_tz: TIMEZONES.some((x) => x.tz === str(fd, "call_tz")) ? str(fd, "call_tz") : "Europe/Madrid",
+      partner_tz: TIMEZONES.some((x) => x.tz === str(fd, "partner_tz")) ? str(fd, "partner_tz") : null,
+      call_day: weekday ? WEEKDAY_RU[weekday - 1] : opt(fd, "call_day"),
       current_week: Number.isInteger(week) && week > 0 ? week : null,
       drive_folder_url: drive,
       zoom_url: zoom,
@@ -513,7 +522,11 @@ export async function createDriveFolder(onboardingId: string): Promise<OnbResult
 }
 
 /** Перетаскивание пункта плана в другую неделю (только hq). Встает в конец недели. */
-export async function moveItem(itemId: string, weekKey: string): Promise<OnbResult> {
+/**
+ * Перенос пункта мышкой: в другую неделю (в конец) или на место перед другим
+ * пунктом (beforeId). Порядок недели пересчитывается заново.
+ */
+export async function moveItem(itemId: string, weekKey: string, beforeId: string | null = null): Promise<OnbResult> {
   const g = await requireOnboardingAccess("manage");
   if ("error" in g) return { error: g.error };
   const db = onboardingWriteDb();
@@ -521,19 +534,27 @@ export async function moveItem(itemId: string, weekKey: string): Promise<OnbResu
   if (!wk) return { error: "onbErrSave" };
   const onbId = await onboardingOfItem("plan_items", itemId);
   if (!onbId) return { error: "onbErrSave" };
-  const { data: last } = await db
+  const { data: rows } = await db
     .from("plan_items")
-    .select("sort")
+    .select("id, sort")
     .eq("onboarding_id", onbId)
     .eq("week_key", weekKey)
-    .order("sort", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-  const { error } = await db
-    .from("plan_items")
-    .update({ week_key: weekKey, sort: ((last?.sort as number | undefined) ?? 0) + 1, updated_at: new Date().toISOString() })
-    .eq("id", itemId);
-  if (error) return { error: error.message };
+    .neq("id", itemId)
+    .order("sort");
+  const list = ((rows ?? []) as { id: string; sort: number }[]).map((r) => r.id);
+  const at = beforeId ? list.indexOf(beforeId) : -1;
+  list.splice(at < 0 ? list.length : at, 0, itemId);
+  const now = new Date().toISOString();
+  const old = new Map(((rows ?? []) as { id: string; sort: number }[]).map((r) => [r.id, r.sort]));
+  for (let k = 0; k < list.length; k++) {
+    const id = list[k];
+    if (id === itemId) {
+      const { error } = await db.from("plan_items").update({ week_key: weekKey, sort: k, updated_at: now }).eq("id", id);
+      if (error) return { error: error.message };
+    } else if (old.get(id) !== k) {
+      await db.from("plan_items").update({ sort: k }).eq("id", id);
+    }
+  }
   refresh(onbId);
   return { error: null };
 }

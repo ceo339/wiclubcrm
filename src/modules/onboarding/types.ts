@@ -65,8 +65,86 @@ export type Onboarding = {
   /** Постоянная ссылка на еженедельный звонок в Zoom (видит и партнер). */
   zoom_url: string | null;
   next_call_at: string | null;
+  /** Регулярный созвон: день недели (1 пн … 7 вс) и время «ЧЧ:ММ» в поясе call_tz (куратора). */
+  call_weekday: number | null;
+  call_time: string | null;
+  call_tz: string;
+  /** Часовой пояс партнера: чтобы обе стороны видели время созвона у себя и у другой стороны. */
+  partner_tz: string | null;
   created_at: string;
 };
+
+export type CallInfo = Pick<Onboarding, "next_call_at" | "call_weekday" | "call_time" | "call_tz" | "partner_tz">;
+
+export const WEEKDAYS = [1, 2, 3, 4, 5, 6, 7] as const;
+
+/** Часовые поясы городов сети (подпись по-русски). */
+export const TIMEZONES: { tz: string; label: string }[] = [
+  { tz: "Europe/Madrid", label: "Мадрид, Валенсия, Барселона" },
+  { tz: "Europe/Sofia", label: "София" },
+  { tz: "Europe/Kyiv", label: "Киев, Одесса" },
+  { tz: "Europe/Chisinau", label: "Кишинев" },
+  { tz: "Asia/Tbilisi", label: "Батуми, Тбилиси" },
+  { tz: "Asia/Almaty", label: "Астана, Алматы" },
+  { tz: "Asia/Dubai", label: "Дубай" },
+  { tz: "Europe/Vienna", label: "Вена" },
+  { tz: "Europe/Berlin", label: "Берлин" },
+  { tz: "Europe/Warsaw", label: "Варшава" },
+  { tz: "Europe/Lisbon", label: "Лиссабон" },
+  { tz: "Europe/London", label: "Лондон" },
+  { tz: "America/New_York", label: "Нью-Йорк" },
+  { tz: "America/Los_Angeles", label: "Лос-Анджелес" },
+];
+
+export function tzLabel(tz: string): string {
+  return TIMEZONES.find((x) => x.tz === tz)?.label ?? tz.split("/").pop()?.replace(/_/g, " ") ?? tz;
+}
+
+function tzOffsetMs(ms: number, tz: string): number {
+  const p = Object.fromEntries(
+    new Intl.DateTimeFormat("en-US", { timeZone: tz, hourCycle: "h23", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit" })
+      .formatToParts(new Date(ms))
+      .map((x) => [x.type, x.value])
+  );
+  const asUtc = Date.UTC(+p.year, +p.month - 1, +p.day, +p.hour, +p.minute, +p.second);
+  return asUtc - Math.floor(ms / 1000) * 1000;
+}
+
+/** Локальное время в поясе tz → момент UTC (мс). */
+function zonedToUtc(y: number, m: number, d: number, h: number, mi: number, tz: string): number {
+  const guess = Date.UTC(y, m - 1, d, h, mi);
+  const off = tzOffsetMs(guess, tz);
+  let r = guess - off;
+  const off2 = tzOffsetMs(r, tz);
+  if (off2 !== off) r = guess - off2;
+  return r;
+}
+
+/**
+ * Ближайший созвон: разовый перенос, если он еще впереди (или идет сейчас),
+ * иначе следующий регулярный день и время в поясе куратора.
+ */
+export function nextCallAt(c: CallInfo, now: Date): Date | null {
+  const grace = 90 * 60000;
+  if (c.next_call_at) {
+    const one = new Date(c.next_call_at);
+    if (one.getTime() > now.getTime() - grace) return one;
+  }
+  if (!c.call_weekday || !c.call_time || !/^\d{2}:\d{2}$/.test(c.call_time)) return null;
+  const tz = c.call_tz || "Europe/Madrid";
+  const [hh, mm] = c.call_time.split(":").map(Number);
+  const p = Object.fromEntries(
+    new Intl.DateTimeFormat("en-US", { timeZone: tz, year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(now).map((x) => [x.type, x.value])
+  );
+  for (let k = 0; k <= 7; k++) {
+    const day = new Date(Date.UTC(+p.year, +p.month - 1, +p.day + k));
+    const iso = day.getUTCDay() === 0 ? 7 : day.getUTCDay();
+    if (iso !== c.call_weekday) continue;
+    const at = zonedToUtc(day.getUTCFullYear(), day.getUTCMonth() + 1, day.getUTCDate(), hh, mm, tz);
+    if (at > now.getTime() - grace) return new Date(at);
+  }
+  return null;
+}
 
 export type PlanItem = {
   id: string;

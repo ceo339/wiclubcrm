@@ -3,7 +3,8 @@
 import { useState } from "react";
 import { useLocale } from "@/components/i18n/LocaleProvider";
 import { createDriveFolder, saveMilestone, saveOnboarding, setItemStatus, setOnboardingStatus } from "../actions";
-import { OWNERS, progress, type OnboardingFull } from "../types";
+import { OWNERS, TIMEZONES, WEEKDAYS, progress, type CallInfo, type OnboardingFull } from "../types";
+import CallTime from "./CallTime";
 import MeetingsTab, { type QuizAgendaItem } from "./MeetingsTab";
 import PlanTab, { isDoItem, type PlanFilter } from "./PlanTab";
 import TasksTab from "./TasksTab";
@@ -197,10 +198,11 @@ export default function OnboardingPartner({
         )}
 
         {!opened ? (
-          <Milestones onboardingId={onb.id} milestones={milestones} canManage={canManage} nextCall={onb.next_call_at} zoomUrl={onb.zoom_url} onCall={() => { setNewCall(true); setTab("meet"); }} />
+          <Milestones onboardingId={onb.id} milestones={milestones} canManage={canManage} call={onb} isPartner={isPartner} zoomUrl={onb.zoom_url} onCall={() => { setNewCall(true); setTab("meet"); }} />
         ) : (
           <NextCallCard
-            nextCall={onb.next_call_at}
+            call={onb}
+            isPartner={isPartner}
             zoomUrl={onb.zoom_url}
             openTasks={openTasks}
             overdue={tasks.filter((x) => !x.done && !!x.due && x.due < new Date().toISOString().slice(0, 10)).length}
@@ -274,14 +276,16 @@ function Milestones({
   onboardingId,
   milestones,
   canManage,
-  nextCall,
+  call,
+  isPartner,
   zoomUrl,
   onCall,
 }: {
   onboardingId: string;
   milestones: OnboardingFull["milestones"];
   canManage: boolean;
-  nextCall: string | null;
+  call: CallInfo;
+  isPartner: boolean;
   zoomUrl: string | null;
   onCall: () => void;
 }) {
@@ -333,7 +337,7 @@ function Milestones({
       <div className="mt-3 flex items-center justify-between gap-2 border-t border-border pt-3">
         <div>
           <div className="text-xs text-muted">{t("onbNextCall")}</div>
-          <b>{nextCall ? new Date(nextCall).toLocaleString("ru-RU", { weekday: "short", day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }) : "—"}</b>
+          <CallTime call={call} isPartner={isPartner} />
         </div>
         <div className="flex flex-wrap justify-end gap-1.5">
           {zoomUrl && (
@@ -354,14 +358,16 @@ function Milestones({
 
 /** После открытия: следующий созвон, Zoom и сколько задач открыто. Цифры клуба живут в CRM, не здесь. */
 function NextCallCard({
-  nextCall,
+  call,
+  isPartner,
   zoomUrl,
   openTasks,
   overdue,
   canManage,
   onCall,
 }: {
-  nextCall: string | null;
+  call: CallInfo;
+  isPartner: boolean;
   zoomUrl: string | null;
   openTasks: number;
   overdue: number;
@@ -372,9 +378,7 @@ function NextCallCard({
   return (
     <Card className="flex flex-col p-5">
       <SectionTitle>{t("onbNextCall")}</SectionTitle>
-      <b className="text-lg">
-        {nextCall ? new Date(nextCall).toLocaleString("ru-RU", { weekday: "short", day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }) : "—"}
-      </b>
+      <CallTime call={call} isPartner={isPartner} big />
       <div className="mt-2 text-[13px] text-muted">
         {t("onbOpenTasksTotal")}: <b className="text-ink-2">{openTasks}</b>
         {overdue > 0 && <span className="font-semibold text-accent-strong"> · {t("onbOverdueN", { n: overdue })}</span>}
@@ -478,13 +482,42 @@ function Settings({ data, clubs, driveReady, onDone }: { data: OnboardingFull; c
           <input name="curator" defaultValue={o.curator ?? ""} className={inputCls} />
         </F>
         <F label={t("onbFieldCallDay")}>
-          <input name="call_day" defaultValue={o.call_day ?? ""} className={inputCls} />
+          <div className="flex gap-1.5">
+            <select name="call_weekday" defaultValue={o.call_weekday ?? ""} className={inputCls}>
+              <option value="">—</option>
+              {WEEKDAYS.map((d) => (
+                <option key={d} value={d}>
+                  {t(`onbWd${d}`)}
+                </option>
+              ))}
+            </select>
+            <input type="time" name="call_time" defaultValue={o.call_time ?? ""} className={`${inputCls} !w-[110px]`} />
+          </div>
         </F>
         <F label={t("onbFieldCurrentWeek")}>
           <input type="number" min={1} name="current_week" defaultValue={o.current_week ?? ""} className={inputCls} />
         </F>
-        <F label={t("onbNextCall")}>
+        <F label={t("onbNextCallOnce")}>
           <input type="datetime-local" name="next_call_local" defaultValue={nextVal} className={inputCls} />
+        </F>
+        <F label={t("onbFieldCallTz")}>
+          <select name="call_tz" defaultValue={o.call_tz || "Europe/Madrid"} className={inputCls}>
+            {TIMEZONES.map((z) => (
+              <option key={z.tz} value={z.tz}>
+                {z.label}
+              </option>
+            ))}
+          </select>
+        </F>
+        <F label={t("onbFieldPartnerTz")}>
+          <select name="partner_tz" defaultValue={o.partner_tz ?? ""} className={inputCls}>
+            <option value="">—</option>
+            {TIMEZONES.map((z) => (
+              <option key={z.tz} value={z.tz}>
+                {z.label}
+              </option>
+            ))}
+          </select>
         </F>
         <div className="sm:col-span-3">
           <F label={t("onbZoomUrl")}>

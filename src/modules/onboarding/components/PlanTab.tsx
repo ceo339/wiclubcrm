@@ -56,6 +56,7 @@ export default function PlanTab({
   // перетаскивание пунктов между неделями (только hq)
   const [dragId, setDragId] = useState<string | null>(null);
   const [overWeek, setOverWeek] = useState<string | null>(null);
+  const [overItem, setOverItem] = useState<string | null>(null);
   const move = useAct();
 
   const matches = (i: PlanItem) => {
@@ -137,6 +138,7 @@ export default function PlanTab({
               const id = dragId;
               setDragId(null);
               setOverWeek(null);
+              setOverItem(null);
               const it = items.find((x) => x.id === id);
               if (id && it && it.week_key !== w.key) move.run(() => moveItem(id, w.key));
             }}
@@ -173,6 +175,25 @@ export default function PlanTab({
                     onDragEnd={() => {
                       setDragId(null);
                       setOverWeek(null);
+                      setOverItem(null);
+                    }}
+                    dropBefore={!!dragId && dragId !== i.id && overItem === i.id}
+                    onItemDragOver={(e) => {
+                      if (!dragId || dragId === i.id) return;
+                      e.preventDefault();
+                      e.stopPropagation();
+                      if (overItem !== i.id) setOverItem(i.id);
+                      if (overWeek !== w.key) setOverWeek(w.key);
+                    }}
+                    onItemDrop={(e) => {
+                      if (!dragId || dragId === i.id) return;
+                      e.preventDefault();
+                      e.stopPropagation();
+                      const id = dragId;
+                      setDragId(null);
+                      setOverWeek(null);
+                      setOverItem(null);
+                      move.run(() => moveItem(id, i.week_key, i.id));
                     }}
                   />
                 ))}
@@ -215,6 +236,9 @@ function ItemRow({
   quiz,
   onDragStart,
   onDragEnd,
+  dropBefore = false,
+  onItemDragOver,
+  onItemDrop,
 }: {
   item: PlanItem;
   quiz?: { score: number; total: number; passed: boolean };
@@ -223,6 +247,9 @@ function ItemRow({
   canManage: boolean;
   dragging?: boolean;
   onDragStart?: () => void;
+  dropBefore?: boolean;
+  onItemDragOver?: (e: React.DragEvent) => void;
+  onItemDrop?: (e: React.DragEvent) => void;
   onDragEnd?: () => void;
 }) {
   const { t } = useLocale();
@@ -244,6 +271,9 @@ function ItemRow({
         onDragStart?.();
       }}
       onDragEnd={onDragEnd}
+      onDragOver={onItemDragOver}
+      onDrop={onItemDrop}
+      style={dropBefore ? { boxShadow: "inset 0 3px 0 0 var(--accent)" } : undefined}
     >
       <div className="grid grid-cols-[30px_minmax(0,1fr)_34px] items-center gap-3.5 px-5 py-3 hover:bg-surface-2/40 md:grid-cols-[30px_minmax(0,1fr)_150px_104px_80px_118px_34px]">
         <button
