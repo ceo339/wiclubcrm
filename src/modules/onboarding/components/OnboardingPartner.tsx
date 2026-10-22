@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useLocale } from "@/components/i18n/LocaleProvider";
 import { createDriveFolder, saveMilestone, saveOnboarding, setItemStatus, setOnboardingStatus } from "../actions";
 import { OWNERS, progress, type OnboardingFull } from "../types";
-import MeetingsTab from "./MeetingsTab";
+import MeetingsTab, { type QuizAgendaItem } from "./MeetingsTab";
 import PlanTab, { isDoItem, type PlanFilter } from "./PlanTab";
 import TasksTab from "./TasksTab";
 import QuizTab from "./QuizTab";
@@ -43,6 +43,7 @@ export default function OnboardingPartner({
   for (const a of data.quizAttempts) if (!quizLast[a.plan_item_id]) quizLast[a.plan_item_id] = { score: a.score, total: a.total, passed: a.passed };
   const quizCount = items.filter((i) => i.tags.includes("квиз") && !i.hidden).length;
   const quizFailed = Object.values(quizLast).filter((q) => !q.passed).length;
+  const quizAgenda = buildQuizAgenda(data);
   const openTasks = tasks.filter((x) => !x.done).length;
   const todo = items.filter((i) => /^w\d+$/.test(i.week_key) && !i.hidden && isDoItem(i) && i.status !== "done" && i.status !== "moved").length;
   const weekKeys = new Set(weeks.filter((w) => w.kind === "week").map((w) => w.key));
@@ -252,6 +253,7 @@ export default function OnboardingPartner({
           canManage={canManage}
           isPartner={isPartner}
           startNew={newCall}
+          quizAgenda={quizAgenda}
         />
       )}
       {tab === "tasks" && <TasksTab onboardingId={onb.id} tasks={tasks} meetings={meetings} canMark={canMark} canManage={canManage} isPartner={isPartner} />}
@@ -538,4 +540,25 @@ function DriveButton({ onboardingId, hasFolder, driveReady }: { onboardingId: st
       {error && <span className="text-xs text-accent-strong">{t(error)}</span>}
     </div>
   );
+}
+
+/** Свежие (14 дней) последние попытки квизов с ошибками: в повестку созвона. */
+function buildQuizAgenda(data: OnboardingFull): QuizAgendaItem[] {
+  const since = Date.now() - 14 * 86400000;
+  const qById = new Map((data.quizQuestions ?? []).map((q) => [q.id, q]));
+  const seen = new Set<string>();
+  const out: QuizAgendaItem[] = [];
+  for (const a of data.quizAttempts) {
+    if (seen.has(a.plan_item_id)) continue;
+    seen.add(a.plan_item_id);
+    if (a.score === a.total || new Date(a.created_at).getTime() < since) continue;
+    const item = data.items.find((i) => i.id === a.plan_item_id);
+    const wrong: string[] = [];
+    for (const [qid, chosen] of Object.entries(a.answers)) {
+      const q = qById.get(qid);
+      if (q && chosen !== q.correct) wrong.push(q.question);
+    }
+    out.push({ id: a.id, title: item?.title ?? "", score: a.score, total: a.total, passed: a.passed, wrong });
+  }
+  return out;
 }

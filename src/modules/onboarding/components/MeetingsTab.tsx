@@ -23,6 +23,7 @@ export default function MeetingsTab({
   canManage,
   isPartner,
   startNew,
+  quizAgenda = [],
 }: {
   onboardingId: string;
   status: OnbStatus;
@@ -35,6 +36,8 @@ export default function MeetingsTab({
   canManage: boolean;
   isPartner: boolean;
   startNew: boolean;
+  /** Ошибки свежих квизов: материал, результат и (для УК) вопросы с ошибкой. */
+  quizAgenda?: QuizAgendaItem[];
 }) {
   const { t } = useLocale();
   const opened = status === "opened";
@@ -80,7 +83,10 @@ export default function MeetingsTab({
 
       <Card className="p-6">
         {sel === "new" && canManage ? (
-          <NewCall onboardingId={onboardingId} opened={opened} currentWeek={currentWeek} names={names} onDone={(id) => setSel(id ?? meetings[0]?.id ?? "")} />
+          <>
+            <QuizAgenda list={quizAgenda} />
+            <NewCall onboardingId={onboardingId} opened={opened} currentWeek={currentWeek} names={names} onDone={(id) => setSel(id ?? meetings[0]?.id ?? "")} />
+          </>
         ) : m ? (
           <CallDetail
             onboardingId={onboardingId}
@@ -88,6 +94,7 @@ export default function MeetingsTab({
             opened={opened}
             tasks={tasks.filter((tk) => tk.meeting_id === m.id)}
             agenda={!opened ? agendaFor(m, items, weeks) : []}
+            quizAgenda={m.id === meetings[0]?.id ? quizAgenda : []}
             names={names}
             canMark={canMark}
             canManage={canManage}
@@ -114,6 +121,7 @@ function CallDetail({
   opened,
   tasks,
   agenda,
+  quizAgenda,
   names,
   canMark,
   canManage,
@@ -124,6 +132,7 @@ function CallDetail({
   opened: boolean;
   tasks: Task[];
   agenda: PlanItem[];
+  quizAgenda: QuizAgendaItem[];
   names: string[];
   canMark: boolean;
   canManage: boolean;
@@ -162,6 +171,8 @@ function CallDetail({
           ))}
         </Sec>
       )}
+
+      <QuizAgenda list={quizAgenda} />
 
       {agenda.length > 0 && (
         <Sec title={t("onbAgenda")}>
@@ -379,5 +390,33 @@ function Sec({ title, children }: { title: string; children: React.ReactNode }) 
       <h5 className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted">{title}</h5>
       {children}
     </div>
+  );
+}
+
+export type QuizAgendaItem = { id: string; title: string; score: number; total: number; passed: boolean; wrong: string[] };
+
+/** Разбор квизов на созвоне: свежие попытки с ошибками. */
+function QuizAgenda({ list }: { list: QuizAgendaItem[] }) {
+  const { t } = useLocale();
+  if (!list.length) return null;
+  return (
+    <Sec title={t("onbQuizAgenda")}>
+      <div className="rounded-xl border border-border px-3.5 py-1">
+        {list.map((q) => (
+          <div key={q.id} className="border-t border-dashed border-border py-2 first:border-t-0">
+            <div className="flex items-center gap-2">
+              <b className="min-w-0 flex-1 text-sm">{q.title}</b>
+              <span className={`rounded-full px-2 py-px text-xs font-semibold ${q.passed ? "bg-surface-2 text-ink-2" : "bg-accent text-white"}`}>{`${q.score}/${q.total}`}</span>
+            </div>
+            {q.wrong.map((w, k) => (
+              <div key={k} className="mt-0.5 text-xs text-ink-2">
+                • {w}
+              </div>
+            ))}
+          </div>
+        ))}
+      </div>
+      <p className="mt-1.5 text-xs text-muted">{t("onbQuizAgendaHint")}</p>
+    </Sec>
   );
 }
