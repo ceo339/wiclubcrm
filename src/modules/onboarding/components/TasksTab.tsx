@@ -14,7 +14,6 @@ export default function TasksTab({
   tasks,
   meetings,
   canMark,
-  canManage,
   isPartner,
 }: {
   onboardingId: string;
@@ -43,13 +42,13 @@ export default function TasksTab({
             {t(`onbTF_${k}`)}
           </button>
         ))}
-        {canManage && (
+        {canMark && (
           <button type="button" className={`${btnPriCls} ml-auto`} onClick={() => setAdding(!adding)}>
             + {t("onbTask")}
           </button>
         )}
       </div>
-      {adding && canManage && <AddTask onboardingId={onboardingId} meetings={meetings} onDone={() => setAdding(false)} />}
+      {adding && canMark && <AddTask onboardingId={onboardingId} meetings={meetings} onDone={() => setAdding(false)} />}
       <div className="grid gap-4 md:grid-cols-3">
         {cols.map(([h, l]) => (
           <div key={h}>

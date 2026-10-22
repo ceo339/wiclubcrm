@@ -87,6 +87,8 @@ export type PlanItem = {
   custom: boolean;
   hidden: boolean;
   sort: number;
+  /** Заметка к пункту (дата ДР, комментарий к лендингу и т.п.). */
+  note: string | null;
 };
 
 export type Milestone = {

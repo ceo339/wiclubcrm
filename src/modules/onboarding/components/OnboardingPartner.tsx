@@ -39,6 +39,7 @@ export default function OnboardingPartner({
   const { pending, error, run } = useAct();
 
   const prog = progress(items);
+  const franchbook = items.find((i) => /франчбук/i.test(i.title) && i.template_url)?.template_url ?? null;
   const quizLast: Record<string, { score: number; total: number; passed: boolean }> = {};
   for (const a of data.quizAttempts) if (!quizLast[a.plan_item_id]) quizLast[a.plan_item_id] = { score: a.score, total: a.total, passed: a.passed };
   const quizCount = items.filter((i) => i.tags.includes("квиз") && !i.hidden).length;
@@ -108,6 +109,11 @@ export default function OnboardingPartner({
               {onb.drive_folder_url && (
                 <a href={onb.drive_folder_url} target="_blank" rel="noreferrer" className="font-semibold text-ink-2 underline">
                   {t("onbDriveFolder")} ↗
+                </a>
+              )}
+              {franchbook && (
+                <a href={franchbook} target="_blank" rel="noreferrer" className="font-semibold text-ink-2 underline">
+                  {t("onbFranchbook")} ↗
                 </a>
               )}
             </div>
@@ -447,6 +453,11 @@ function Settings({ data, clubs, driveReady, onDone }: { data: OnboardingFull; c
         }}
       >
         <h3 className="font-display text-lg sm:col-span-3">{t("onbSettings")}</h3>
+        <div className="sm:col-span-3">
+          <F label={t("onbFieldPartnerName")}>
+            <input name="partner_name" defaultValue={data.candidate_name === "—" ? "" : data.candidate_name} className={inputCls} />
+          </F>
+        </div>
         <F label={t("onbFieldCity")}>
           <input name="city" defaultValue={o.city ?? ""} className={inputCls} />
         </F>

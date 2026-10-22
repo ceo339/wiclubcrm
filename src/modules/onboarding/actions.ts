@@ -5,6 +5,7 @@ import { onboardingWriteDb } from "./server/db";
 import { ownsOnboarding, requireOnboardingAccess } from "./server/guard";
 import { createOnboarding } from "./server/start";
 import { createPartnerDriveFolder } from "./server/folder";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { ITEM_STATUSES, OWNERS, PARTNER_SUBFOLDERS, driveFileIdFromUrl, quizPassMark, type ItemStatus, type QuizQuestion, type QuizQuestionPublic, type QuizReview, type Owner, type PlanItem, type TemplateItem } from "./types";
 
 /**
@@ -70,6 +71,11 @@ export async function saveOnboarding(id: string, fd: FormData): Promise<OnbResul
   const zoom = opt(fd, "zoom_url");
   if (!isUrl(drive) || !isUrl(zoom)) return { error: "onbErrUrl" };
   const nextCall = opt(fd, "next_call_at");
+  const partnerName = str(fd, "partner_name");
+  if (partnerName) {
+    const { data: o } = await onboardingWriteDb().from("onboardings").select("candidate_id").eq("id", id).maybeSingle();
+    if (o?.candidate_id) await createAdminClient().from("franchise_candidates").update({ name: partnerName }).eq("id", o.candidate_id);
+  }
   const { error } = await onboardingWriteDb()
     .from("onboardings")
     .update({
@@ -155,6 +161,7 @@ export async function updateItem(itemId: string, fd: FormData): Promise<OnbResul
       week_key: str(fd, "week_key") || undefined,
       file_url: fileUrl,
       template_url: tplUrl,
+      note: opt(fd, "note"),
       done_date: doneDate || null,
       updated_at: new Date().toISOString(),
     })
@@ -318,8 +325,9 @@ export async function updateTask(taskId: string, fd: FormData): Promise<OnbResul
 }
 
 export async function addTask(onboardingId: string, fd: FormData): Promise<OnbResult> {
-  const g = await requireOnboardingAccess("manage");
+  const g = await requireOnboardingAccess("mark");
   if ("error" in g) return { error: g.error };
+  if (!(await ownsOnboarding(g.profile, onboardingId))) return { error: "errNotAuthorized" };
   const title = str(fd, "title");
   const due = str(fd, "due");
   if (!title) return { error: "onbErrTitle" };
@@ -598,4 +606,22 @@ export async function submitQuiz(planItemId: string, answers: Record<string, num
       items: qs.map((q) => ({ question: q.question, options: q.options, chosen: clean[q.id] ?? null, correct: q.correct, explanation: q.explanation })),
     },
   };
+}
+
+/** Заметка и ссылка к пункту плана: может и партнер в своем онбординге. */
+export async function saveItemNote(itemId: string, fd: FormData): Promise<OnbResult> {
+  const g = await requireOnboardingAccess("mark");
+  if ("error" in g) return { error: g.error };
+  const onbId = await onboardingOfItem("plan_items", itemId);
+  if (!onbId) return { error: "onbErrSave" };
+  if (!(await ownsOnboarding(g.profile, onbId))) return { error: "errNotAuthorized" };
+  const fileUrl = opt(fd, "file_url");
+  if (!isUrl(fileUrl)) return { error: "onbErrUrl" };
+  const { error } = await onboardingWriteDb()
+    .from("plan_items")
+    .update({ note: opt(fd, "note"), file_url: fileUrl, updated_at: new Date().toISOString() })
+    .eq("id", itemId);
+  if (error) return { error: error.message };
+  refresh(onbId);
+  return { error: null };
 }

@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { useLocale } from "@/components/i18n/LocaleProvider";
-import { addItem, moveItem, setItemHidden, setItemStatus, updateItem } from "../actions";
+import { addItem, moveItem, saveItemNote, setItemHidden, setItemStatus, updateItem } from "../actions";
 import { OWNERS, type ItemStatus, type OnbStatus, type PlanItem, type TemplateWeek } from "../types";
 import { Card, Chip, OWNER_KEY, OwnerChip, STATUS_KEY, StatusDot, btnCls, btnPriCls, chipBtnCls, fmtDate, inputCls } from "./ui";
 import QuizModal from "./QuizModal";
@@ -229,6 +229,7 @@ function ItemRow({
   const { pending, error, run } = useAct();
   const [edit, setEdit] = useState(false);
   const [quizOpen, setQuizOpen] = useState(false);
+  const [noteOpen, setNoteOpen] = useState(false);
   const hasQuiz = i.tags.includes("квиз") && !!i.template_item_id;
   const isDo = isDoItem(i);
   const link = i.link_mode === "copy" ? i.file_url : i.file_url ?? i.template_url;
@@ -273,6 +274,12 @@ function ItemRow({
               </button>
             )}
           </div>
+          {i.note && <div className="mt-1.5 whitespace-pre-line rounded-lg bg-surface-2 px-2.5 py-1.5 text-[12.5px] text-ink-2">{i.note}</div>}
+          {canMark && !canManage && (
+            <button type="button" className="mt-1 text-xs font-semibold text-muted hover:text-accent-strong" onClick={() => setNoteOpen(!noteOpen)}>
+              ✎ {t(i.note ? "onbNoteEdit" : "onbNoteAdd")}
+            </button>
+          )}
           <div className="mt-1 text-xs text-muted md:hidden">
             {i.action} · {t(OWNER_KEY[i.owner])}
           </div>
@@ -311,6 +318,7 @@ function ItemRow({
         )}
       </div>
       {edit && canManage && <EditItem item={i} weeks={weeks} onDone={() => setEdit(false)} />}
+      {noteOpen && !canManage && <NoteForm item={i} onDone={() => setNoteOpen(false)} />}
       {quizOpen && <QuizModal planItemId={i.id} onClose={() => setQuizOpen(false)} />}
     </div>
   );
@@ -368,6 +376,10 @@ function EditItem({ item: i, weeks, onDone }: { item: PlanItem; weeks: TemplateW
         <span className="mb-1 block text-xs text-muted">{t("onbFieldDate")}</span>
         <input type="date" name="done_date" defaultValue={i.done_date ?? ""} className={inputCls} />
       </label>
+      <label className="sm:col-span-2">
+        <span className="mb-1 block text-xs text-muted">{t("onbFieldNote")}</span>
+        <textarea name="note" rows={2} defaultValue={i.note ?? ""} placeholder={t("onbNotePh")} className={inputCls} />
+      </label>
       <label className="flex items-center gap-2 self-end pb-2 text-sm sm:col-span-2">
         <input type="checkbox" name="hw" defaultChecked={i.tags.includes("ДЗ")} className="h-4 w-4" />
         <span>{t("onbHwLabel")}</span>
@@ -422,6 +434,32 @@ function AddItem({ onboardingId, weekKey }: { onboardingId: string; weekKey: str
           {t("onbAdd")}
         </button>
         <button type="button" className={btnCls} onClick={() => setOpen(false)}>
+          {t("cancel")}
+        </button>
+      </div>
+    </form>
+  );
+}
+
+function NoteForm({ item: i, onDone }: { item: PlanItem; onDone: () => void }) {
+  const { t } = useLocale();
+  const { pending, error, run } = useAct();
+  return (
+    <form className="grid gap-3 border-t border-dashed border-border bg-surface-2/50 px-5 py-4" action={(fd) => run(() => saveItemNote(i.id, fd), onDone)}>
+      <label>
+        <span className="mb-1 block text-xs text-muted">{t("onbFieldNote")}</span>
+        <textarea name="note" rows={2} defaultValue={i.note ?? ""} placeholder={t("onbNotePh")} className={inputCls} />
+      </label>
+      <label>
+        <span className="mb-1 block text-xs text-muted">{t("onbFieldFileUrl")}</span>
+        <input name="file_url" defaultValue={i.file_url ?? ""} placeholder="https://" className={inputCls} />
+      </label>
+      {error && <p className="text-sm text-accent-strong">{t(error)}</p>}
+      <div className="flex gap-2">
+        <button type="submit" className={btnPriCls} disabled={pending}>
+          {t("save")}
+        </button>
+        <button type="button" className={btnCls} onClick={onDone}>
           {t("cancel")}
         </button>
       </div>
