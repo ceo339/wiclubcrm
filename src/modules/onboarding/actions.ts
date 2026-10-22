@@ -646,3 +646,28 @@ export async function saveItemNote(itemId: string, fd: FormData): Promise<OnbRes
   refresh(onbId);
   return { error: null };
 }
+
+/**
+ * Убрать пункт из шаблона: новые партнеры его не получат. По галочке он скрывается
+ * и в планах идущих онбордингов, где еще не сделан (скрытый пункт можно вернуть в плане).
+ */
+export async function archiveTemplateItem(itemId: string, alsoCurrent: boolean): Promise<OnbResult> {
+  const g = await requireOnboardingAccess("manage");
+  if ("error" in g) return { error: g.error };
+  const db = onboardingWriteDb();
+  const { error } = await db.from("template_items").update({ archived: true }).eq("id", itemId);
+  if (error) return { error: error.message };
+  if (alsoCurrent) {
+    const { data: active } = await db.from("onboardings").select("id").eq("status", "onboarding");
+    const ids = (active ?? []).map((o) => o.id as string);
+    if (ids.length)
+      await db
+        .from("plan_items")
+        .update({ hidden: true, updated_at: new Date().toISOString() })
+        .eq("template_item_id", itemId)
+        .in("onboarding_id", ids)
+        .neq("status", "done");
+  }
+  revalidatePath("/onboarding", "layout");
+  return { error: null };
+}

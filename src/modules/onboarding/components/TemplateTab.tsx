@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useLocale } from "@/components/i18n/LocaleProvider";
-import { addTemplateItem, pushTemplateLinks, updateTemplateItem } from "../actions";
+import { addTemplateItem, archiveTemplateItem, pushTemplateLinks, updateTemplateItem } from "../actions";
 import { OWNERS, PARTNER_SUBFOLDERS, type TemplateItem, type TemplateWeek } from "../types";
 import { weekLabel } from "./PlanTab";
 import { Card, Chip, OWNER_KEY, btnCls, btnPriCls, inputCls } from "./ui";
@@ -147,6 +147,18 @@ function TplRow({ item: i, weeks }: { item: TemplateItem; weeks: TemplateWeek[] 
             </button>
             <button type="button" className={btnCls} onClick={() => setEdit(false)}>
               {t("cancel")}
+            </button>
+            <button
+              type="button"
+              className={`${btnCls} ml-auto text-accent-strong`}
+              disabled={pending}
+              onClick={() => {
+                if (!window.confirm(t("onbTplArchiveConfirm"))) return;
+                const also = window.confirm(t("onbTplArchiveAlso"));
+                run(() => archiveTemplateItem(i.id, also), () => setEdit(false));
+              }}
+            >
+              {t("onbTplArchive")}
             </button>
           </div>
         </form>
