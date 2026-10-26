@@ -322,7 +322,7 @@ function ItemRow({
                 draggable={false}
                 className={`whitespace-nowrap rounded-lg border px-2.5 py-1 font-semibold ${i.link_mode === "copy" && i.file_url ? "border-foreground bg-foreground text-white" : "border-border bg-background text-foreground"}`}
               >
-                {i.link_mode === "copy" && i.file_url ? t("onbCopy") : t("onbOpen")} ↗
+                {t("onbOpen")} ↗
               </a>
             )}
           </div>
@@ -346,7 +346,7 @@ function ItemRow({
               rel="noreferrer"
               className={`whitespace-nowrap rounded-lg border px-2 py-1 text-xs font-semibold ${i.link_mode === "copy" && i.file_url ? "border-foreground bg-foreground text-white" : "border-border bg-background hover:border-foreground"}`}
             >
-              {i.link_mode === "copy" && i.file_url ? t("onbCopy") : t("onbOpen")} ↗
+              {t("onbOpen")} ↗
             </a>
           ) : (
             <span className="text-[12.5px] text-border-strong">{i.link_mode === "copy" ? t("onbNoCopyYet") : "—"}</span>
