@@ -310,8 +310,21 @@ function ItemRow({
               ✎ {t(i.note ? "onbNoteEdit" : "onbNoteAdd")}
             </button>
           )}
-          <div className="mt-1 text-xs text-muted md:hidden">
-            {i.action} · {t(OWNER_KEY[i.owner])}
+          <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1.5 text-xs text-muted md:hidden">
+            <span>
+              {i.action} · {t(OWNER_KEY[i.owner])}
+            </span>
+            {link && (
+              <a
+                href={link}
+                target="_blank"
+                rel="noreferrer"
+                draggable={false}
+                className={`whitespace-nowrap rounded-lg border px-2.5 py-1 font-semibold ${i.link_mode === "copy" && i.file_url ? "border-foreground bg-foreground text-white" : "border-border bg-background text-foreground"}`}
+              >
+                {i.link_mode === "copy" && i.file_url ? t("onbCopy") : t("onbOpen")} ↗
+              </a>
+            )}
           </div>
           {error && <div className="mt-1 text-xs text-accent-strong">{t(error)}</div>}
         </div>
