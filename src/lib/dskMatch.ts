@@ -204,6 +204,7 @@ const COUNTRY_TIME_ZONE: Record<string, string> = {
   Georgia: "Asia/Tbilisi",
   Ukraine: "Europe/Kyiv",
   Kazakhstan: "Asia/Almaty",
+  Moldova: "Europe/Chisinau",
 };
 
 export function clubTimeZone(country: string | null | undefined): string {

@@ -94,7 +94,7 @@ const PRICE_ALIASES = ["price", "цена", "value", "сумма", "amount"];
 // non-EUR currency (e.g. WiClub Batumi, lari) can send this one extra
 // hidden field alongside `price` so the raw number isn't silently treated
 // as EUR. Accepted values match CurrencyCode (lib/currency.ts) case-
-// insensitively: EUR, USD, GEL, UAH, KZT. Absent (the default, and the only
+// insensitively: EUR, USD, GEL, UAH, KZT, MDL. Absent (the default, and the only
 // thing every existing landing page before this round ever sent) means
 // "price is already in EUR" — unchanged behaviour, zero setup needed for
 // a club that only ever sells in euros (e.g. WiClub Sofia).

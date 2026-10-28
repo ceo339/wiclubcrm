@@ -918,10 +918,10 @@ export async function addEnrollmentPayment(
     lead_id: (e as { members?: { lead_id: string | null } | null }).members?.lead_id ?? null,
     amount: Math.round(amountEur * 100) / 100,
     amount_local:
-      local && Number.isFinite(local.local) && /^(GEL|UAH|USD|KZT)$/.test(local.currency)
+      local && Number.isFinite(local.local) && /^(GEL|UAH|USD|KZT|MDL)$/.test(local.currency)
         ? Math.round(local.local * 100) / 100
         : null,
-    local_currency: local && /^(GEL|UAH|USD|KZT)$/.test(local.currency) ? local.currency : null,
+    local_currency: local && /^(GEL|UAH|USD|KZT|MDL)$/.test(local.currency) ? local.currency : null,
     status: "paid",
     paid_date: paidDate || todayIso(),
     is_partial: isPartial,

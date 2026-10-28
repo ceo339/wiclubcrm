@@ -6,7 +6,7 @@
 
 import { clubScopeForProfile } from "@/lib/scope";
 
-export type CurrencyCode = "EUR" | "USD" | "GEL" | "UAH" | "KZT";
+export type CurrencyCode = "EUR" | "USD" | "GEL" | "UAH" | "KZT" | "MDL";
 
 export const CURRENCIES: { code: CurrencyCode; symbol: string }[] = [
   { code: "EUR", symbol: "€" },
@@ -14,6 +14,7 @@ export const CURRENCIES: { code: CurrencyCode; symbol: string }[] = [
   { code: "GEL", symbol: "₾" },
   { code: "UAH", symbol: "₴" },
   { code: "KZT", symbol: "₸" },
+  { code: "MDL", symbol: "L" },
 ];
 
 /** Every amount in the database is stored in this currency. */
@@ -43,6 +44,8 @@ export const COUNTRY_CURRENCY: Record<string, CurrencyCode> = {
   Ukraine: "UAH",
   // Round 93: клуб в Казахстане (Алматы) — тенге
   Kazakhstan: "KZT",
+  // 28 окт 2026: клуб в Молдове (Кишинёв) — молдавский лей
+  Moldova: "MDL",
 };
 
 export function currencyForCountry(country: string | null | undefined): CurrencyCode {
@@ -124,7 +127,7 @@ export function convertToEur(
  * optional only so `roundMoney` keeps working the couple of places that
  * round a EUR figure directly, with no target currency in play. */
 export function roundMoney(n: number, currency?: CurrencyCode): number {
-  if (currency === "GEL" || currency === "KZT") return Math.round(n);
+  if (currency === "GEL" || currency === "KZT" || currency === "MDL") return Math.round(n);
   return Math.round(n * 100) / 100;
 }
 

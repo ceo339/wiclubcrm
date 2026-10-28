@@ -169,6 +169,7 @@ export const COUNTRIES: { name: string; city?: string }[] = [
   { name: "Georgia", city: "Batumi" },
   { name: "Bulgaria", city: "Sofia" },
   { name: "Kazakhstan", city: "Almaty" },
+  { name: "Moldova", city: "Chisinau" },
 ];
 
 /** Looks up a country's default city from COUNTRIES (e.g. Bulgaria ->

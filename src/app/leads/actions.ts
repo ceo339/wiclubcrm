@@ -1076,7 +1076,7 @@ export async function convertLeadToMember(
   const cohortStartDate = choice ? choice.cohortStartDate : lead.cohort_start_date;
   const price = (choice ? choice.price : lead.value) ?? 0;
   const priceLocal = choice
-    ? choice.priceLocal && /^(GEL|UAH|USD|KZT)$/.test(choice.priceLocal.currency) && Number.isFinite(choice.priceLocal.local)
+    ? choice.priceLocal && /^(GEL|UAH|USD|KZT|MDL)$/.test(choice.priceLocal.currency) && Number.isFinite(choice.priceLocal.local)
       ? { price_local: Math.round(choice.priceLocal.local * 100) / 100, local_currency: choice.priceLocal.currency }
       : { price_local: null, local_currency: null }
     : leadLocal(lead);
