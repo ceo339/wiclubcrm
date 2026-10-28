@@ -253,11 +253,22 @@ export async function POST(request: Request, { params }: { params: Promise<{ key
   const productName = pick(fields, PRODUCT_ALIASES);
   let productId: string | null = null;
   let matchedProductPrice: number | null = null;
+  // Round 109 — точная цена каталога в валюте клуба (130 ₾), чтобы заявка и
+  // запись на курс не показывали пересчёт по сегодняшнему курсу (129 ₾).
+  let matchedPriceLocal: number | null = null;
+  let matchedLocalCurrency: string | null = null;
   if (productName) {
-    const { data: products } = await admin.from("products").select("id, name, price").eq("partner_id", partner.id);
+    const { data: products } = await admin
+      .from("products")
+      .select("id, name, price, price_local, local_currency")
+      .eq("partner_id", partner.id);
     const match = (products ?? []).find((p) => p.name.trim().toLowerCase() === productName.trim().toLowerCase());
     productId = match?.id ?? null;
     matchedProductPrice = match?.price ?? null;
+    if (match && match.price_local !== null && match.price_local !== undefined && match.local_currency) {
+      matchedPriceLocal = Number(match.price_local);
+      matchedLocalCurrency = match.local_currency;
+    }
   }
 
   // Same idea as the product resolution above, one level down: only
@@ -295,6 +306,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ key
       if (!productId) {
         productId = rule.productId;
         matchedProductPrice = rule.productPrice;
+        matchedPriceLocal = rule.productPriceLocal;
+        matchedLocalCurrency = rule.productLocalCurrency;
         cohortStartDate = rule.cohortStartDate;
       } else if (productId === rule.productId && !cohortStartDate) {
         cohortStartDate = rule.cohortStartDate;
@@ -345,6 +358,10 @@ export async function POST(request: Request, { params }: { params: Promise<{ key
     }
   } else if (matchedProductPrice !== null) {
     value = matchedProductPrice;
+    if (matchedPriceLocal !== null && matchedLocalCurrency && isCurrencyCode(matchedLocalCurrency)) {
+      valueLocal = matchedPriceLocal;
+      localCurrency = matchedLocalCurrency as CurrencyCode;
+    }
   }
 
   // Same email-first-then-phone matching rule as createLead/findOrCreateContact

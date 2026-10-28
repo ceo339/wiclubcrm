@@ -45,7 +45,10 @@ export default async function AdsPage() {
     .from("leads")
     .select("utm_campaign, added_date, stage")
     .not("utm_campaign", "is", null)
-    .gte("added_date", sinceIso);
+    .gte("added_date", sinceIso)
+    // Round 109 — свежие сначала: при лимите строк новые кампании не теряются.
+    .order("added_date", { ascending: false })
+    .limit(5000);
   if (scopePartnerId) leadsQuery = leadsQuery.eq("partner_id", scopePartnerId);
 
   const [{ data: insights, error }, { data: crmLeads }] = await Promise.all([insightsQuery, leadsQuery]);

@@ -2,6 +2,7 @@
 
 import { useMemo, useState, useTransition } from "react";
 import { useLocale } from "@/components/i18n/LocaleProvider";
+import { campaignKey } from "@/lib/campaignRules";
 import { saveCampaignRule, deleteCampaignRule, applyCampaignRule, type RuleActionResult } from "@/app/ads/actions";
 
 export type CampaignRuleRow = {
@@ -40,6 +41,14 @@ export default function CampaignRulesCard({
   const [productId, setProductId] = useState("");
   const [campaign, setCampaign] = useState("");
   const [cohort, setCohort] = useState("");
+  // Round 109 — список кампаний был подсказкой <datalist>, которую телефон
+  // почти не показывает. Теперь это обычный выпадающий список кампаний без
+  // правила (по алфавиту) + «Другая — ввести вручную».
+  const [manual, setManual] = useState(false);
+  const freeCampaigns = useMemo(() => {
+    const taken = new Set(rules.map((r) => campaignKey(r.campaign_name)));
+    return campaignNames.filter((n) => !taken.has(campaignKey(n)));
+  }, [campaignNames, rules]);
 
   const productName = (id: string) => products.find((p) => p.id === id)?.name ?? "—";
   const cohortOptions = useMemo(
@@ -122,23 +131,54 @@ export default function CampaignRulesCard({
               setCampaign("");
               setProductId("");
               setCohort("");
+              setManual(false);
             });
           }}
         >
           <label className="flex flex-col gap-1 text-xs font-medium text-muted">
             {t("adsRuleCampaign")}
-            <input
-              list="ads-rule-campaigns"
-              value={campaign}
-              onChange={(e) => setCampaign(e.target.value)}
-              required
-              className="rounded-lg border border-border px-3 py-2 text-sm text-foreground"
-            />
-            <datalist id="ads-rule-campaigns">
-              {campaignNames.map((n) => (
-                <option key={n} value={n} />
-              ))}
-            </datalist>
+            {manual || freeCampaigns.length === 0 ? (
+              <span className="flex flex-col gap-1">
+                <input
+                  value={campaign}
+                  onChange={(e) => setCampaign(e.target.value)}
+                  required
+                  className="rounded-lg border border-border px-3 py-2 text-sm text-foreground"
+                />
+                {freeCampaigns.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setManual(false);
+                      setCampaign("");
+                    }}
+                    className="self-start text-xs font-normal text-ink-2 hover:underline"
+                  >
+                    {t("adsRuleBackToList")}
+                  </button>
+                )}
+              </span>
+            ) : (
+              <select
+                value={campaign}
+                onChange={(e) => {
+                  if (e.target.value === "__manual") {
+                    setManual(true);
+                    setCampaign("");
+                  } else setCampaign(e.target.value);
+                }}
+                required
+                className="rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground"
+              >
+                <option value="">{t("adsRulePickCampaign")}</option>
+                {freeCampaigns.map((n) => (
+                  <option key={n} value={n}>
+                    {n}
+                  </option>
+                ))}
+                <option value="__manual">{t("adsRuleManualCampaign")}</option>
+              </select>
+            )}
           </label>
           <label className="flex flex-col gap-1 text-xs font-medium text-muted">
             {t("adsRuleProduct")}

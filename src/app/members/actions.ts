@@ -350,7 +350,7 @@ export async function addEnrollment(memberId: string, formData: FormData): Promi
   });
 
   if (status === "sAwaiting") {
-    await createDealForUnpaidEnrollment(supabase, profile.partner_id, member, verifiedProductId, startDate, price);
+    await createDealForUnpaidEnrollment(supabase, profile.partner_id, member, verifiedProductId, startDate, price, local);
   }
 
   revalidatePath("/members");
@@ -389,7 +389,9 @@ async function createDealForUnpaidEnrollment(
   },
   productId: string | null,
   cohortStartDate: string | null,
-  price: number
+  price: number,
+  /** Round 109 — сумма как введена в валюте клуба (130 ₾). */
+  local: { local: number | null; currency: string | null } = { local: null, currency: null }
 ): Promise<void> {
   let contactId = member.contact_id;
   if (!contactId) {
@@ -434,6 +436,8 @@ async function createDealForUnpaidEnrollment(
     product_id: productId,
     cohort_start_date: cohortStartDate,
     value: price,
+    value_local: local.local,
+    local_currency: local.currency,
     source: null,
     stage: "presented",
   });
@@ -914,10 +918,10 @@ export async function addEnrollmentPayment(
     lead_id: (e as { members?: { lead_id: string | null } | null }).members?.lead_id ?? null,
     amount: Math.round(amountEur * 100) / 100,
     amount_local:
-      local && Number.isFinite(local.local) && /^(GEL|UAH|USD)$/.test(local.currency)
+      local && Number.isFinite(local.local) && /^(GEL|UAH|USD|KZT)$/.test(local.currency)
         ? Math.round(local.local * 100) / 100
         : null,
-    local_currency: local && /^(GEL|UAH|USD)$/.test(local.currency) ? local.currency : null,
+    local_currency: local && /^(GEL|UAH|USD|KZT)$/.test(local.currency) ? local.currency : null,
     status: "paid",
     paid_date: paidDate || todayIso(),
     is_partial: isPartial,

@@ -1653,6 +1653,10 @@ export const DICT: Record<string, Entry> = {
   adsRulesEmpty: { ru: "Правил пока нет.", bg: "Още няма правила." },
   adsRuleCampaign: { ru: "Кампания (как в Meta)", bg: "Кампания (както в Meta)" },
   adsRuleProduct: { ru: "Продукт", bg: "Продукт" },
+  // Round 109 — кампания выбирается из списка (без правила) или вручную
+  adsRulePickCampaign: { ru: "— выберите кампанию —", bg: "— изберете кампания —" },
+  adsRuleManualCampaign: { ru: "Другая — ввести вручную…", bg: "Друга — въведете ръчно…" },
+  adsRuleBackToList: { ru: "← выбрать из списка", bg: "← изберете от списъка" },
   adsRuleCohort: { ru: "Поток", bg: "Поток" },
   adsRuleNoCohort: { ru: "— без потока —", bg: "— без поток —" },
   adsRulePickProduct: { ru: "— выберите продукт —", bg: "— изберете продукт —" },

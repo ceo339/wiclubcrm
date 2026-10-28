@@ -4,6 +4,9 @@ import { campaignKey } from "@/lib/campaignRules";
 export type CampaignRuleTarget = {
   productId: string;
   productPrice: number | null;
+  /** Round 109 — точная цена каталога в валюте клуба (130 ₾), если задана. */
+  productPriceLocal: number | null;
+  productLocalCurrency: string | null;
   cohortStartDate: string | null;
 };
 
@@ -30,7 +33,7 @@ export async function findCampaignRule(
 
   const { data: product } = await admin
     .from("products")
-    .select("id, price")
+    .select("id, price, price_local, local_currency")
     .eq("partner_id", partnerId)
     .eq("id", rule.product_id)
     .maybeSingle();
@@ -51,6 +54,11 @@ export async function findCampaignRule(
   return {
     productId: product.id,
     productPrice: product.price !== null && product.price !== undefined ? Number(product.price) : null,
+    productPriceLocal:
+      product.price_local !== null && product.price_local !== undefined && product.local_currency
+        ? Number(product.price_local)
+        : null,
+    productLocalCurrency: product.price_local !== null && product.price_local !== undefined ? product.local_currency ?? null : null,
     cohortStartDate,
   };
 }
@@ -94,7 +102,14 @@ export async function applyRuleToExistingLeads(
     if (!l.product_id) {
       patch.product_id = target.productId;
       patch.cohort_start_date = target.cohortStartDate;
-      if (!Number(l.value) && !l.value_local && target.productPrice !== null) patch.value = target.productPrice;
+      if (!Number(l.value) && !l.value_local && target.productPrice !== null) {
+        patch.value = target.productPrice;
+        // Round 109 — и точная цена в валюте клуба, иначе «129 ₾» вместо 130.
+        if (target.productPriceLocal !== null && target.productLocalCurrency) {
+          patch.value_local = target.productPriceLocal;
+          patch.local_currency = target.productLocalCurrency;
+        }
+      }
     } else if (l.product_id === target.productId && !l.cohort_start_date && target.cohortStartDate) {
       patch.cohort_start_date = target.cohortStartDate;
     } else {
