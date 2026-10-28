@@ -92,8 +92,11 @@ function navItemsForProfile(profile: Profile, viewMode: ViewMode): NavItem[] {
   // (CityScopeSwitcher); у остальных ролей режима нет — для них пункты не прячем.
   const hasModeToggle = profile.role === "hq" || profile.role === "viewer";
 
+  // «Клубы сети» — в режиме «Клубы» на прежнем месте; в «Франчайзи» тоже
+  // (28 окт 2026, «добавь во вкладку франчайзи модуль клубы сети»), в конце меню.
+  const partnersItem: NavItem = { href: "/partners", labelKey: "navPartners", icon: <IconBuilding /> };
   if (profile.role === "hq" && (!hasModeToggle || viewMode === "clubs")) {
-    items.push({ href: "/partners", labelKey: "navPartners", icon: <IconBuilding /> });
+    items.push(partnersItem);
   }
 
   // Round 38: the «Франчайзи» pipeline itself now exists, so a "franchise"
@@ -115,6 +118,10 @@ function navItemsForProfile(profile: Profile, viewMode: ViewMode): NavItem[] {
   // у партнёра всегда (свой онбординг).
   if (showOnboardingNav(profile.role, viewMode)) {
     items.push({ href: "/onboarding", labelKey: "navOnboarding", icon: <IconOnboarding />, matchPrefix: true });
+  }
+
+  if (profile.role === "hq" && hasModeToggle && viewMode === "franchise") {
+    items.push(partnersItem);
   }
 
   return items;

@@ -1,6 +1,7 @@
 import { notFound, redirect } from "next/navigation";
 import type { ReactNode } from "react";
 import { getViewMode } from "@/lib/viewScope";
+import { isNetworkRole } from "@/lib/role";
 import { localeScopeForProfile } from "@/lib/i18n";
 import AppShell from "@/components/shell/AppShell";
 import LocaleScope from "@/components/i18n/LocaleScope";
@@ -17,12 +18,17 @@ import { isDriveConfigured } from "../server/drive";
 async function shell(profile: Profile, body: ReactNode, opts: { subtitle?: ReactNode; back?: boolean } = {}) {
   const viewMode = await getViewMode(profile);
   const locale = localeScopeForProfile(profile);
+  // Переключатель «Франчайзи / Клубы» сверху, как на других страницах HQ
+  // (28 окт 2026). Партнёру он не показывается (AppShell сам проверяет роль).
+  const switcherClubs = isNetworkRole(profile.role) ? await loadClubs() : [];
   return (
     <AppShell
       profile={profile}
       title={<T k="navOnboarding" />}
       subtitle={opts.subtitle ?? <T k="onbSubtitle" />}
       viewMode={viewMode}
+      clubs={switcherClubs}
+      activeClubId={null}
       backHref={opts.back ? "/onboarding" : undefined}
       backLabel={opts.back ? <T k="navOnboarding" /> : undefined}
       headerExtra={
