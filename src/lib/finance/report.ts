@@ -158,7 +158,32 @@ function factRevenueTotal(f: ClubFinance, months: Set<string>): Amt {
   return sum([...factRevenueByProduct(f, months).values()]);
 }
 
-export function computeProfitLoss(f0: ClubFinance, period: string, today: Date, planType: PlanType = "partner"): ProfitLoss {
+/**
+ * Round 112: Workshop и тренинги — отдельная вкладка «Workshop» со своими доходами и расходами.
+ * Продукт относится к Workshop по названию (Workshop / воркшоп / тренинг).
+ */
+export function isWorkshopName(name: string | null | undefined): boolean {
+  return !!name && /workshop|воркшоп|тренинг|training/i.test(name);
+}
+export function workshopProductIds(products: Prod[]): Set<string> {
+  return new Set(products.filter((p) => isWorkshopName(p.name)).map((p) => p.id));
+}
+
+/** Клуб без указанных продуктов: их выручка, записи, расходы и строки плана не учитываются. */
+export function withoutProducts(f: ClubFinance, ids: Set<string>): ClubFinance {
+  if (!ids.size) return f;
+  return {
+    ...f,
+    products: f.products.filter((p) => !ids.has(p.id)),
+    payments: f.payments.filter((p) => !(p.enr && ids.has(p.enr.product_id))),
+    enrollments: f.enrollments.filter((e) => !ids.has(e.product_id)),
+    expenses: f.expenses.filter((e) => !(e.product_id && ids.has(e.product_id))),
+    plan: f.plan.filter((p) => !(p.product_id && ids.has(p.product_id))),
+  };
+}
+
+export function computeProfitLoss(f00: ClubFinance, period: string, today: Date, planType: PlanType = "partner", opts?: { exclude?: Set<string> }): ProfitLoss {
+  const f0 = opts?.exclude ? withoutProducts(f00, opts.exclude) : f00;
   const f: ClubFinance = { ...f0, plan: effectivePlan(f0.plan, planType) };
   const months = new Set(periodMonths(period));
   const pct = autoPercents(f.categories);
@@ -368,4 +393,68 @@ export function computeNetworkRow(f: ClubFinance, period: string): NetworkRow {
     hasPlan: partner.plan.some((p) => months.has(mk(p.month))),
     hasPlanUk: uk.plan.some((p) => months.has(mk(p.month))),
   };
+}
+
+// ---------------------------------------------------------------- Workshop (Round 112)
+
+export type WorkshopLine = {
+  id: string;
+  name: string;
+  revenue: Amt;
+  expenses: Amt;
+  profit: Amt;
+  planRevenue: Amt;
+  planExpenses: Amt;
+  paid: number;
+};
+
+/**
+ * Workshop и тренинги за период: доход — оплаты по продукту (месяц старта потока, как в план/факте;
+ * оплата без записи — по дате оплаты), расходы — записи журнала с этим продуктом.
+ */
+export function computeWorkshops(f: ClubFinance, period: string, payProducts: Map<string, string | null>, planType: PlanType = "partner"): { lines: WorkshopLine[]; revenue: Amt; expenses: Amt; profit: Amt } {
+  const months = new Set(periodMonths(period));
+  const ids = workshopProductIds(f.products);
+  const plan = effectivePlan(f.plan, planType);
+  const lines: WorkshopLine[] = [];
+  for (const prod of f.products.filter((p) => ids.has(p.id))) {
+    const pays = f.payments.filter((p) => {
+      if (p.status !== "paid") return false;
+      const pid = p.enr?.product_id ?? payProducts.get(p.id) ?? null;
+      if (pid !== prod.id) return false;
+      return months.has(p.enr ? attrMonth(p.enr) : mk(p.paid_date));
+    });
+    const exps = f.expenses.filter((e) => e.product_id === prod.id && months.has(mk(e.date)));
+    const revenue = sum(pays.map((p) => amt(p.amount, p.amount_local, p.local_currency, p.amount_usd)));
+    const expenses = sum(exps.map((e) => amt(e.amount, e.amount_local, e.local_currency, e.amount_usd)));
+    const pl = plan.filter((p) => p.product_id === prod.id && months.has(mk(p.month)));
+    const planRevenue = sum(pl.filter((p) => p.kind === "revenue").map((p) => amt(p.amount, p.amount_local, p.local_currency, p.amount_usd)));
+    const planExpenses = sum(pl.filter((p) => p.kind === "expense").map((p) => amt(p.amount, p.amount_local, p.local_currency, p.amount_usd)));
+    lines.push({ id: prod.id, name: prod.name, revenue, expenses, profit: sub(revenue, expenses), planRevenue, planExpenses, paid: pays.length });
+  }
+  const revenue = sum(lines.map((l) => l.revenue));
+  const expenses = sum(lines.map((l) => l.expenses));
+  return { lines, revenue, expenses, profit: sub(revenue, expenses) };
+}
+
+// ---------------------------------------------------------------- Инвестиции (Round 112)
+
+export type InvestmentSummary = {
+  invested: Amt;
+  /** накопленный денежный поток без инвестиций: поступления − операционные выплаты − платёж УК − налоги */
+  earned: Amt;
+  left: Amt;
+  paidBack: boolean;
+  fromMonth: string | null;
+};
+
+export function computeInvestments(f: ClubFinance, upToMonth: string): InvestmentSummary {
+  const invCats = new Set(f.categories.filter((c) => c.cash_group === "investment" && c.kind === "expense").map((c) => c.id));
+  const inv = f.expenses.filter((e) => invCats.has(e.category_id));
+  const invested = sum(inv.map((e) => amt(e.amount, e.amount_local, e.local_currency, e.amount_usd)));
+  const cash = computeCash(f, upToMonth, 120);
+  const earned = sum(cash.months.map((m) => add(m.net, m.investment)));
+  const left = sub(invested, earned);
+  const fromMonth = [...inv.map((e) => mk(e.date))].sort()[0] ?? cash.months[0]?.month ?? null;
+  return { invested, earned, left, paidBack: invested.eur > 0 && left.eur <= 0, fromMonth };
 }

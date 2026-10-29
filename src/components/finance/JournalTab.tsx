@@ -198,7 +198,7 @@ export default function JournalTab({
   );
 }
 
-function CategoryManager({ categories, canManage }: { categories: Cat[]; canManage: boolean }) {
+export function CategoryManager({ categories, canManage }: { categories: Cat[]; canManage: boolean }) {
   const { t } = useLocale();
   const [pending, start] = useTransition();
   const [error, setError] = useState<string | null>(null);

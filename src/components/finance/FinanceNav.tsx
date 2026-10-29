@@ -4,10 +4,13 @@ import Link from "next/link";
 import { useLocale } from "@/components/i18n/LocaleProvider";
 import { monthLabel } from "@/lib/dashboard";
 
-export type FinTab = "pf" | "journal" | "cash" | "plan";
+export type FinTab = "pf" | "exp" | "inc" | "ws" | "inv" | "cash" | "plan";
 const TABS: { id: FinTab; key: string }[] = [
   { id: "pf", key: "finTabPf" },
-  { id: "journal", key: "finTabJournal" },
+  { id: "exp", key: "finTabExp" },
+  { id: "inc", key: "finTabInc" },
+  { id: "ws", key: "finTabWs" },
+  { id: "inv", key: "finTabInv" },
   { id: "cash", key: "finTabCash" },
   { id: "plan", key: "finTabPlan" },
 ];

@@ -7,7 +7,7 @@ import { BASE_CURRENCY, convertFromEur, convertToEur, currencySymbol, roundMoney
 import { monthLabel } from "@/lib/dashboard";
 import Link from "next/link";
 import type { Cat, PlanRow, PlanType, Prod } from "@/lib/finance/report";
-import { savePlan, copyPlanMonth, type PlanInput } from "@/app/finance/actions";
+import { savePlan, copyPlanMonth, type PlanInput, type PlanPropagation } from "@/app/finance/actions";
 import { fmtNumber } from "./A";
 
 const key = (kind: string, cat: string | null, prod: string | null) => `${kind}|${cat ?? ""}|${prod ?? ""}`;
@@ -29,6 +29,8 @@ export default function PlanTab({
   const [pending, start] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
+  // Round 112: изменённые цены и расходы по умолчанию переносятся во все следующие месяцы
+  const [forward, setForward] = useState(true);
 
   const monthRows = useMemo(() => plan.filter((p) => p.month.slice(0, 7) === month), [plan, month]);
   const toDisplay = (eur: number, local: number | null, cur: string | null) =>
@@ -92,6 +94,31 @@ export default function PlanTab({
       }
     }
     return rows;
+  };
+
+  /** что поменяли в этом месяце: цены продуктов и суммы статей — для переноса в следующие месяцы */
+  const changes = (): PlanPropagation => {
+    const out: PlanPropagation = { prices: [], expenses: [] };
+    for (const p of products) {
+      const k = `${key("revenue", null, p.id)}|price`;
+      if (!(k in vals) || vals[k] === "") continue;
+      const unit = num(vals[k]);
+      if (unit === num(initial[k] ?? "")) continue;
+      out.prices.push({ productId: p.id, unitEur: toEur(unit), unitLocal: currency === BASE_CURRENCY ? null : unit, currency: currency === BASE_CURRENCY ? null : currency });
+    }
+    for (const g of groups) {
+      for (const l of leaves(g.id)) {
+        if (l.auto_kind) continue;
+        for (const pid of l.per_product ? products.map((p) => p.id) : [null]) {
+          const k = key("expense", l.id, pid);
+          if (!(k in vals)) continue;
+          const d = num(vals[k]);
+          if (d === num(initial[k] ?? "")) continue;
+          out.expenses.push({ categoryId: l.id, productId: pid, ...input(d) });
+        }
+      }
+    }
+    return out;
   };
 
   const cell = "w-28 rounded-lg border border-border bg-background px-2 py-1.5 text-right text-sm tabular-nums outline-none focus:border-accent focus:ring-1 focus:ring-accent disabled:opacity-60";
@@ -201,7 +228,7 @@ export default function PlanTab({
 
       {canManage && (
         <div className="flex flex-wrap items-center gap-3">
-          <button type="button" disabled={pending} onClick={() => run(() => savePlan(month, collect(), planType))} className="rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-white hover:bg-accent-strong disabled:opacity-50">
+          <button type="button" disabled={pending} onClick={() => run(() => savePlan(month, collect(), planType, forward ? changes() : undefined))} className="rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-white hover:bg-accent-strong disabled:opacity-50">
             {pending ? t("finSaving") : t("finSavePlan")}
           </button>
           {prevHasPlan && (
@@ -213,6 +240,9 @@ export default function PlanTab({
               {t("finCopyFrom", { m: monthLabel(prevMonth, locale).split(" ")[0] })}
             </button>
           )}
+          <label className="flex items-center gap-2 text-sm text-ink-2" title={t("finPlanForwardHint")}>
+            <input type="checkbox" checked={forward} onChange={(e) => setForward(e.target.checked)} /> {t("finPlanForward")}
+          </label>
           {saved && <span className="text-sm text-muted">✓ {t("finSaved")}</span>}
         </div>
       )}

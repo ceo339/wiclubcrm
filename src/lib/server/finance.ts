@@ -25,6 +25,7 @@ export type JournalPayment = {
   status: string;
   member: string | null;
   product: string | null;
+  product_id: string | null;
   linked: boolean;
 };
 
@@ -37,6 +38,8 @@ export type ClubFinanceData = ClubFinance & {
   lastPlanChange: string | null;
   lastPlanChangeUk: string | null;
   journalPayments: JournalPayment[];
+  /** оплата → продукт (в т.ч. оплаты без записи) — для вкладки Workshop */
+  payProducts: Map<string, string | null>;
 };
 
 /** Всё, что нужно разделу «Финансы» по одному клубу (через RLS-клиента пользователя). */
@@ -50,7 +53,7 @@ export async function loadClubFinance(db: Db, partnerId: string): Promise<ClubFi
       db
         .from("payments")
         .select(
-          "id, amount, amount_local, local_currency, amount_usd, status, paid_date, enrollment_id, members(name), products(name), member_enrollments(product_id, start_date, created_at, status)"
+          "id, amount, amount_local, local_currency, amount_usd, status, paid_date, enrollment_id, product_id, members(name), products(name), member_enrollments(product_id, start_date, created_at, status)"
         )
         .eq("partner_id", partnerId)
         .order("paid_date", { ascending: false })
@@ -65,6 +68,7 @@ export async function loadClubFinance(db: Db, partnerId: string): Promise<ClubFi
   type PayRow = {
     id: string; amount: number; amount_local: number | null; local_currency: string | null; amount_usd: number | null; status: string; paid_date: string;
     enrollment_id: string | null;
+    product_id: string | null;
     members: { name: string } | null; products: { name: string } | null;
     member_enrollments: { product_id: string; start_date: string | null; created_at: string; status: string } | null;
   };
@@ -115,7 +119,8 @@ export async function loadClubFinance(db: Db, partnerId: string): Promise<ClubFi
       .map((p) => ({
         id: p.id, paid_date: p.paid_date, amount: Number(p.amount), amount_local: num(p.amount_local),
         local_currency: p.local_currency, status: p.status, member: p.members?.name ?? null,
-        product: p.products?.name ?? null, linked: !!p.member_enrollments,
+        product: p.products?.name ?? null, product_id: p.member_enrollments?.product_id ?? p.product_id ?? null, linked: !!p.member_enrollments,
       })),
+    payProducts: new Map(payRows.map((p) => [p.id, p.member_enrollments?.product_id ?? p.product_id ?? null])),
   };
 }

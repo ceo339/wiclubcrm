@@ -126,7 +126,17 @@ export type PlanInput = {
 
 const lineKey = (kind: string, cat: string | null, prod: string | null) => `${kind}|${cat ?? ""}|${prod ?? ""}`;
 
-export async function savePlan(month: string, rows: PlanInput[], planType: PlanType = "partner"): Promise<FinResult> {
+/**
+ * Round 112: изменения месяца переносятся во все следующие месяцы плана.
+ * prices — новая цена продукта за единицу (сумма = кол-во следующего месяца × цена, количество не трогаем);
+ * expenses — новая сумма статьи (0 = убрать строку).
+ */
+export type PlanPropagation = {
+  prices: { productId: string; unitEur: number; unitLocal: number | null; currency: string | null }[];
+  expenses: { categoryId: string; productId: string | null; amountEur: number; amountLocal: number | null; currency: string | null }[];
+};
+
+export async function savePlan(month: string, rows: PlanInput[], planType: PlanType = "partner", propagate?: PlanPropagation): Promise<FinResult> {
   const g = await guard();
   if ("error" in g) return g;
   if (planType !== "uk" && planType !== "partner") return { error: "errNotAuthorized" };
@@ -188,8 +198,92 @@ export async function savePlan(month: string, rows: PlanInput[], planType: PlanT
     log.push({ partner_id: g.partnerId, plan_type: planType, month: monthDate, kind: prev.kind, category_id: prev.category_id, product_id: prev.product_id, qty: null, amount: 0, changed_by: g.userId });
   }
   if (log.length) await admin.from("fin_plan_log").insert(log);
+  if (propagate && (propagate.prices.length || propagate.expenses.length)) {
+    const r = await propagateForward(g.partnerId, g.userId, monthDate, planType, propagate, okCat, okProd);
+    if (r.error) return r;
+  }
   revalidatePath("/finance");
   return { error: null };
+}
+
+async function propagateForward(
+  partnerId: string, userId: string, monthDate: string, planType: PlanType, pr: PlanPropagation,
+  okCat: Set<string>, okProd: Set<string>,
+): Promise<FinResult> {
+  const admin = createAdminClient();
+  const cur = (c: string | null) => (c && c !== BASE_CURRENCY && CURRENCIES.some((x) => x.code === c) ? c : null);
+  const r2 = (n: number) => Math.round(n * 100) / 100;
+  const load = async (pt: PlanType) => {
+    const out: Database["public"]["Tables"]["fin_plan"]["Row"][] = [];
+    for (let from = 0; from < 20000; from += 1000) {
+      const { data, error } = await admin.from("fin_plan").select("*").eq("partner_id", partnerId).eq("plan_type", pt).gt("month", monthDate).range(from, from + 999);
+      if (error) throw new Error(error.message);
+      out.push(...(data ?? []));
+      if (!data || data.length < 1000) break;
+    }
+    return out;
+  };
+  try {
+    let rows = await load(planType);
+    // план партнёра: месяцы, которые партнёр не правил, сейчас берутся из плана УК —
+    // чтобы изменение в них попало, сначала переносим туда строки УК как строки партнёра
+    if (planType === "partner") {
+      const own = new Set(rows.map((r) => r.month));
+      const uk = (await load("uk")).filter((r) => !own.has(r.month));
+      if (uk.length) {
+        const copies = uk.map((r) => ({
+          partner_id: partnerId, plan_type: "partner", month: r.month, kind: r.kind, category_id: r.category_id, product_id: r.product_id,
+          qty: r.qty, amount: r.amount, amount_local: r.amount_local, local_currency: r.local_currency,
+        }));
+        for (let i = 0; i < copies.length; i += 500) {
+          const { error } = await admin.from("fin_plan").insert(copies.slice(i, i + 500));
+          if (error) return { error: error.message };
+        }
+        rows = await load("partner");
+      }
+    }
+    const months = [...new Set(rows.map((r) => r.month))].sort();
+    const now = new Date().toISOString();
+    const log: PlanLogInsert[] = [];
+    for (const m of months) {
+      const inMonth = rows.filter((r) => r.month === m);
+      for (const p of pr.prices) {
+        if (!okProd.has(p.productId)) continue;
+        const row = inMonth.find((r) => r.kind === "revenue" && r.product_id === p.productId);
+        const qty = Number(row?.qty ?? 0);
+        if (!row || !qty) continue;
+        const local = cur(p.currency) && p.unitLocal !== null ? r2(qty * p.unitLocal) : null;
+        const amount = r2(qty * p.unitEur);
+        const { error } = await admin.from("fin_plan").update({ amount, amount_local: local, local_currency: local === null ? null : cur(p.currency), updated_at: now }).eq("id", row.id);
+        if (error) return { error: error.message };
+        log.push({ partner_id: partnerId, plan_type: planType, month: m, kind: "revenue", category_id: null, product_id: p.productId, qty, amount, changed_by: userId });
+      }
+      for (const e of pr.expenses) {
+        if (!okCat.has(e.categoryId) || (e.productId && !okProd.has(e.productId))) continue;
+        const row = inMonth.find((r) => r.kind === "expense" && r.category_id === e.categoryId && (r.product_id ?? null) === (e.productId ?? null));
+        const amount = r2(Number(e.amountEur));
+        if (!Number.isFinite(amount) || amount < 0) continue;
+        if (amount === 0) {
+          if (row) {
+            const { error } = await admin.from("fin_plan").delete().eq("id", row.id);
+            if (error) return { error: error.message };
+          }
+        } else {
+          const local = cur(e.currency) && e.amountLocal !== null ? r2(Number(e.amountLocal)) : null;
+          const data = { amount, amount_local: local, local_currency: local === null ? null : cur(e.currency), updated_at: now };
+          const { error } = row
+            ? await admin.from("fin_plan").update(data).eq("id", row.id)
+            : await admin.from("fin_plan").insert({ ...data, partner_id: partnerId, plan_type: planType, month: m, kind: "expense", category_id: e.categoryId, product_id: e.productId, qty: null });
+          if (error) return { error: error.message };
+        }
+        log.push({ partner_id: partnerId, plan_type: planType, month: m, kind: "expense", category_id: e.categoryId, product_id: e.productId, qty: null, amount, changed_by: userId });
+      }
+    }
+    for (let i = 0; i < log.length; i += 500) await admin.from("fin_plan_log").insert(log.slice(i, i + 500));
+    return { error: null };
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : String(err) };
+  }
 }
 
 /** Копирует план из одного месяца в другой (целевой месяц перезаписывается). */

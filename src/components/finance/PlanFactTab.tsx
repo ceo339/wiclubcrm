@@ -145,7 +145,7 @@ export default function PlanFactTab({
     if (!planPart && !came) return undefined;
     return <>{planPart}{planPart && came ? " · " : ""}{came}</>;
   };
-  const catLink = (id: string) => `/finance?tab=journal&month=${period}&cat=${id}`;
+  const catLink = (id: string) => `/finance?tab=exp&month=${period}&cat=${id}`;
   const lineProducts = (ps: Line[], indent: "sub" | "sub2", leafId: string) => {
     const ukPs = ukLeaf.get(leafId)?.products ?? [];
     const all = [...ps, ...ukPs.filter((x) => !ps.some((p) => p.id === x.id)).map((x) => ({ ...x, plan: ZERO }))];

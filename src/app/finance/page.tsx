@@ -4,7 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { currencyForCountry } from "@/lib/currency";
 import { localeScopeForProfile } from "@/lib/i18n";
 import { isNetworkRole, getViewScopePartnerId, getViewMode } from "@/lib/viewScope";
-import { computeCash, computeNetworkRow, computeProfitLoss, effectivePlan, periodMonths, shiftMonth, type PlanType } from "@/lib/finance/report";
+import { computeCash, computeInvestments, computeNetworkRow, computeProfitLoss, computeWorkshops, effectivePlan, isWorkshopName, periodMonths, shiftMonth, workshopProductIds, type PlanType } from "@/lib/finance/report";
 import { loadClubFinance } from "@/lib/server/finance";
 import CurrencySwitcher from "@/components/currency/CurrencySwitcher";
 import CurrencyScope from "@/components/currency/CurrencyScope";
@@ -14,13 +14,14 @@ import T from "@/components/i18n/T";
 import AppShell from "@/components/shell/AppShell";
 import FinanceNav, { type FinTab } from "@/components/finance/FinanceNav";
 import PlanFactTab from "@/components/finance/PlanFactTab";
-import JournalTab from "@/components/finance/JournalTab";
+import EntriesTab from "@/components/finance/EntriesTab";
+import { InvestmentSummaryView, WorkshopSummary } from "@/components/finance/FinSummaries";
 import CashTab from "@/components/finance/CashTab";
 import PlanTab from "@/components/finance/PlanTab";
 import NetworkTab, { type NetworkClub } from "@/components/finance/NetworkTab";
 import CityBack from "@/components/finance/CityBack";
 
-const TABS: FinTab[] = ["pf", "journal", "cash", "plan"];
+const TABS: FinTab[] = ["pf", "exp", "inc", "ws", "inv", "cash", "plan"];
 
 export default async function FinancePage({
   searchParams,
@@ -43,7 +44,9 @@ export default async function FinancePage({
   const now = new Date();
   const curMonth = now.toISOString().slice(0, 7);
   const requested = sp.month && /^\d{4}(-\d{2})?$/.test(sp.month) ? sp.month : curMonth;
-  const tabRaw = (TABS as string[]).includes(sp.tab ?? "") ? (sp.tab as FinTab) : "pf";
+  // старые ссылки «Расходы и доходы» (tab=journal) ведут на «Расходы»
+  const tabIn = sp.tab === "journal" ? "exp" : sp.tab;
+  const tabRaw = (TABS as string[]).includes(tabIn ?? "") ? (tabIn as FinTab) : "pf";
 
   const { data: clubs } = networkView
     ? await supabase.from("partners").select("id, name, country").order("name")
@@ -127,12 +130,22 @@ export default async function FinancePage({
   const planType: PlanType = sp.plan === "uk" || (sp.plan !== "partner" && networkView) ? "uk" : "partner";
   const planRows = effectivePlan(data.plan, planType);
   const monthHasOwnPartnerPlan = data.plan.some((p) => p.plan_type === "partner" && p.month.slice(0, 7) === period);
+  // Round 112: Workshop и тренинги считаются отдельно (вкладка «Workshop»); в план/факт месяца не входят,
+  // в годовой отчёт входят.
+  const wsIds = workshopProductIds(data.products);
+  const isWsPay = (p: { product_id: string | null; product: string | null }) => (p.product_id ? wsIds.has(p.product_id) : isWorkshopName(p.product));
+  const invCats = new Set(data.categories.filter((c) => c.cash_group === "investment").map((c) => c.id));
+  const incomeCats = new Set(data.categories.filter((c) => c.kind === "income").map((c) => c.id));
+  const inPeriod = (d: string) => monthsOfPeriod.has(d.slice(0, 7));
   if (tab === "pf") {
-    const pl = computeProfitLoss(data, period, now, "partner");
+    const exclude = /^\d{4}-\d{2}$/.test(period) ? wsIds : undefined;
+    const pl = computeProfitLoss(data, period, now, "partner", { exclude });
     // Round 92: план/факт партнёра считается только от плана партнёра (без колонок и подсказок УК);
     // сравнение с планом УК — только у головного офиса и финдиректора. План УК партнёр видит во вкладке «План».
-    const plUk = networkView ? computeProfitLoss(data, period, now, "uk") : undefined;
+    const plUk = networkView ? computeProfitLoss(data, period, now, "uk", { exclude }) : undefined;
     content = (
+      <>
+      {wsIds.size > 0 && <p className="mb-3 text-sm text-muted"><T k={exclude ? "finPfWsMonthNote" : "finPfWsYearNote"} /></p>}
       <PlanFactTab
         pl={pl}
         uk={plUk}
@@ -143,17 +156,59 @@ export default async function FinancePage({
         canAccept={profile.role === "hq" && !!scopePartnerId}
         hasAnyPlan={data.plan.some((p) => monthsOfPeriod.has(p.month.slice(0, 7)))}
       />
+      </>
     );
-  } else if (tab === "journal") {
+  } else if (tab === "exp") {
     content = (
-      <JournalTab
+      <EntriesTab
+        mode="expense" tab="exp"
         categories={data.categories}
         products={data.products}
-        expenses={data.expenses.filter((e) => monthsOfPeriod.has(e.date.slice(0, 7)))}
-        payments={data.journalPayments.filter((p) => monthsOfPeriod.has(p.paid_date.slice(0, 7)))}
+        expenses={data.expenses.filter((e) => inPeriod(e.date) && !invCats.has(e.category_id) && !incomeCats.has(e.category_id) && !(e.product_id && wsIds.has(e.product_id)))}
         canManage={canManage}
         catFilter={sp.cat ?? null}
         period={period}
+      />
+    );
+  } else if (tab === "inc") {
+    content = (
+      <EntriesTab
+        mode="income" tab="inc"
+        categories={data.categories}
+        products={data.products}
+        expenses={data.expenses.filter((e) => inPeriod(e.date) && incomeCats.has(e.category_id) && !(e.product_id && wsIds.has(e.product_id)))}
+        payments={data.journalPayments.filter((p) => inPeriod(p.paid_date) && !isWsPay(p))}
+        canManage={canManage}
+        period={period}
+      />
+    );
+  } else if (tab === "ws") {
+    const ws = computeWorkshops(data, period, data.payProducts);
+    content = (
+      <EntriesTab
+        mode="workshop" tab="ws"
+        categories={data.categories}
+        products={data.products}
+        expenses={data.expenses.filter((e) => inPeriod(e.date) && !!e.product_id && wsIds.has(e.product_id) && !invCats.has(e.category_id))}
+        payments={data.journalPayments.filter((p) => inPeriod(p.paid_date) && isWsPay(p))}
+        canManage={canManage}
+        catFilter={sp.cat ?? null}
+        period={period}
+        summary={<WorkshopSummary {...ws} />}
+      />
+    );
+  } else if (tab === "inv") {
+    // инвестиции — разовые вложения, показываем все за всё время, независимо от выбранного месяца
+    content = (
+      <EntriesTab
+        mode="investment" tab="inv"
+        categories={data.categories}
+        products={data.products}
+        expenses={data.expenses.filter((e) => invCats.has(e.category_id))}
+        canManage={canManage}
+        catFilter={sp.cat ?? null}
+        period={period}
+        summary={<InvestmentSummaryView s={computeInvestments(data, curMonth)} />}
       />
     );
   } else if (tab === "cash") {
